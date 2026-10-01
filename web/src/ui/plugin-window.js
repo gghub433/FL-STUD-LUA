@@ -15,7 +15,7 @@ export function openChannelEditor(app, chId) {
   const meta = instrumentMeta(ch.type);
   const spec = {
     title: ch.name, dynamic: true,
-    rect: { x: 180, y: 70, w: ch.type === 'sampler' ? 640 : 520, h: ch.type === 'sampler' ? 430 : 360 },
+    rect: { x: 180, y: 70, ...(custom && custom.rect ? custom.rect : { w: 520, h: 360 }) },
     minW: 320, minH: 180,
     create: (win) => (custom ? custom(win, app, chId) : genericEditor(win, app, chId)),
   };

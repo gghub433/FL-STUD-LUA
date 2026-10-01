@@ -5,6 +5,7 @@ import { defaults, clampParam } from './schema.js';
 import { instrumentSchema, hasInstrument, instrumentMeta } from './instruments/index.js';
 import { effectSchema, hasEffect } from './effects/index.js';
 import { CHANNEL_BUILTIN, TRACK_BUILTIN } from './addr.js';
+import { defaultPads, PADS, MAX_LAYERS } from './instruments/fpc.js';
 
 export const FORMAT = 'stepwise';
 export const VERSION = 1;
@@ -98,6 +99,8 @@ export function createChannel(p, type, opts = {}) {
   if (opts.params) Object.assign(ch.params, opts.params);
   if (type === 'sampler' || type === 'audio') ch.sample = opts.sample || null;
   if (type === 'layer') ch.children = opts.children || [];
+  if (type === 'fpc') { ch.pads = opts.pads || defaultPads(); ch.padBank = 0; }
+  if (type === 'slicer') { ch.sample = opts.sample || null; ch.slices = opts.slices || []; ch.loopBpm = opts.loopBpm || 0; }
   if (type === 'automation') { ch.target = opts.target || null; ch.points = opts.points || []; ch.len = opts.len || barTicks(p.timeSig); ch.mixer = 0; }
   return ch;
 }
@@ -208,8 +211,31 @@ export function normalize(raw) {
       pitch: num(c.pitch, -12, 12, 0), mixer: int(c.mixer, 0, MAX_INSERT, 0), group: str(c.group, '', 40),
       params: normParams(instrumentSchema(type), c.params),
     };
-    if (type === 'sampler' || type === 'audio') {
+    if (type === 'sampler' || type === 'audio' || type === 'slicer') {
       ch.sample = c.sample && typeof c.sample.id === 'string' ? { id: str(c.sample.id, '', 80), name: str(c.sample.name, '', 80) } : null;
+      if (ch.sample && typeof c.sample.use === 'string') ch.sample.use = str(c.sample.use, '', 120);
+    }
+    if (type === 'slicer') {
+      ch.slices = Array.isArray(c.slices) ? c.slices.filter((x) => Number.isFinite(x) && x >= 0).slice(0, 64).map((x) => Math.floor(x)) : [];
+      ch.loopBpm = num(c.loopBpm, 0, 999, 0);
+    }
+    if (type === 'fpc') {
+      ch.padBank = int(c.padBank, 0, 3, 0);
+      ch.pads = defaultPads();
+      if (Array.isArray(c.pads)) {
+        for (let i = 0; i < PADS; i++) {
+          const pd = c.pads[i];
+          if (!pd || typeof pd !== 'object') continue;
+          const out = ch.pads[i];
+          out.name = str(pd.name, '', 24); out.vol = num(pd.vol, 0, 2, 1); out.pan = num(pd.pan, -1, 1, 0); out.pitch = num(pd.pitch, -48, 48, 0);
+          out.note = int(pd.note, 0, 127, out.note); out.mute = bit(pd.mute); out.solo = bit(pd.solo); out.choke = int(pd.choke, 0, 8, 0); out.gate = bit(pd.gate);
+          out.layers = [];
+          for (const l of Array.isArray(pd.layers) ? pd.layers.slice(0, MAX_LAYERS) : []) {
+            if (!l || !l.sample || typeof l.sample.id !== 'string') continue;
+            out.layers.push({ sample: { id: str(l.sample.id, '', 80), name: str(l.sample.name, '', 80) }, vol: num(l.vol, 0, 2, 1), pan: num(l.pan, -1, 1, 0), pitch: num(l.pitch, -48, 48, 0), start: num(l.start, 0, 0.99, 0) });
+          }
+        }
+      }
     }
     if (type === 'layer') ch.children = Array.isArray(c.children) ? c.children.filter((x) => Number.isInteger(x)).slice(0, 64) : [];
     if (type === 'automation') {

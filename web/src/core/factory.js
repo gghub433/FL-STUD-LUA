@@ -138,7 +138,10 @@ export const factoryName = (id) => (FACTORY_BY_ID.get(id) || IR_BY_ID.get(id) ||
 export function collectFactorySamples(project, sr) {
   const map = new Map();
   const need = new Set();
-  for (const ch of project.channels) if (ch.sample && ch.sample.id) need.add(ch.sample.id);
+  for (const ch of project.channels) {
+    if (ch.sample && ch.sample.id) need.add(ch.sample.id);
+    if (ch.pads) for (const pad of ch.pads) for (const l of pad.layers || []) if (l.sample) need.add(l.sample.id);
+  }
   for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) need.add(f.extra.irId);
   for (const id of need) {
     if (!isFactoryId(id) || map.has(id)) continue;

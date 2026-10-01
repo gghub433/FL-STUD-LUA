@@ -39,8 +39,9 @@ class ChannelRT {
     if (was && !this.enabled && this.inst) this.inst.allOff();
     if (this.inst && data.params) for (const k in data.params) this.inst.setParam(k, data.params[k]);
     if (this.inst && (data.type === 'sampler' || data.type === 'audio') && this.inst.setParam) {
-      this.inst.setParam('sampleId', data.sample ? data.sample.id : null);
+      this.inst.setParam('sampleId', data.sample ? (data.sample.use || data.sample.id) : null);
     }
+    if (this.inst && this.inst.setData) this.inst.setData(data);
   }
 }
 

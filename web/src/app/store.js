@@ -53,6 +53,7 @@ export class Store {
     this.host.send({ t: 'stop' });
     this.host.send({ t: 'init', project: p });
     this.dirty = false;
+    this.bus.emit('replaced', p);
     this.bus.emit('project', p);
     this.bus.emit('selection', this.selected);
   }

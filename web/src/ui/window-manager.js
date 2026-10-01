@@ -147,7 +147,8 @@ export class WindowManager {
   get(id) { return this.wins.get(id) || null; }
 
   open(id, spec) {
-    if (spec && !this.specs.has(id)) this.register(id, spec);
+    // dynamic specs close over their channel/slot, so each open replaces the previous registration
+    if (spec && (spec.dynamic || !this.specs.has(id))) this.register(id, spec);
     const sp = this.specs.get(id);
     if (!sp) return null;
     let w = this.wins.get(id);
@@ -192,6 +193,9 @@ export class WindowManager {
     this.bus.emit('window', { id, open: false });
     this.saveSoon();
   }
+
+  // Dynamic windows (plugin / effect editors) belong to one project: close them all when it is replaced.
+  closeDynamic() { for (const [id, w] of [...this.wins]) if (w.spec.dynamic) this.close(id); }
 
   toggle(id) { if (this.isOpen(id)) { const w = this.wins.get(id); if (w.el.classList.contains('active')) this.close(id); else this.focus(id); } else this.open(id); }
 

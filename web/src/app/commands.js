@@ -319,3 +319,68 @@ import { createTrack } from '../core/project.js';
 function createTrackLike(p, n) { return createTrack(n); }
 
 export { effectSchema };
+
+// ---------------------------------------------------------------- instruments
+import { slicesToNotes, estimateLoop } from '../core/slice-detect.js';
+import { stretchAudio } from '../core/stretch.js';
+
+export function editPad(store, chId, idx, fn, label = 'Edit pad') {
+  store.edit(label, () => { const c = store.channel(chId); if (c && c.pads) fn(c.pads[idx], c.pads); }, CH, { coalesce: `pad:${chId}:${idx}:${label}` });
+}
+
+export function setChannelData(store, chId, patch, label = 'Edit channel') {
+  store.edit(label, () => { const c = store.channel(chId); if (c) Object.assign(c, patch); }, CH, { coalesce: `chd:${chId}:${Object.keys(patch).join()}` });
+}
+
+// Several instrument parameters as ONE undo step (e.g. loading a drum-type preset)
+export function applyParams(store, chId, values, label = 'Load preset') {
+  store.edit(label, (p) => {
+    const c = store.channel(chId);
+    for (const [k, v] of Object.entries(values)) c.params[k] = v;
+  }, CH);
+}
+
+export function setSampleUse(store, chId, use) {
+  store.edit('Time stretch', () => { const c = store.channel(chId); if (c && c.sample) { if (use) c.sample.use = use; else delete c.sample.use; } }, CH);
+  if (use) store.bank.ensure(use);
+}
+
+// Render a time-stretched / pitch-shifted copy of the channel's sample into the bank and use it.
+export async function applyStretch(store, chId) {
+  const c = store.channel(chId);
+  if (!c || !c.sample) return false;
+  const src = await store.bank.ensure(c.sample.id);
+  if (!src) return false;
+  const ratio = c.params.stretchTime, semi = c.params.stretchPitch;
+  const id = `stretch:${c.sample.id}:${ratio.toFixed(4)}:${semi.toFixed(2)}`;
+  if (!store.bank.has(id)) {
+    const channels = stretchAudio(src.channels, { ratio, semitones: semi, rate: src.rate });
+    store.bank.addPCM(`${src.name} (stretched)`, src.rate, channels, id);
+  }
+  setSampleUse(store, chId, id);
+  return true;
+}
+
+export function setSlices(store, chId, slices, loopBpm) {
+  store.edit('Edit slices', () => {
+    const c = store.channel(chId);
+    if (!c) return;
+    c.slices = slices.slice(0, 64);
+    if (loopBpm !== undefined) c.loopBpm = loopBpm;
+  }, CH, { coalesce: `slices:${chId}` });
+}
+
+// Write the slices into the current pattern in their original order, quantized to the step grid.
+export function sliceToPattern(store, chId, grid = 24) {
+  const c = store.channel(chId);
+  const e = c && c.sample ? store.bank.get(c.sample.id) : null;
+  if (!c || !e || !c.slices.length) return 0;
+  const bpm = c.loopBpm || estimateLoop(e.length, e.rate).bpm;
+  const notes = slicesToNotes(c.slices, e.length, e.rate, bpm, 60, 100, grid);
+  const pat = store.pattern;
+  store.edit('Slicer: write MIDI', (p) => {
+    pat.notes[chId] = notes.map((n) => createNote(p, n.s, n.l, n.k, n.v));
+    if (!pat.len) { const bar = barTicks(p.timeSig); const end = Math.max(...notes.map((n) => n.s + n.l)); if (end > bar) pat.len = Math.ceil(end / bar) * bar; }
+  }, [['patterns', pat.id]]);
+  return notes.length;
+}

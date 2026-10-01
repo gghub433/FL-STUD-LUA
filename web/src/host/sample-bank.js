@@ -89,6 +89,8 @@ export class SampleBank {
     const ids = new Set();
     for (const ch of project.channels) {
       if (ch.sample && ch.sample.id) ids.add(ch.sample.id);
+      if (ch.sample && ch.sample.use) ids.add(ch.sample.use);
+      if (ch.pads) for (const pad of ch.pads) for (const l of pad.layers || []) if (l.sample) ids.add(l.sample.id);
     }
     for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) ids.add(f.extra.irId);
     const missing = [];
