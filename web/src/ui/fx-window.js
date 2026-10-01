@@ -10,6 +10,7 @@ import { EFFECTS } from '../core/effects/index.js';
 import { eqResponse, BANDS, BAND_TYPES } from '../core/effects/eq.js';
 import { defaultSlots, SLOTS, evalCurve } from '../core/effects/grossbeat.js';
 import { defaults } from '../core/schema.js';
+import { EFFECT_PRESETS } from '../core/presets.js';
 import { IRS } from '../core/factory.js';
 import { trackName } from '../core/addr.js';
 
@@ -59,6 +60,9 @@ export function fxPresetItems(app, track, slot) {
     } },
     { label: 'Reset to defaults', fn: () => apply({}) },
   ];
+  const factory = (EFFECT_PRESETS[type] || {});
+  const fnames = Object.keys(factory);
+  if (fnames.length) { items.push({ sep: true }, { title: 'Factory presets' }); for (const n of fnames) items.push({ label: n, fn: () => apply(factory[n]) }); }
   const names = Object.keys(presets);
   if (names.length) {
     items.push({ sep: true }, { title: 'User presets' });

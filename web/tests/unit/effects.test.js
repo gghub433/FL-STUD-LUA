@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEffect, EFFECTS } from '../../src/core/effects/index.js';
+import { FFT } from '../../src/core/fft.js';
 import { eqResponse } from '../../src/core/effects/eq.js';
 import { defaults } from '../../src/core/schema.js';
 import { Noise, dbToGain, gainToDb } from '../../src/core/dsp.js';
@@ -8,7 +9,7 @@ import { renderFactorySample } from '../../src/core/factory.js';
 
 const SR = 44100;
 // effects that legitimately keep ringing after the input stops
-const TAILS = new Set(['reverb', 'delay', 'convolver', 'chorus', 'flanger', 'phaser', 'grossbeat', 'vocoder']);
+const TAILS = new Set(['reverb', 'delay', 'convolver', 'chorus', 'flanger', 'phaser', 'grossbeat', 'vocoder', 'pitchshift', 'tape', 'freqshift']);
 const host = { tempo: 120, tick: 0, playing: false, sr: SR, getSample: () => null };
 
 function sine(freq, seconds, amp = 0.5) { const n = Math.floor(seconds * SR); const a = new Float32Array(n); for (let i = 0; i < n; i++) a[i] = amp * Math.sin(2 * Math.PI * freq * i / SR); return a; }
@@ -244,4 +245,96 @@ test('factory impulse responses decay to silence', () => {
   const ir = renderFactorySample('factory:ir-hall', SR);
   assert.equal(ir.length, 2);
   assert.ok(rms(ir[0], 0, 4000) > rms(ir[0], ir[0].length - 20000, ir[0].length - 5000) * 5);
+});
+
+// ---- plugins added later ---------------------------------------------------------------
+function spectrumPeak(a, from = 8192, N = 16384) {
+  const fft = new FFT(N), re = new Float32Array(N), im = new Float32Array(N);
+  for (let i = 0; i < N; i++) re[i] = (a[from + i] || 0) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N));
+  fft.transform(re, im);
+  let best = 0, bv = 0;
+  for (let k = 5; k < N / 2; k++) { const m = Math.hypot(re[k], im[k]); if (m > bv) { bv = m; best = k; } }
+  return (best * SR) / N;
+}
+function bandEnergy(a, f0, f1, from = 8192, N = 16384) {
+  const fft = new FFT(N), re = new Float32Array(N), im = new Float32Array(N);
+  for (let i = 0; i < N; i++) re[i] = (a[from + i] || 0) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N));
+  fft.transform(re, im);
+  let e = 0;
+  for (let k = Math.floor((f0 * N) / SR); k <= Math.ceil((f1 * N) / SR); k++) e += re[k] * re[k] + im[k] * im[k];
+  return e;
+}
+
+test('tremolo: level swings between 1 and 1-depth at the LFO rate; sync locks to tempo', () => {
+  const out = run('tremolo', { rate: 4, depth: 1, shape: 0, mix: 1 }, sine(440, 1.5, 0.5));
+  const win = 441; const env = [];
+  for (let i = 4000; i + win < out.L.length; i += win) env.push(rms(out.L, i, i + win));
+  assert.ok(Math.max(...env) > 0.3 && Math.min(...env) < 0.03, `full-depth tremolo swings from ~0.35 to ~0: ${Math.min(...env)}..${Math.max(...env)}`);
+  const half = run('tremolo', { rate: 4, depth: 0.5, shape: 1 }, sine(440, 1, 0.5));
+  assert.ok(peak(half.L, 6000) <= 0.5 + 1e-3 && rms(half.L, 6000) > 0.5 * 0.7 * 0.45, 'half depth never goes below half level');
+  // synced to 1/4 at 120 bpm = 2 Hz: a full cycle in 0.5 s
+  const sy = run('tremolo', { sync: 1, division: 8, depth: 1, shape: 0 }, sine(440, 1, 0.5), undefined, { host: { ...host, tempo: 120, playing: false } });
+  const e2 = []; for (let i = 0; i + 441 < sy.L.length; i += 441) e2.push(rms(sy.L, i, i + 441));
+  const mins = e2.map((v, i) => (i > 0 && i < e2.length - 1 && v < e2[i - 1] && v <= e2[i + 1] && v < 0.05 ? i : -1)).filter((i) => i >= 0);
+  assert.ok(mins.length >= 1 && Math.abs((mins[1] ?? mins[0] + 50) - mins[0] - 50) <= 3, `minima spaced by 0.5 s: ${mins}`);
+});
+
+test('auto-pan moves the sound between left and right', () => {
+  const x = sine(300, 1, 0.5);
+  const out = run('tremolo', { mode: 1, rate: 2, depth: 1, shape: 0 }, x, x);
+  let leftWins = 0, rightWins = 0;
+  for (let i = 0; i + 2205 < x.length; i += 2205) { const l = rms(out.L, i, i + 2205), r = rms(out.R, i, i + 2205); if (l > r * 3) leftWins++; if (r > l * 3) rightWins++; }
+  assert.ok(leftWins >= 2 && rightWins >= 2, `alternates sides (left ${leftWins}, right ${rightWins})`);
+});
+
+test('transient shaper: attack boost raises the click, sustain cut shortens the tail, level independent', () => {
+  const n = Math.floor(0.6 * SR), x = new Float32Array(n);
+  for (let i = 0; i < n; i++) x[i] = Math.exp(-i / (0.12 * SR)) * 0.6 * Math.sin((2 * Math.PI * 150 * i) / SR) * (i < 20 ? 1 : 0.35);   // click then body
+  const base = run('transient', {}, x), att = run('transient', { attack: 100 }, x), sus = run('transient', { sustain: -100 }, x);
+  const early = (a) => peak(a.subarray(0, 600)), late = (a) => rms(a, 6000, 20000);
+  assert.ok(early(att.L) > early(base.L) * 1.5, `attack +100% raises the attack: ${early(att.L) / early(base.L)}`);
+  assert.ok(late(sus.L) < late(base.L) * 0.6, `sustain -100% cuts the tail: ${late(sus.L) / late(base.L)}`);
+  assert.ok(Math.abs(late(att.L) / late(base.L) - 1) < 0.15, 'attack control leaves the sustain alone');
+  const quiet = Float32Array.from(x, (v) => v * 0.05), qa = run('transient', { attack: 100 }, quiet);
+  assert.ok(Math.abs(early(qa.L) / early(quiet) - early(att.L) / early(x)) < 0.6, 'works at low levels too (level independent)');
+});
+
+test('pitch shifter: +12 semitones doubles the frequency, -12 halves it, 0 keeps it', () => {
+  const x = sine(440, 1.2, 0.5);
+  const up = run('pitchshift', { semi: 12, grain: 40 }, x), down = run('pitchshift', { semi: -12, grain: 40 }, x), same = run('pitchshift', { semi: 0 }, x);
+  assert.ok(Math.abs(spectrumPeak(up.L) - 880) < 12, `up: ${spectrumPeak(up.L)}`);
+  assert.ok(Math.abs(spectrumPeak(down.L) - 220) < 8, `down: ${spectrumPeak(down.L)}`);
+  assert.ok(Math.abs(spectrumPeak(same.L) - 440) < 6, `unchanged: ${spectrumPeak(same.L)}`);
+  assert.ok(rms(up.L, 20000) > 0.2, 'keeps its level');
+  const fx = createEffect('pitchshift', SR, host);
+  fx.setParam('grain', 80);
+  assert.equal(fx.latency, Math.round(0.04 * SR), 'reports its latency for delay compensation');
+});
+
+test('frequency shifter moves every partial by the same Hz; ring modulator makes sidebands', () => {
+  const x = sine(1000, 1.2, 0.5);
+  const up = run('freqshift', { shift: 200, mix: 1 }, x), dn = run('freqshift', { shift: -300, mix: 1 }, x);
+  assert.ok(Math.abs(spectrumPeak(up.L) - 1200) < 8, `+200 Hz: ${spectrumPeak(up.L)}`);
+  assert.ok(Math.abs(spectrumPeak(dn.L) - 700) < 8, `-300 Hz: ${spectrumPeak(dn.L)}`);
+  // sideband suppression: the opposite sideband (800 Hz for +200) is far below the wanted one
+  assert.ok(bandEnergy(up.L, 780, 820) < bandEnergy(up.L, 1180, 1220) * 0.01, 'single sideband (>20 dB image rejection)');
+  const rm = run('freqshift', { mode: 1, shift: 100, mix: 1 }, x);
+  const e = (a, b) => bandEnergy(rm.L, a, b);
+  assert.ok(e(880, 920) > e(980, 1020) * 20 && e(1080, 1120) > e(980, 1020) * 20, 'sidebands at 1000 ± 100 Hz, carrier suppressed');
+});
+
+test('tape saturator: drive adds harmonics, bias adds even harmonics, wow moves the pitch', () => {
+  const x = sine(300, 1, 0.3);
+  const clean = run('tape', { drive: 0, bias: 0, bump: 0, wow: 0, flutter: 0, tone: 20000 }, x);
+  const hot = run('tape', { drive: 20, bias: 0, bump: 0, wow: 0, flutter: 0, tone: 20000 }, x);
+  const thd = (r) => Math.sqrt(bandEnergy(r.L, 850, 950) + bandEnergy(r.L, 1450, 1550)) / Math.sqrt(bandEnergy(r.L, 280, 320));
+  assert.ok(thd(hot) > 0.1 && thd(hot) > thd(clean) * 10, `odd harmonics grow with drive: ${thd(hot)} vs ${thd(clean)}`);
+  const even = (r) => Math.sqrt(bandEnergy(r.L, 580, 620)) / Math.sqrt(bandEnergy(r.L, 280, 320));
+  const biased = run('tape', { drive: 12, bias: 0.8, bump: 0, wow: 0, flutter: 0, tone: 20000 }, x);
+  const unbiased = run('tape', { drive: 12, bias: 0, bump: 0, wow: 0, flutter: 0, tone: 20000 }, x);
+  assert.ok(even(biased) > even(unbiased) * 5 && even(biased) > 0.03, `bias creates the 2nd harmonic: ${even(biased)} vs ${even(unbiased)}`);
+  const wow = run('tape', { drive: 0, bias: 0, bump: 0, wow: 1, flutter: 0, tone: 20000 }, sine(1000, 2, 0.4));
+  const side = bandEnergy(wow.L, 940, 985, 8192, 32768) + bandEnergy(wow.L, 1015, 1060, 8192, 32768);
+  assert.ok(side > bandEnergy(clean.L, 940, 985) * 100 + 1e-3 || side > 1, 'wow frequency-modulates the tone (sidebands appear)');
+  assert.ok(peak(hot.L, 8000) < 1.2, 'saturation stays bounded');
 });

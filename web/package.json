@@ -1,8 +1,8 @@
 {
-  "name": "stepwise-daw",
+  "name": "fl-lua-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Stepwise: browser DAW with a pattern-based Channel Rack -> Playlist workflow",
+  "description": "FL LUA: browser DAW with a pattern-based Channel Rack -> Playlist workflow",
   "type": "module",
   "license": "MIT",
   "scripts": {

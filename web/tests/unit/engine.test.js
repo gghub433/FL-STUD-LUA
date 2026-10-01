@@ -132,7 +132,7 @@ test('loop wrap keeps the pattern in time over many repeats (live engine)', () =
 });
 
 test('normalize() repairs garbage and rejects foreign files', () => {
-  assert.throws(() => normalize({}), /Not a Stepwise project/);
+  assert.throws(() => normalize({}), /Not an FL LUA project/);
   assert.throws(() => normalize(null));
   const p = demoProject();
   const back = normalize(JSON.parse(JSON.stringify(p)));

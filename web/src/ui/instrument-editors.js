@@ -15,6 +15,9 @@ import { PADS, BANKS, MAX_LAYERS } from '../core/instruments/fpc.js';
 import { detectSlices, evenSlices, estimateLoop } from '../core/slice-detect.js';
 import { FACTORY } from '../core/factory.js';
 import { schemaMap } from '../core/schema.js';
+import { instrumentPresetItems } from './presets-ui.js';
+import { FOOTAGE, PRESETS as ORGAN_PRESETS } from '../core/instruments/organ.js';
+import { frameWave, WT_FRAMES, TABLE_NAMES } from '../core/instruments/wavetable.js';
 
 const addrOf = (chId) => (id) => `ch:${chId}:p:${id}`;
 
@@ -28,6 +31,7 @@ function chHead(app, win, chId, extra = []) {
     new Knob(app, { addr: `ch:${chId}:pan`, size: 'sm', title: 'Channel panning' }).el,
     new Knob(app, { addr: `ch:${chId}:pitch`, size: 'sm', title: 'Channel pitch (semitones)' }).el,
     ...extra, h('div.grow'),
+    h('div.btn', { hint: 'Presets — factory and your own saved settings for this plugin', onclick: (e) => { const r = e.currentTarget.getBoundingClientRect(); showPopup(instrumentPresetItems(app, chId), r.left, r.bottom, r); } }, 'Presets ▾'),
     h('div.btn', { hint: 'Preview — plays the channel at its root key', onclick: () => app.preview(chId) }, '▶ Preview'));
   return head;
 }
@@ -528,3 +532,94 @@ slicerEditor.rect = { w: 720, h: 430 };
 drumsEditor.rect = { w: 560, h: 400 };
 synthEditor.rect = { w: 620, h: 440 };
 fmEditor.rect = { w: 780, h: 580 };
+
+
+// =================================================================================== ORGAN
+const DRAWBAR_COLOR = ['#8a5a2b', '#8a5a2b', '#e8e6e1', '#e8e6e1', '#2a2d31', '#e8e6e1', '#2a2d31', '#e8e6e1', '#e8e6e1'];
+export function organEditor(win, app, chId) {
+  const store = app.store, cmd = app.cmd;
+  const ch = () => store.channel(chId);
+  const schema = instrumentSchema('organ');
+  const head = chHead(app, win, chId);
+  const bars = h('div.organ-bars');
+  const drawbar = (i) => {
+    const el = h('div.organ-bar', { dataset: { bar: i }, hint: `Drawbar ${FOOTAGE[i][0]} — drag or click to set the level (0 to 8), double-click resets` },
+      h('div.organ-track'), h('div.organ-knob', { style: { background: DRAWBAR_COLOR[i], color: DRAWBAR_COLOR[i] === '#e8e6e1' ? '#222' : '#fff' } }), h('div.organ-label', FOOTAGE[i][0]), h('div.organ-val'));
+    const set = (clientY) => {
+      const r = el.querySelector('.organ-track').getBoundingClientRect();
+      const lv = clamp(Math.round(((clientY - r.top) / r.height) * 8), 0, 8);
+      store.setParam(`ch:${chId}:p:d${i}`, lv, { coalesce: `organ:d${i}` });
+    };
+    el.addEventListener('pointerdown', (e) => { if (e.button !== 0) return; set(e.clientY); drag(e, (dx, dy, ev) => set(ev.clientY)); });
+    el.addEventListener('dblclick', () => store.setParam(`ch:${chId}:p:d${i}`, schema.find((d) => d.id === `d${i}`).def));
+    el.addEventListener('contextmenu', (e) => contextMenu(e, [{ title: `Drawbar ${FOOTAGE[i][0]}` }, ...(app.paramMenuItems ? app.paramMenuItems(`ch:${chId}:p:d${i}`) : [])]));
+    return el;
+  };
+  for (let i = 0; i < 9; i++) bars.append(drawbar(i));
+  const paint = () => {
+    const c = ch(); if (!c) return;
+    bars.querySelectorAll('.organ-bar').forEach((el, i) => {
+      const v = c.params[`d${i}`];
+      el.querySelector('.organ-knob').style.top = `${(v / 8) * 100}%`;
+      el.querySelector('.organ-val').textContent = String(v);
+      el.querySelector('.organ-track').style.setProperty('--fill', `${(v / 8) * 100}%`);
+    });
+  };
+  const presetRow = h('div.row', { style: { padding: '6px 10px', gap: '6px', flexWrap: 'wrap' } }, h('span.dim', 'Registrations'),
+    ...Object.entries(ORGAN_PRESETS).map(([name, lv]) => h('div.btn.sm', { hint: `${name} — sets all nine drawbars`, onclick: () => cmd.applyParams(store, chId, Object.fromEntries(lv.map((v, i) => [`d${i}`, v])), `Registration: ${name}`) }, name)));
+  const ctl = tabbed(app, chId, schema, [{ name: 'Drawbars', groups: [] }, { name: 'Percussion', groups: ['Percussion'] }, { name: 'Sound', groups: ['Sound'] }], { Drawbars: () => h('div', bars, presetRow) });
+  const el = h('div.rack', head, ctl.bar, ctl.body);
+  const subs = [store.bus.on('param', (a) => { if (a.startsWith(`ch:${chId}:p:d`)) paint(); }), store.bus.on('change', paint), store.bus.on('project', () => { if (!ch()) win.close(); else paint(); })];
+  ctl.bar.addEventListener('click', () => requestAnimationFrame(paint));       // the drawbars are re-attached when their tab is shown
+  requestAnimationFrame(paint);
+  return { el, destroy() { for (const s of subs) s(); } };
+}
+organEditor.rect = { w: 560, h: 420 };
+
+// =================================================================================== WAVETABLE
+export function wavetableEditor(win, app, chId) {
+  const store = app.store;
+  const ch = () => store.channel(chId);
+  const schema = instrumentSchema('wavetable');
+  const head = chHead(app, win, chId);
+  const cv = h('canvas', { width: 520, height: 150, style: { width: '100%', height: '150px', display: 'block', background: '#0e1012', cursor: 'ew-resize' }, hint: 'Wavetable — drag horizontally to scan through the frames (Position)' });
+  const draw = () => {
+    const c = ch(); if (!c) return;
+    const W = Math.max(200, Math.floor(cv.clientWidth || 520)); if (cv.width !== W) cv.width = W;
+    const H = cv.height, g = cv.getContext('2d');
+    g.fillStyle = '#0e1012'; g.fillRect(0, 0, W, H);
+    const table = c.params.table, pos = c.params.pos;
+    const N = 2048, buf = new Float32Array(N);
+    const frames = WT_FRAMES, plotW = W - 80, plotH = H - 50;
+    // back-to-front stack of all frames, slightly offset like a waterfall
+    for (let f = frames - 1; f >= 0; f--) {
+      frameWave(table, f / (frames - 1), buf);
+      const ox = 10 + (f / (frames - 1)) * 60, oy = 8 + (1 - f / (frames - 1)) * 30;
+      g.strokeStyle = `rgba(255,176,46,${0.18 + 0.1 * (1 - f / (frames - 1))})`; g.lineWidth = 1; g.beginPath();
+      for (let x = 0; x <= 128; x++) { const v = buf[Math.min(N - 1, Math.floor((x / 128) * N))]; const px = ox + (x / 128) * plotW, py = oy + plotH / 2 - v * plotH * 0.42; if (x === 0) g.moveTo(px, py); else g.lineTo(px, py); }
+      g.stroke();
+    }
+    // current frame, bright
+    frameWave(table, pos, buf);
+    const ox = 10 + pos * 60, oy = 8 + (1 - pos) * 30;
+    g.strokeStyle = '#ffc04a'; g.lineWidth = 2; g.beginPath();
+    for (let x = 0; x <= 256; x++) { const v = buf[Math.min(N - 1, Math.floor((x / 256) * N))]; const px = ox + (x / 256) * plotW, py = oy + plotH / 2 - v * plotH * 0.42; if (x === 0) g.moveTo(px, py); else g.lineTo(px, py); }
+    g.stroke();
+    g.fillStyle = '#8e989f'; g.font = '10px sans-serif'; g.fillText(`${TABLE_NAMES[table]}  ·  position ${(pos * 100).toFixed(0)}%`, 8, H - 6);
+  };
+  cv.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const r = cv.getBoundingClientRect(), start = ch().params.pos, sx = e.clientX;
+    drag(e, (dx, dy, ev) => store.setParam(`ch:${chId}:p:pos`, clamp(start + (ev.clientX - sx) / r.width * 1.2, 0, 1), { coalesce: 'wt:pos' }));
+  });
+  const groups = [...new Set(schema.map((d) => d.group))];
+  const ctl = tabbed(app, chId, schema, groups.map((g) => ({ name: g, groups: [g] })), {});
+  const el = h('div.rack', head, h('div', { style: { padding: '0 8px', background: '#0e1012', flex: 'none' } }, cv), ctl.bar, ctl.body);
+  const subs = [
+    store.bus.on('param', (a) => { if (a.startsWith(`ch:${chId}:p:`)) draw(); }),
+    store.bus.on('change', draw), store.bus.on('project', () => { if (!ch()) win.close(); else draw(); }),
+  ];
+  requestAnimationFrame(draw);
+  return { el, onResize: draw, destroy() { for (const s of subs) s(); } };
+}
+wavetableEditor.rect = { w: 640, h: 520 };

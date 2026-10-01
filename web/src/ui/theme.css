@@ -1,4 +1,4 @@
-/* Stepwise DAW: dark theme. Own palette; no third-party assets. */
+/* FL LUA: dark theme. Own palette; no third-party assets. */
 :root {
   --bg0: #272a2d; --bg1: #303438; --bg2: #3a3f44; --bg3: #454b51; --bg4: #525a62;
   --line: #17191b; --hi: #5a636b;
@@ -26,7 +26,7 @@ canvas { display: block; }
 .menu-top { padding: 0 11px; display: flex; align-items: center; letter-spacing: .6px; font-size: 10.5px; color: var(--text); cursor: default; }
 .menu-top:hover, .menu-top.open { background: var(--bg3); color: #fff; }
 .app-name { display: flex; align-items: center; padding: 0 10px 0 6px; margin-right: 4px; color: var(--accent); font-weight: 700; letter-spacing: 1.2px; }
-.app-name i { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); margin-right: 6px; box-shadow: 0 0 6px var(--accent-dim); }
+.app-logo { width: 18px; height: 18px; margin-right: 7px; border-radius: 4px; filter: drop-shadow(0 0 4px rgba(255,176,46,.35)); }
 
 .popup { position: fixed; z-index: 1000; min-width: 190px; background: var(--bg2); border: 1px solid #0c0d0e; box-shadow: 0 8px 24px rgba(0,0,0,.55); padding: 3px 0; }
 .popup .item { display: flex; align-items: center; justify-content: space-between; gap: 22px; padding: 4px 14px 4px 12px; white-space: nowrap; cursor: default; }
@@ -296,3 +296,12 @@ canvas { display: block; }
 .pl-center canvas { position: absolute; left: 0; }
 .pl-ruler { cursor: pointer; }
 .pl-playhead { position: absolute; left: 0; top: 0; width: 1px; background: #fff; box-shadow: 0 0 4px rgba(255,255,255,.7); pointer-events: none; display: none; z-index: 3; }
+
+/* ------------------------------------------------------------ organ drawbars */
+.organ-bars { display: flex; justify-content: center; gap: 10px; padding: 14px 12px 8px; background: #25282b; }
+.organ-bar { position: relative; width: 44px; height: 190px; padding-bottom: 36px; cursor: ns-resize; touch-action: none; }
+.organ-track { position: absolute; left: 18px; top: 0; bottom: 36px; width: 8px; background: #0c0e10; border-radius: 4px; box-shadow: inset 0 0 0 1px #000; }
+.organ-track::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: var(--fill, 0%); background: linear-gradient(#ffb02e, #b97b12); border-radius: 4px; opacity: .55; }
+.organ-knob { position: absolute; left: 6px; width: 32px; height: 18px; margin-top: -9px; border-radius: 3px; border: 1px solid #000; box-shadow: 0 2px 3px rgba(0,0,0,.6); font-size: 10px; text-align: center; line-height: 16px; }
+.organ-label { position: absolute; bottom: 16px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--dim); }
+.organ-val { position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; font-family: var(--mono); color: var(--accent); }

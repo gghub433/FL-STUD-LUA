@@ -4,7 +4,8 @@ import { STEP, MIDDLE_C } from '../core/constants.js';
 import {
   createChannel, createNote, createPattern, clone, patternLength, barTicks, stepsPerBar, nextId, COLORS, currentArrangement, createFxSlot,
 } from '../core/project.js';
-import { instrumentMeta } from '../core/instruments/index.js';
+import { instrumentMeta, instrumentSchema } from '../core/instruments/index.js';
+import { defaults, clampParam } from '../core/schema.js';
 
 const CH = [['channels']];
 
@@ -646,4 +647,18 @@ export async function stretchClip(store, clipId, ratio, semitones) {
     delete c.pitch;
   }, 'Time-stretch clip');
   return true;
+}
+
+// Load a preset: the instrument returns to its defaults first, then the preset's values are applied (one undo step)
+export function loadInstrumentPreset(store, chId, params, label = 'Load preset') {
+  store.edit(label, () => {
+    const c = store.channel(chId);
+    if (!c) return;
+    const schema = instrumentSchema(c.type) || [];
+    c.params = { ...defaults(schema) };
+    for (const [k, v] of Object.entries(params)) {
+      const d = schema.find((x) => x.id === k);
+      if (d) c.params[k] = clampParam(d, v);
+    }
+  }, CH);
 }

@@ -1,6 +1,10 @@
+<p align="center"><img src="web/assets/logo.svg" alt="FL LUA" width="420"></p>
+
 # FL-STUD-LUA
 
-В репозитории две части:
+В репозитории три части:
+
+0. **[FL LUA](web/README.md)** — веб-DAW в браузере: AudioWorklet-движок с сэмпл-точным планированием, Channel Rack + Step Sequencer, Piano Roll, Playlist, микшер на 125 инсертов, 9 инструментов и 20 эффектов. Запуск: `cd web && node tools/serve.mjs`.
 
 1. **[Подробный разбор FL Studio](docs/FL_Studio_razbor.md)**: история, ядро программы, редакции, эксклюзивы All Plugins Edition, что нового в FL Studio 2026, экономика выбора редакции, сильные и слабые стороны.
 2. **LuaLoops** — собственный бесплатный open-source битмейкер на Lua ([LÖVE](https://love2d.org)) с паттерновым воркфлоу в духе FL Studio (Channel Rack → Piano Roll → Playlist). Собирается в Windows `.exe`.

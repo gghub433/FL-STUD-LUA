@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 256" width="800" height="256">
+  <g>
+<defs>
+    <linearGradient id="bg" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#ffcf55"/>
+      <stop offset="0.55" stop-color="#ff9a1a"/>
+      <stop offset="1" stop-color="#f26a0a"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".45"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b3036"/>
+      <stop offset="1" stop-color="#14171a"/>
+    </linearGradient>
+    <mask id="crescent">
+      <rect width="256" height="256" fill="#000"/>
+      <circle cx="168" cy="102" r="44" fill="#fff"/>
+      <circle cx="184" cy="91" r="38" fill="#000"/>
+    </mask>
+  </defs>
+  <rect x="6" y="6" width="244" height="244" rx="60" fill="url(#bg)"/>
+  <rect x="6" y="6" width="244" height="244" rx="60" fill="url(#shine)"/>
+  <rect x="9" y="9" width="238" height="238" rx="57" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2"/>
+  <!-- crescent moon ("lua" is Portuguese for moon) -->
+  <rect width="256" height="256" fill="url(#ink)" mask="url(#crescent)"/>
+  <!-- the L, with the moon resting in its corner; three LEDs in the foot hint at a step sequencer -->
+  <g fill="url(#ink)">
+    <rect x="56" y="50" width="48" height="154" rx="15"/>
+    <rect x="56" y="158" width="160" height="46" rx="15"/>
+  </g>
+  <g fill="#ffd36a">
+    <circle cx="132" cy="181" r="6.5"/>
+    <circle cx="160" cy="181" r="6.5" opacity=".5"/>
+    <circle cx="188" cy="181" r="6.5" opacity=".5"/>
+  </g>
+
+  </g>
+  <text x="290" y="150" font-family="'Segoe UI','Inter','Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="104" letter-spacing="4" fill="#ffb02e">FL LUA</text>
+  <text x="294" y="196" font-family="'Segoe UI','Inter','Helvetica Neue',Arial,sans-serif" font-weight="500" font-size="23" letter-spacing="5" fill="#8e989f">PATTERN-BASED BROWSER DAW</text>
+</svg>

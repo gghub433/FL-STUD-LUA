@@ -4,6 +4,8 @@ import { h, clear } from './h.js';
 import { paramControl, paramGrid } from './param-controls.js';
 import { instrumentSchema, instrumentMeta } from '../core/instruments/index.js';
 import { Knob } from './knob.js';
+import { showPopup } from './menu.js';
+import { instrumentPresetItems } from './presets-ui.js';
 
 export function openChannelEditor(app, chId) {
   const store = app.store;
@@ -60,7 +62,9 @@ export function genericEditor(win, app, chId) {
   if (ch0.type === 'sampler') {
     head.append(sampleName, h('div.btn', { hint: 'Load sample — pick an audio file from disk', onclick: () => app.pickSampleFor(chId) }, 'Load sample…'));
   }
-  head.append(h('div.grow'), h('div.btn', { hint: 'Preview — plays the channel at its root key', onclick: () => app.preview(chId) }, '▶ Preview'));
+  head.append(h('div.grow'),
+    h('div.btn', { hint: 'Presets — factory and your own saved settings for this plugin', onclick: (e) => { const r = e.currentTarget.getBoundingClientRect(); showPopup(instrumentPresetItems(app, chId), r.left, r.bottom, r); } }, 'Presets ▾'),
+    h('div.btn', { hint: 'Preview — plays the channel at its root key', onclick: () => app.preview(chId) }, '▶ Preview'));
   if (groups.length > 1) render(); else render();
   refreshHead();
   const off1 = store.bus.on('change', ({ paths }) => { if (paths.some((p) => p[0] === 'channels')) refreshHead(); });

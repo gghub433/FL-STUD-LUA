@@ -1,4 +1,4 @@
-// Stepwise DAW: application bootstrap and wiring.
+// FL LUA: application bootstrap and wiring.
 import { h } from './ui/h.js';
 import { AudioHost } from './host/audio-host.js';
 import { SampleBank } from './host/sample-bank.js';
@@ -139,7 +139,7 @@ app.newProject = async () => {
 app.openDemo = async () => { await app.store.replaceProject(demoProject()); toast('Demo project loaded. Press Space to play'); };
 
 app.openFile = () => {
-  const inp = h('input', { type: 'file', accept: '.stepwise,.json,application/json', style: { display: 'none' } });
+  const inp = h('input', { type: 'file', accept: '.fllua,.stepwise,.json,application/json', style: { display: 'none' } });
   inp.addEventListener('change', async () => {
     const f = inp.files[0];
     if (!f) return;
@@ -165,7 +165,7 @@ app.saveProject = async () => {
 app.downloadProject = () => {
   const p = app.store.project;
   const name = (p.meta.title || 'project').replace(/[^\w\- ]+/g, '_');
-  downloadBlob(new TextEncoder().encode(app.store.serialize()), `${name}.stepwise`, 'application/json');
+  downloadBlob(new TextEncoder().encode(app.store.serialize()), `${name}.fllua`, 'application/json');
 };
 
 app.sampleMap = () => {
@@ -251,10 +251,10 @@ function buildMenus() {
     ] },
     { label: 'HELP', items: () => [
       { label: 'Keyboard shortcuts', fn: () => app.shortcutsDialog() },
-      { label: 'About Stepwise', fn: () => app.about() },
+      { label: 'About FL LUA', fn: () => app.about() },
     ] },
   ];
-  const brand = h('div.app-name', h('i'), 'STEPWISE');
+  const brand = h('div.app-name', h('img.app-logo', { src: 'assets/icon.svg', alt: '', width: 18, height: 18, draggable: false }), 'FL LUA');
   buildMenuBar(document.getElementById('menubar'), defs, brand);
 }
 
@@ -288,7 +288,7 @@ app.audioInfo = () => {
   ].join('\n'));
 };
 
-app.about = () => alertBox('Stepwise DAW', 'A browser DAW with a pattern-based workflow (Channel rack → Playlist).\nAudio engine in an AudioWorklet; the same engine renders exports offline.\nOpen source (MIT). Not affiliated with any other DAW vendor.');
+app.about = () => alertBox('FL LUA', 'A browser DAW with a pattern-based workflow (Channel rack → Playlist).\nAudio engine in an AudioWorklet; the same engine renders exports offline.\nOpen source (MIT). Not affiliated with any other DAW vendor.');
 
 app.shortcutsDialog = () => {
   const rows = [
@@ -374,7 +374,7 @@ function wireDrop() {
     if (e.defaultPrevented) return;
     e.preventDefault();
     for (const f of e.dataTransfer.files) {
-      if (/\.(stepwise|json)$/i.test(f.name)) { try { await app.loadProjectFile(f); } catch (err) { toast(`Could not open ${f.name}: ${err.message}`); } continue; }
+      if (/\.(fllua|stepwise|json)$/i.test(f.name)) { try { await app.loadProjectFile(f); } catch (err) { toast(`Could not open ${f.name}: ${err.message}`); } continue; }
       try {
         const smp = await app.bank.decode(f.name, await f.arrayBuffer());
         const ch = cmd.addChannel(app.store, 'sampler', { name: smp.name, sample: { id: smp.id, name: smp.name } });

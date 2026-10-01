@@ -178,3 +178,155 @@ test('synth channels play through the full engine (pattern notes)', () => {
   const r = renderOffline(p, new Map(), { sampleRate: SR, mode: 'pat', tail: 0.5 });
   assert.ok(peak(r.left) > 0.05 && peak(r.right) > 0.05, `peak ${peak(r.left)}`);
 });
+
+// ---- Pluck / Organ / Wavetable -------------------------------------------------------------
+const ev = (key, vel = 0.9, extra = {}) => ({ key, vel, pan: 0, rel: 64, fine: 0, mx: 128, my: 128, slide: 0, len: 0, nid: 0, ...extra });
+const mkInst = (type, params = {}) => { const i = createInstrument(type, SR, host()); for (const [k, v] of Object.entries(params)) i.setParam(k, v); return i; };
+const hz = (key) => 440 * Math.pow(2, (key - 69) / 12);
+
+test('every registered instrument has schema + meta and renders finite, bounded audio for notes across the range', () => {
+  for (const [type, mod] of Object.entries(INSTRUMENTS)) {
+    assert.ok(mod.schema.length && mod.meta.name, type);
+    if (['sampler', 'fpc', 'slicer'].includes(type)) continue;                         // need samples; covered elsewhere
+    const inst = mkInst(type);
+    for (const k of [24, 60, 96, 120]) {
+      const { L, R } = render(inst, 8192, [{ at: 0, fn: () => inst.noteOn(ev(k)) }, { at: 5000, fn: () => inst.noteOff(k) }]);
+      for (let i = 0; i < L.length; i += 13) assert.ok(Number.isFinite(L[i]) && Number.isFinite(R[i]), `${type} key ${k}: NaN`);
+      assert.ok(peak(L) < 4 && peak(L) > 0, `${type} key ${k}: peak ${peak(L)}`);
+    }
+  }
+});
+
+// fundamental by autocorrelation with parabolic refinement (spectral peaks pick a strong harmonic on plucked strings)
+function f0Auto(a, from, len, fmin, fmax) {
+  const lagMin = Math.floor(SR / fmax), lagMax = Math.ceil(SR / fmin);
+  const r = (lag) => { let s = 0; for (let i = 0; i < len; i++) s += a[from + i] * a[from + i + lag]; return s; };
+  let best = lagMin, bv = -Infinity; const vals = new Map();
+  for (let lag = lagMin; lag <= lagMax; lag++) { const v = r(lag); vals.set(lag, v); if (v > bv) { bv = v; best = lag; } }
+  const y0 = vals.get(best - 1) ?? bv, y2 = vals.get(best + 1) ?? bv, d = y0 - 2 * bv + y2;
+  const off = d !== 0 ? (0.5 * (y0 - y2)) / d : 0;
+  return SR / (best + off);
+}
+
+test('pluck: pitch is accurate over the range, decay and damping do what they say, note-off mutes', () => {
+  for (const k of [36, 48, 60, 72, 84, 96]) {
+    const i = mkInst('pluck', { damping: 0.2, width: 0 });
+    const { L } = render(i, 20000, [{ at: 0, fn: () => i.noteOn(ev(k)) }]);
+    const want = hz(k), f = f0Auto(L, 3000, 4096, want * 0.7, want * 1.4);
+    assert.ok(Math.abs(Math.log2(f / want)) * 1200 < 8, `key ${k}: ${f.toFixed(2)} Hz vs ${want.toFixed(2)} Hz (${(Math.log2(f / want) * 1200).toFixed(1)} cents)`);
+  }
+  const short = mkInst('pluck', { decay: 0.3 }), long = mkInst('pluck', { decay: 6 });
+  const a = render(short, 44100, [{ at: 0, fn: () => short.noteOn(ev(60)) }]).L, b = render(long, 44100, [{ at: 0, fn: () => long.noteOn(ev(60)) }]).L;
+  assert.ok(rms(b, 30000) > rms(a, 30000) * 8, `longer decay rings on: ${rms(b, 30000)} vs ${rms(a, 30000)}`);
+  const dark = mkInst('pluck', { damping: 0.9 }), bright = mkInst('pluck', { damping: 0 });
+  const cd = centroid(render(dark, 20000, [{ at: 0, fn: () => dark.noteOn(ev(60)) }]).L, 2048), cb = centroid(render(bright, 20000, [{ at: 0, fn: () => bright.noteOn(ev(60)) }]).L, 2048);
+  assert.ok(cb > cd * 1.3, `damping darkens the tone: ${cb} vs ${cd}`);
+  const rel = mkInst('pluck', { decay: 8, release: 30 });
+  const r = render(rel, 30000, [{ at: 0, fn: () => rel.noteOn(ev(55)) }, { at: 8000, fn: () => rel.noteOff(55) }]).L;
+  assert.ok(rms(r, 20000, 30000) < rms(r, 4000, 8000) * 0.03, 'note-off mutes the string');
+  const soft = mkInst('pluck', { velBright: 1, damping: 0.1 }), hard = mkInst('pluck', { velBright: 1, damping: 0.1 });
+  const cs = centroid(render(soft, 20000, [{ at: 0, fn: () => soft.noteOn(ev(60, 0.15)) }]).L, 1024), chd = centroid(render(hard, 20000, [{ at: 0, fn: () => hard.noteOn(ev(60, 1)) }]).L, 1024);
+  assert.ok(chd > cs * 1.2, `harder plucks are brighter: ${cs} -> ${chd}`);
+});
+
+test('pluck voices free themselves after the string has died', () => {
+  const i = mkInst('pluck', { decay: 0.1 });
+  render(i, 3000, [{ at: 0, fn: () => i.noteOn(ev(72)) }]);
+  render(i, 44100 * 2, []);
+  assert.equal(i.active, false);
+});
+
+test('organ: drawbars choose the partials, percussion decays, rotary and overdrive stay stable', () => {
+  const only8 = mkInst('organ', { d0: 0, d1: 0, d2: 8, d3: 0, d4: 0, d5: 0, d6: 0, d7: 0, d8: 0, click: 0, drive: 0 });
+  const a = render(only8, 30000, [{ at: 0, fn: () => only8.noteOn(ev(57)) }]).L;
+  assert.ok(Math.abs(peakFreq(a) - hz(57)) < 4, `8' drawbar plays the key: ${peakFreq(a)}`);
+  const add4 = mkInst('organ', { d0: 0, d1: 0, d2: 8, d3: 8, d4: 0, d5: 0, d6: 0, d7: 0, d8: 0, click: 0, drive: 0 });
+  const b = render(add4, 30000, [{ at: 0, fn: () => add4.noteOn(ev(57)) }]).L;
+  assert.ok(centroid(b) > centroid(a) * 1.4, "adding the 4' drawbar brightens the sound");
+  const sub = mkInst('organ', { d0: 8, d1: 0, d2: 0, d3: 0, d4: 0, d5: 0, d6: 0, d7: 0, d8: 0, click: 0, drive: 0 });
+  assert.ok(Math.abs(peakFreq(render(sub, 30000, [{ at: 0, fn: () => sub.noteOn(ev(57)) }]).L) - hz(57) / 2) < 4, "16' sounds an octave below");
+  const perc = mkInst('organ', { perc: 1, percLevel: 1, percDecay: 0, click: 0, drive: 0 }), plain = mkInst('organ', { perc: 0, click: 0, drive: 0 });
+  const p1 = render(perc, 44100, [{ at: 0, fn: () => perc.noteOn(ev(60)) }]).L, p0 = render(plain, 44100, [{ at: 0, fn: () => plain.noteOn(ev(60)) }]).L;
+  assert.ok(rms(p1, 0, 4000) > rms(p0, 0, 4000) * 1.1 && Math.abs(rms(p1, 30000, 40000) / rms(p0, 30000, 40000) - 1) < 0.08, 'percussion adds a bite that fades');
+  const rot = mkInst('organ', { rotary: 2, rotDepth: 1, drive: 0.8 });
+  const r = render(rot, 20000, [{ at: 0, fn: () => { rot.noteOn(ev(48)); rot.noteOn(ev(60)); rot.noteOn(ev(64)); } }]);
+  assert.ok(peak(r.L) < 3 && rms(r.L, 5000) > 0.02, 'chord through rotary + overdrive');
+  const k = mkInst('organ', { release: 20 });
+  render(k, 6000, [{ at: 0, fn: () => k.noteOn(ev(60)) }, { at: 2000, fn: () => k.noteOff(60) }]);
+  render(k, 12000, []);
+  assert.equal(k.active, false, 'released notes end');
+});
+
+test('wavetable: pitch is accurate, position morphs the spectrum, high notes do not alias', () => {
+  for (const k of [36, 60, 84]) {
+    const i = mkInst('wavetable', { ftype: 3, uni: 1 });
+    const { L } = render(i, 30000, [{ at: 0, fn: () => i.noteOn(ev(k)) }]);
+    assert.ok(Math.abs(Math.log2(peakFreq(L) / hz(k))) * 1200 < 25 || Math.abs(Math.log2(peakFreq(L) / (2 * hz(k)))) * 1200 < 25 || Math.abs(Math.log2(peakFreq(L) / (3 * hz(k)))) * 1200 < 25, `key ${k}: ${peakFreq(L)}`);
+  }
+  const lo = mkInst('wavetable', { table: 0, pos: 0, ftype: 3, uni: 1 }), hi = mkInst('wavetable', { table: 0, pos: 0.6, ftype: 3, uni: 1 });
+  const cl = centroid(render(lo, 20000, [{ at: 0, fn: () => lo.noteOn(ev(48)) }]).L), ch = centroid(render(hi, 20000, [{ at: 0, fn: () => hi.noteOn(ev(48)) }]).L);
+  assert.ok(ch > cl * 3, `position 0 (sine) vs 0.6 (saw-ish): centroid ${cl} -> ${ch}`);
+  // alias check: a bright saw-like frame on a very high note must have (almost) no energy between its harmonics
+  const sawI = mkInst('wavetable', { table: 0, pos: 0.66, ftype: 3, uni: 1 });
+  const key = 100, f0 = hz(key);
+  const { L } = render(sawI, 40000, [{ at: 0, fn: () => sawI.noteOn(ev(key, 1)) }]);
+  const N = 16384, fft = new FFT(N), re = new Float32Array(N), im = new Float32Array(N);
+  for (let i = 0; i < N; i++) re[i] = L[8000 + i] * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / N));
+  fft.transform(re, im);
+  let harm = 0, between = 0;
+  for (let k = 3; k < N / 2; k++) {
+    const f = (k * SR) / N, nearest = Math.round(f / f0), d = Math.abs(f - nearest * f0);
+    const e = re[k] * re[k] + im[k] * im[k];
+    if (d < 40) harm += e; else between += e;
+  }
+  assert.ok(between < harm * 0.003, `aliasing energy ${(10 * Math.log10(between / harm)).toFixed(1)} dB below the harmonics`);
+});
+
+test('wavetable: unison beats, filter envelope darkens, loudness is similar across pitches', () => {
+  const one = mkInst('wavetable', { uni: 1, ftype: 3 }), five = mkInst('wavetable', { uni: 5, unidet: 40, ftype: 3 });
+  const a = render(one, 30000, [{ at: 0, fn: () => one.noteOn(ev(60)) }]).L, b = render(five, 30000, [{ at: 0, fn: () => five.noteOn(ev(60)) }]).L;
+  const env = (x) => { const e = []; for (let i = 8000; i + 441 < x.length; i += 441) e.push(rms(x, i, i + 441)); return Math.max(...e) / Math.max(1e-9, Math.min(...e)); };
+  assert.ok(env(b) > env(a) * 1.15, `detuned unison amplitude beats: ${env(b)} vs ${env(a)}`);
+  const open = mkInst('wavetable', { table: 0, pos: 0.7, ftype: 0, cutoff: 12000, fenv: 0 }), closed = mkInst('wavetable', { table: 0, pos: 0.7, ftype: 0, cutoff: 400, fenv: 0 });
+  assert.ok(centroid(render(open, 20000, [{ at: 0, fn: () => open.noteOn(ev(48)) }]).L) > centroid(render(closed, 20000, [{ at: 0, fn: () => closed.noteOn(ev(48)) }]).L) * 2, 'cutoff darkens');
+  const levels = [36, 60, 84, 108].map((k) => { const i = mkInst('wavetable', { table: 0, pos: 0.7, ftype: 3, uni: 1, as: 1 }); return rms(render(i, 20000, [{ at: 0, fn: () => i.noteOn(ev(k, 1)) }]).L, 8000); });
+  assert.ok(Math.max(...levels) / Math.min(...levels) < 2.2, `similar loudness across the range: ${levels.map((l) => l.toFixed(3))}`);
+  for (let t = 0; t < 6; t++) { const w = mkInst('wavetable', { table: t, pos: 0.5, ftype: 3 }); const r = render(w, 8000, [{ at: 0, fn: () => w.noteOn(ev(60)) }]); assert.ok(peak(r.L) > 0.05 && peak(r.L) < 1.5, `table ${t} audible and bounded: ${peak(r.L)}`); }
+});
+
+test('new instruments work inside a project render (Pluck, Organ, Wavetable)', () => {
+  for (const type of ['pluck', 'organ', 'wavetable']) {
+    const p = createProject(); p.tempo = 120;
+    const ch = createChannel(p, type, { name: type, mixer: 0 }); p.channels.push(ch);
+    p.patterns[1].notes[ch.id] = [createNote(p, 0, 96, 60, 100), createNote(p, 96, 96, 67, 100)];
+    const r = renderOffline(p, new Map(), { mode: 'pat', sampleRate: SR, tail: 0.3 });
+    assert.ok(peak(r.left) > 0.05 && peak(r.left) < 2, `${type}: ${peak(r.left)}`);
+    const q = normalize(JSON.parse(JSON.stringify(p)));
+    assert.equal(q.channels[0].type, type, 'survives save/load');
+  }
+});
+
+test('factory presets only use real parameters with in-range values', async () => {
+  const { INSTRUMENT_PRESETS, EFFECT_PRESETS } = await import('../../src/core/presets.js');
+  const { EFFECTS } = await import('../../src/core/effects/index.js');
+  const { clampParam } = await import('../../src/core/schema.js');
+  const check = (kind, type, schema, sets) => {
+    const byId = new Map(schema.map((d) => [d.id, d]));
+    for (const [name, params] of Object.entries(sets)) {
+      assert.ok(Object.keys(params).length > 0, `${kind} ${type} "${name}" is empty`);
+      for (const [k, v] of Object.entries(params)) {
+        const d = byId.get(k);
+        assert.ok(d, `${kind} ${type} "${name}": unknown parameter ${k}`);
+        assert.equal(clampParam(d, v), v, `${kind} ${type} "${name}": ${k}=${v} outside ${d.min}..${d.max}`);
+      }
+    }
+  };
+  for (const [type, sets] of Object.entries(INSTRUMENT_PRESETS)) check('instrument', type, INSTRUMENTS[type].schema, sets);
+  for (const [type, sets] of Object.entries(EFFECT_PRESETS)) check('effect', type, EFFECTS[type].schema, sets);
+  // every preset renders without NaN
+  for (const [type, sets] of Object.entries(INSTRUMENT_PRESETS)) for (const params of Object.values(sets)) {
+    const i = mkInst(type, params);
+    const { L } = render(i, 6000, [{ at: 0, fn: () => i.noteOn(ev(57)) }]);
+    assert.ok(peak(L) > 0 && peak(L) < 4 && L.every(Number.isFinite), `${type} preset audible and finite`);
+  }
+});

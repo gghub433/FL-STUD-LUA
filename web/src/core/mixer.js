@@ -114,7 +114,7 @@ export class Mixer {
     if (key === 'mix') slot.mix = v;
     else if (key === 'on') slot.on = v !== 0;
     else slot.inst.setParam(key, v);
-    if (key === 'on' || key === 'lookahead') this.latencyDirty = true;
+    if (key === 'on' || key === 'lookahead' || (slot.inst.latencyParams && slot.inst.latencyParams.includes(key))) this.latencyDirty = true;
   }
 
   // Topological order (sources first) + solo audibility.

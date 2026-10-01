@@ -99,7 +99,7 @@ function sub808(sr) {
   return finish(out, sr);
 }
 
-// id, display name, category path under "Packs/Stepwise Drums"
+// id, display name, category path under "Packs/FL LUA Drums"
 export const FACTORY = [
   { id: 'kick-deep', name: 'Kick Deep', cat: 'Kicks', gen: drum({ type: 0, pitch: -3, pitchEnv: 0.5, pitchDecay: 60, decay: 620, click: 0.2, drive: 0.3, noise: 0.05 }, 1.6) },
   { id: 'kick-punch', name: 'Kick Punch', cat: 'Kicks', gen: drum({ type: 0, pitch: 2, pitchEnv: 0.7, pitchDecay: 30, decay: 280, click: 0.55, drive: 0.45 }, 1) },

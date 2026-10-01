@@ -17,6 +17,11 @@ import * as stereo from './stereo.js';
 import * as convolver from './convolver.js';
 import * as vocoder from './vocoder.js';
 import * as grossbeat from './grossbeat.js';
+import * as tremolo from './tremolo.js';
+import * as transient from './transient.js';
+import * as pitchshift from './pitchshift.js';
+import * as freqshift from './freqshift.js';
+import * as tape from './tape.js';
 
 export const EFFECTS = {
   eq, compressor, multiband, limiter, gate,
@@ -25,6 +30,7 @@ export const EFFECTS = {
   flanger: { schema: mod.flangerSchema, meta: mod.flangerMeta, create: mod.createFlanger },
   phaser: { schema: mod.phaserSchema, meta: mod.phaserMeta, create: mod.createPhaser },
   distortion, bitcrusher, filter, stereo, vocoder, grossbeat,
+  tremolo, transient, pitchshift, freqshift, tape,
 };
 
 export function registerEffect(type, m) { EFFECTS[type] = m; }
