@@ -337,12 +337,14 @@ export function riffMachine({ seed = 1, root = 0, scale = 'minor', bars = 2, bea
     const variant = rep % 4 === 2 ? 'B' : rep % 4 === 3 ? 'A2' : 'A';
     const shiftDeg = variant === 'B' ? (rnd() < 0.5 ? 2 : -2) : 0;
     motif.forEach((m, i) => {
-      let k = shiftDeg ? scaleStep(m.key, shiftDeg, root, scale) : m.key;
-      if (variant === 'A2' && i === motif.length - 1) k = scaleStep(k, rnd() < 0.5 ? 1 : -1, root, scale);   // turnaround tweak
+      // variations move by scale degrees but must stay inside [lo, hi]: reflect when a step would leave the range
+      const move = (key, deg) => { const up = scaleStep(key, deg, root, scale); return up > hi || up < lo ? scaleStep(key, -deg, root, scale) : up; };
+      let k = shiftDeg ? move(m.key, shiftDeg) : m.key;
+      if (variant === 'A2' && i === motif.length - 1) k = move(k, rnd() < 0.5 ? 1 : -1);   // turnaround tweak
       const s = start + (rep * motifSteps + m.step) * grid;
       if (s >= start + bars * ticksPerBar) return;
       const v = clamp(Math.round(vel * (m.step % 4 === 0 ? 1 : 0.85) + (rnd() * 2 - 1) * 6), 1, 127);
-      out.push({ id: newId(), s, l: Math.max(1, Math.round(m.l * grid * 0.92)), k: keyOk(clamp(k, 0, KEY_MAX)), v });
+      out.push({ id: newId(), s, l: Math.max(1, Math.round(m.l * grid * 0.92)), k: keyOk(clamp(k, lo, hi)), v });
     });
   }
   return out.sort(byTime);
