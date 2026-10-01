@@ -33,6 +33,7 @@ class StepwiseProcessor extends AudioWorkletProcessor {
         case 'noteOn': e.noteOn(m.ch, m.key, m.vel); break;
         case 'noteOff': e.noteOff(m.ch, m.key); break;
         case 'panic': e.allNotesOff(true); e.mixer.reset(); break;
+        case 'watch': e.watch(m.track, m.slot); break;
         case 'ping': this.port.postMessage({ t: 'pong', id: m.id }); break;
         default: break;
       }

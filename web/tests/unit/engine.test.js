@@ -154,3 +154,86 @@ test('routing cycles are dropped on load', () => {
   const fixed = normalize(JSON.parse(JSON.stringify(p)));
   assert.ok(!(fixed.mixer.tracks[1].routes.length && fixed.mixer.tracks[2].routes.some((r) => r[0] === 1)), 'cycle must be broken');
 });
+
+// ------------------------------------------------------------------ mixer integration
+import { createFxSlot } from '../../src/core/project.js';
+import { addFactorySampler, setSteps } from '../../src/core/demo.js';
+import { renderOffline } from '../../src/core/offline.js';
+
+function kickProject(mixer = 1) {
+  const p = createProject(); p.tempo = 120;
+  const ch = addFactorySampler(p, 'kick-punch', { mixer });
+  setSteps(p, 1, ch, [0], 127);
+  return { p, ch };
+}
+const rndr = (p, o = {}) => renderOffline(p, collectFactorySamples(p, SR), { mode: 'pat', sampleRate: SR, tail: 0.3, ...o });
+
+test('effect slot on an insert changes the sound (EQ low-pass removes the hat)', () => {
+  const p = createProject(); p.tempo = 120;
+  const hat = addFactorySampler(p, 'hat-closed', { mixer: 1 });
+  setSteps(p, 1, hat, [0], 127);
+  const dry = rms(rndr(p).left);
+  p.mixer.tracks[1].fx[0] = createFxSlot('eq');
+  p.mixer.tracks[1].fx[0].params.b7type = 3; p.mixer.tracks[1].fx[0].params.b7freq = 300; p.mixer.tracks[1].fx[0].params.b7slope = 1;
+  const wet = rms(rndr(p).left);
+  assert.ok(wet < dry * 0.2, `hat rms ${dry} -> ${wet}`);
+  p.mixer.tracks[1].fx[0].on = 0;
+  assert.ok(Math.abs(rms(rndr(p).left) / dry - 1) < 0.02, 'bypass restores the dry sound');
+  p.mixer.tracks[1].fx[0].on = 1; p.mixer.tracks[1].fx[0].mix = 0;
+  assert.ok(Math.abs(rms(rndr(p).left) / dry - 1) < 0.02, 'mix = 0 is dry');
+});
+
+test('sidechain route makes a compressor duck the bass', () => {
+  const build = (withSc) => {
+    const p = createProject(); p.tempo = 120;
+    const kick = addFactorySampler(p, 'kick-punch', { mixer: 1 });
+    const bass = addFactorySampler(p, 'sub-808', { mixer: 2 });
+    bass.params.loop = 1; bass.params.loopStart = 0.3; bass.params.loopEnd = 0.6; bass.params.ignoreOff = 0; bass.params.volEnvOn = 1; bass.params.volSus = 1; bass.params.volDec = 0.01;
+    setSteps(p, 1, kick, [0, 8], 127);
+    const list = p.patterns[1].notes[bass.id] = []; list.push({ id: 900, s: 0, l: 384, k: 60, v: 100 });
+    if (withSc) {
+      p.mixer.tracks[2].fx[0] = createFxSlot('compressor');
+      Object.assign(p.mixer.tracks[2].fx[0].params, { threshold: -40, ratio: 20, attack: 1, release: 120, sidechain: 1 });
+      p.mixer.tracks[1].routes = [[0, 0.0001, 0], [2, 1, 1]];   // kick -> sidechain bus of the bass insert (inaudible on master)
+    } else p.mixer.tracks[1].routes = [[0, 0, 0]];                // baseline: bass alone, no compressor
+    p.mixer.tracks[1].vol = 0.8;
+    return p;
+  };
+  const a = rndr(build(false)), b = rndr(build(true));
+  const win = (r) => rms(r.left, 2000, 9000);
+  assert.ok(win(a) > 0.05, `bass should be audible without sidechain: ${win(a)}`);
+  assert.ok(win(b) < win(a) * 0.5, `sidechain should duck the bass: ${win(b)} vs ${win(a)}`);
+});
+
+test('plugin delay compensation: parallel paths with different latency stay aligned', () => {
+  const { p } = kickProject(1);
+  p.mixer.tracks[1].routes = [[0, 1, 0], [2, 1, 0]];
+  p.mixer.tracks[2].routes = [[0, 1, 0]];
+  const q = clone(p); q.mixer.tracks[1].routes = [[0, 1, 0]];
+  const single = peak(rndr(q).left);
+  p.mixer.tracks[2].fx[0] = createFxSlot('limiter');
+  p.mixer.tracks[2].fx[0].params.ceiling = 0; p.mixer.tracks[2].fx[0].params.lookahead = 5;
+  const r = rndr(p);
+  // aligned paths add up to roughly twice the kick; without PDC the 5 ms offset would smear them
+  assert.ok(peak(r.left) > single * 1.7, `summed peak ${peak(r.left)} vs single ${single}`);
+  const first = r.left.findIndex((v) => Math.abs(v) > 0.02);
+  assert.ok(first >= 0 && first < 400, `onset at ${first}`);
+  // the whole mix is late by exactly the limiter latency, and both paths agree
+  const lat = Math.round(0.005 * SR);
+  const noPdc = (() => { const q = clone(p); q.mixer.tracks[2].fx[0].on = 0; return rndr(q); })();
+  const f0 = noPdc.left.findIndex((v) => Math.abs(v) > 0.02);
+  assert.ok(Math.abs(first - f0 - lat) <= 3, `latency ${first - f0}, expected ${lat}`);
+});
+
+test('mixer handles all 125 inserts with effects without breaking', () => {
+  const p = createProject(); p.tempo = 120;
+  for (let t = 1; t <= 125; t++) {
+    const ch = addFactorySampler(p, t % 2 ? 'hat-closed' : 'kick-short', { mixer: t });
+    setSteps(p, 1, ch, [t % 16], 100);
+    if (t % 5 === 0) p.mixer.tracks[t].fx[0] = createFxSlot('compressor');
+    if (t % 7 === 0) p.mixer.tracks[t].fx[1] = createFxSlot('delay');
+  }
+  const r = rndr(p);
+  assert.ok(r.frames > 0 && peak(r.left) > 0.05);
+  for (let i = 0; i < r.left.length; i += 211) assert.ok(Number.isFinite(r.left[i]));
+});

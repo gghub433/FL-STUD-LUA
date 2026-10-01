@@ -1,6 +1,6 @@
 // Sample bank: the main thread keeps decoded PCM here, persists user samples in IndexedDB and
 // streams each sample to the audio engine exactly once.
-import { renderFactorySample, isFactoryId, FACTORY_BY_ID } from '../core/factory.js';
+import { renderFactorySample, isFactoryId, factoryName } from '../core/factory.js';
 import { idbGet, idbPut } from './idb.js';
 
 // cyrb53 string/array hash, used to give identical audio the same id
@@ -34,9 +34,7 @@ export class SampleBank {
 
   name(id) {
     const e = this.map.get(id);
-    if (e) return e.name;
-    const f = FACTORY_BY_ID.get(id);
-    return f ? f.name : id;
+    return e ? e.name : factoryName(id);
   }
 
   _send(e) {
@@ -76,8 +74,7 @@ export class SampleBank {
       if (isFactoryId(id)) {
         const data = renderFactorySample(id, this.host.sampleRate);
         if (!data) return null;
-        const f = FACTORY_BY_ID.get(id);
-        return this.addPCM(f.name, this.host.sampleRate, [data], id, false);
+        return this.addPCM(factoryName(id), this.host.sampleRate, Array.isArray(data) ? data : [data], id, false);
       }
       const rec = await idbGet('samples', id);
       if (!rec) return null;
@@ -92,8 +89,8 @@ export class SampleBank {
     const ids = new Set();
     for (const ch of project.channels) {
       if (ch.sample && ch.sample.id) ids.add(ch.sample.id);
-      for (const id of ch.extraSamples || []) ids.add(id);
     }
+    for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) ids.add(f.extra.irId);
     const missing = [];
     await Promise.all([...ids].map(async (id) => { if (!(await this.ensure(id))) missing.push(id); }));
     return missing;

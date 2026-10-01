@@ -125,21 +125,62 @@ export const FACTORY = [
 export const factoryId = (id) => `factory:${id}`;
 export const isFactoryId = (id) => typeof id === 'string' && id.startsWith('factory:');
 export const FACTORY_BY_ID = new Map(FACTORY.map((f) => [factoryId(f.id), f]));
+export const isIR = (id) => typeof id === 'string' && id.startsWith('factory:ir-');
 
 export function renderFactorySample(id, sr) {
-  const f = FACTORY_BY_ID.get(id);
-  return f ? f.gen(sr) : null;
+  const f = FACTORY_BY_ID.get(id) || IR_BY_ID.get(id);
+  return f ? f.gen(sr) : null; // Float32Array (mono) or [Float32Array, Float32Array] (stereo IR)
 }
+
+export const factoryName = (id) => (FACTORY_BY_ID.get(id) || IR_BY_ID.get(id) || {}).name || id;
 
 // Map id -> { rate, channels } for every factory sample a project references (used by offline render / tests).
 export function collectFactorySamples(project, sr) {
   const map = new Map();
-  for (const ch of project.channels) {
-    const id = ch.sample && ch.sample.id;
-    if (id && isFactoryId(id) && !map.has(id)) {
-      const data = renderFactorySample(id, sr);
-      if (data) map.set(id, { rate: sr, channels: [data] });
-    }
+  const need = new Set();
+  for (const ch of project.channels) if (ch.sample && ch.sample.id) need.add(ch.sample.id);
+  for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) need.add(f.extra.irId);
+  for (const id of need) {
+    if (!isFactoryId(id) || map.has(id)) continue;
+    const data = renderFactorySample(id, sr);
+    if (data) map.set(id, { rate: sr, channels: Array.isArray(data) ? data : [data] });
   }
   return map;
 }
+
+// ---------------------------------------------------------------------------------- impulse responses
+function makeIR(sr, { len, rt60, pre = 0, taps = [], f0 = 14000, f1 = 1800, seed = 1, spread = 1 }) {
+  const n = Math.floor(len * sr);
+  const out = [new Float32Array(n), new Float32Array(n)];
+  for (let c = 0; c < 2; c++) {
+    const nz = new Noise(seed * 977 + c * 131);
+    let lp = 0;
+    const start = Math.floor(pre * sr);
+    for (let i = start; i < n; i++) {
+      const t = (i - start) / sr;
+      const fc = f0 * Math.pow(f1 / f0, Math.min(1, t / rt60));
+      const a = 1 - Math.exp((-TAU * fc) / sr);
+      lp += a * (nz.next() - lp);
+      const dens = Math.min(1, t * 40); // sparse early field -> dense tail
+      out[c][i] = lp * Math.exp((-6.9078 * t) / rt60) * dens * 3;
+    }
+    for (const [ms, g] of taps) {
+      const pos = start + Math.floor((ms * (c === 0 ? 1 : 1 + 0.07 * spread) * sr) / 1000);
+      if (pos < n) out[c][pos] += g * (c === 0 ? 1 : -0.9);
+    }
+  }
+  let m = 0;
+  for (const c of out) for (let i = 0; i < n; i++) m = Math.max(m, Math.abs(c[i]));
+  for (const c of out) { for (let i = 0; i < n; i++) c[i] *= 0.9 / m; const f = Math.min(n, Math.floor(0.05 * sr)); for (let i = 0; i < f; i++) c[n - 1 - i] *= i / f; }
+  return out;
+}
+
+export const IRS = [
+  { id: 'ir-ambience', name: 'IR Tight Ambience', cat: 'Impulse responses', gen: (sr) => makeIR(sr, { len: 0.45, rt60: 0.25, pre: 0.002, taps: [[7, 0.8], [13, 0.5], [21, 0.3]], seed: 1 }) },
+  { id: 'ir-small-room', name: 'IR Small Room', cat: 'Impulse responses', gen: (sr) => makeIR(sr, { len: 0.9, rt60: 0.5, pre: 0.003, taps: [[9, 0.9], [17, 0.6], [26, 0.45], [38, 0.3]], seed: 2 }) },
+  { id: 'ir-plate', name: 'IR Bright Plate', cat: 'Impulse responses', gen: (sr) => makeIR(sr, { len: 2.4, rt60: 1.8, f0: 18000, f1: 6000, seed: 3 }) },
+  { id: 'ir-hall', name: 'IR Concert Hall', cat: 'Impulse responses', gen: (sr) => makeIR(sr, { len: 3.4, rt60: 2.4, pre: 0.018, taps: [[24, 0.7], [41, 0.5], [67, 0.4]], seed: 4 }) },
+  { id: 'ir-large-hall', name: 'IR Large Hall', cat: 'Impulse responses', gen: (sr) => makeIR(sr, { len: 5, rt60: 3.8, pre: 0.03, taps: [[35, 0.6], [62, 0.45], [95, 0.35]], f0: 11000, f1: 1200, seed: 5 }) },
+  { id: 'ir-cathedral', name: 'IR Cathedral', cat: 'Impulse responses', gen: (sr) => makeIR(sr, { len: 7, rt60: 6, pre: 0.045, taps: [[48, 0.5], [90, 0.4], [140, 0.3]], f0: 9000, f1: 900, seed: 6 }) },
+];
+export const IR_BY_ID = new Map(IRS.map((f) => [`factory:${f.id}`, f]));

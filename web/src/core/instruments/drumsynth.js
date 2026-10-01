@@ -33,7 +33,7 @@ export const TYPE_PRESETS = {
 };
 
 class DVoice {
-  constructor() { this.alive = false; this.bq = new Biquad(); this.bq2 = new Biquad(); this.noise = new Noise(1); this.ph = [0, 0, 0, 0, 0, 0]; }
+  constructor() { this.alive = false; this.bq = new Biquad(); this.bq2 = new Biquad(); this.bq3 = new Biquad(); this.noise = new Noise(1); this.ph = [0, 0, 0, 0, 0, 0]; }
 }
 
 export class DrumSynth {
@@ -81,6 +81,7 @@ export class DrumSynth {
     const fc = 200 * Math.pow(60, color); // 200 Hz .. 12 kHz
     v.bq.set(v.type === 2 ? 'hp' : 'bp', sr, v.type === 2 ? 5000 + 5000 * p.tone : fc, v.type === 2 ? 0.7 : 0.9);
     v.bq2.set('lp', sr, 800 * Math.pow(25, p.tone), 0.7);
+    v.bq3.set('hp', sr, 5500 + 3500 * p.tone, 0.7071); v.bq3.reset();   // metallic oscillators of the hat only sound above ~5 kHz
     v.bq.reset(); v.bq2.reset();
     v.gl = Math.cos((clamp(v.pan, -1, 1) + 1) * 0.7853981634) * 1.41421356;
     v.gr = Math.sin((clamp(v.pan, -1, 1) + 1) * 0.7853981634) * 1.41421356;
@@ -115,7 +116,7 @@ export class DrumSynth {
             v.ph[o] += (hatFreqs[o] * k) / sr; if (v.ph[o] >= 1) v.ph[o] -= 1;
             m += v.ph[o] < 0.5 ? 1 : -1;
           }
-          s = (m / 6) * v.amp * 0.6;
+          s = v.bq3.process((m / 6) * v.amp * 1.2);
         }
         // noise layer
         let nz = v.noise.next();

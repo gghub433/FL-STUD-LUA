@@ -78,5 +78,8 @@ export class AudioHost {
     return t;
   }
 
+  // ask the engine for a spectrum + effect meters of mixer track `track`, slot (-1 = track output); null stops it
+  watch(track, slot = -1) { this.send({ t: 'watch', track, slot }); }
+
   peak(track) { return [this.peaks[track * 2] || 0, this.peaks[track * 2 + 1] || 0]; }
 }

@@ -262,3 +262,10 @@ export function hermite(data, pos, len) {
   const b = w + a;
   return ((a * f - b) * f + c) * f + x1;
 }
+
+// Tempo-sync divisions: [label, length in beats]
+export const SYNC_DIVS = [
+  ['1/32', 0.125], ['1/16T', 1 / 6], ['1/16', 0.25], ['1/16.', 0.375], ['1/8T', 1 / 3], ['1/8', 0.5], ['1/8.', 0.75],
+  ['1/4T', 2 / 3], ['1/4', 1], ['1/4.', 1.5], ['1/2T', 4 / 3], ['1/2', 2], ['1/2.', 3], ['1 bar', 4], ['2 bars', 8],
+];
+export const SYNC_LABELS = SYNC_DIVS.map((d) => d[0]);

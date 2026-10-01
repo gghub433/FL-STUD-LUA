@@ -98,7 +98,7 @@ export class Engine {
       case 'currentPattern': this.dirty = true; break;
       case 'mixer':
         if (path[1] === 'tracks' && path.length >= 3) this.mixer.updateTrack(path[2], p.mixer.tracks[path[2]]);
-        else if (path[1] === 'tracks') this.mixer.setProject(p);
+        else if (path.length <= 2 && path[1] !== 'selected') this.mixer.setProject(p);   // whole mixer / all tracks
         this.autoDefs.clear();
         break;
       case 'swing': this.dirty = true; break;
@@ -406,6 +406,9 @@ export class Engine {
       if (rt.inst && rt.inst.active) this._prepare(rt);
     }
     mixer.clearBuffers();
+    this.host.tempo = this.project.tempo;
+    this.host.tick = tr.tick;
+    this.host.playing = tr.playing;
 
     // ---- collect events for this block (sample offsets) ----
     const evs = this.evs;
@@ -439,6 +442,12 @@ export class Engine {
     }
 
     const master = mixer.process(m);
+    if (mixer.tap && mixer.analyzer.ready) {
+      const tp = mixer.tap;
+      this.out.push({ t: 'spectrum', track: tp.track, slot: tp.slot, mags: mixer.analyzer.compute() });
+      const slot = tp.slot >= 0 ? mixer.tracks[tp.track].fx[tp.slot] : null;
+      if (slot) this.out.push({ t: 'fxmeter', track: tp.track, slot: tp.slot, values: slot.inst.meters ? Array.from(slot.inst.meters) : [], status: slot.inst.status || '' });
+    }
     const mL = master.inL, mR = master.inR;
     for (let i = 0; i < m; i++) { outL[off + i] = mL[i]; outR[off + i] = mR[i]; }
     if (this.click.on) this._renderClick(outL, outR, off, m);
@@ -568,6 +577,9 @@ export class Engine {
       if (c.env < 0.001) { c.on = false; break; }
     }
   }
+
+  // UI asks for a spectrum (and effect meters) of one effect slot, or of a track output (slot -1)
+  watch(track, slot) { this.mixer.setTap(track == null ? null : { track, slot }); }
 
   // ------------------------------------------------------------------ reporting
   state() {

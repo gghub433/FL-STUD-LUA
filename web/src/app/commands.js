@@ -227,3 +227,95 @@ export function setMixerTarget(store, chId, track) {
 
 export function nextColor(project) { return COLORS[project.channels.length % COLORS.length]; }
 export { instrumentMeta, barTicks, stepsPerBar, currentArrangement, createFxSlot };
+
+// ---------------------------------------------------------------- mixer
+import { reaches } from '../core/project.js';
+import { effectSchema } from '../core/effects/index.js';
+
+const mx = (n) => [['mixer', 'tracks', n]];
+
+export function selectTrack(store, n) {
+  store.project.mixer.selected = n;
+  store.bus.emit('mixerSel', n);
+}
+
+export function setFx(store, track, slot, type) {
+  store.edit(type ? 'Insert effect' : 'Remove effect', (p) => {
+    p.mixer.tracks[track].fx[slot] = type ? createFxSlot(type) : null;
+  }, mx(track));
+}
+
+export function setFxExtra(store, track, slot, extra) {
+  store.edit('Edit effect data', (p) => { const s = p.mixer.tracks[track].fx[slot]; if (s) s.extra = extra; }, mx(track), { coalesce: `fxextra:${track}:${slot}` });
+}
+
+export function moveFx(store, track, from, to) {
+  if (from === to) return;
+  store.edit('Move effect', (p) => {
+    const t = p.mixer.tracks[track];
+    const item = t.fx[from];
+    const rest = t.fx.filter((_, i) => i !== from);   // 9 entries
+    rest.splice(to, 0, item);                          // back to 10, neighbours shift
+    t.fx = rest;
+  }, mx(track));
+}
+
+export function swapFx(store, track, a, b) {
+  store.edit('Swap effects', (p) => { const fx = p.mixer.tracks[track].fx; [fx[a], fx[b]] = [fx[b], fx[a]]; }, mx(track));
+}
+
+export function copyFx(store, fromTrack, fromSlot, toTrack, toSlot) {
+  const src = store.project.mixer.tracks[fromTrack].fx[fromSlot];
+  if (!src) return;
+  store.edit('Copy effect', (p) => { p.mixer.tracks[toTrack].fx[toSlot] = JSON.parse(JSON.stringify(src)); }, mx(toTrack));
+}
+
+export function setTrackField(store, n, field, value, label = 'Edit track') {
+  store.edit(label, (p) => { p.mixer.tracks[n][field] = value; }, mx(n), { coalesce: `trk:${n}:${field}` });
+}
+
+export function toggleTrackFlag(store, n, field) {
+  store.edit(`Toggle ${field}`, (p) => { const t = p.mixer.tracks[n]; t[field] = t[field] ? 0 : 1; }, mx(n));
+}
+
+export function soloTrack(store, n, exclusive) {
+  store.edit('Solo', (p) => {
+    const t = p.mixer.tracks;
+    const was = t[n].solo;
+    if (exclusive) for (const x of t) x.solo = 0;
+    t[n].solo = was ? 0 : 1;
+  }, [['mixer']]);
+}
+
+// Toggle a route src -> dest. Returns false when it would create a cycle.
+export function toggleRoute(store, src, dest, sidechain = false) {
+  const tracks = store.project.mixer.tracks;
+  if (src === dest) return false;
+  const idx = tracks[src].routes.findIndex((r) => r[0] === dest);
+  if (idx < 0 && reaches(tracks, dest, src)) return false;
+  store.edit(idx >= 0 ? 'Remove route' : 'Add route', (p) => {
+    const r = p.mixer.tracks[src].routes;
+    if (idx >= 0) r.splice(idx, 1);
+    else r.push([dest, 1, sidechain ? 1 : 0]);
+  }, mx(src));
+  return true;
+}
+
+export function setRoute(store, src, dest, level, sidechain) {
+  store.edit('Edit route', (p) => {
+    const r = p.mixer.tracks[src].routes.find((x) => x[0] === dest);
+    if (r) { if (level !== undefined) r[1] = Math.max(0, Math.min(2, level)); if (sidechain !== undefined) r[2] = sidechain ? 1 : 0; }
+  }, mx(src), { coalesce: `route:${src}:${dest}` });
+}
+
+export function clearTrack(store, n) {
+  store.edit('Reset track', (p) => {
+    const t = createTrackLike(p, n);
+    p.mixer.tracks[n] = t;
+  }, mx(n));
+}
+
+import { createTrack } from '../core/project.js';
+function createTrackLike(p, n) { return createTrack(n); }
+
+export { effectSchema };

@@ -6,6 +6,7 @@
 import { BLOCK, MAX_INSERT, FX_SLOTS } from './constants.js';
 import { Biquad, faderGain, DelayLine, clamp } from './dsp.js';
 import { createEffect, hasEffect } from './effects/index.js';
+import { Analyzer } from './analyzer.js';
 
 const TAIL_SECONDS = 8;
 
@@ -21,6 +22,9 @@ class FxSlotRT {
     if (data.extra && this.inst.setExtra) this.inst.setExtra(data.extra);
     this.latency = this.inst.latency || 0;
   }
+
+  // effects with look-ahead report their latency (samples) only while enabled
+  get delay() { return this.on ? (this.inst.latency || 0) : 0; }
 }
 
 class TrackRT {
@@ -28,6 +32,8 @@ class TrackRT {
     this.n = n;
     this.sr = sr;
     this.inL = new Float32Array(BLOCK); this.inR = new Float32Array(BLOCK);
+    this.dirL = new Float32Array(BLOCK); this.dirR = new Float32Array(BLOCK);   // channel feeds (aligned separately for PDC)
+    this.ddL = null; this.ddR = null; this.directDelay = 0; this.latency = 0;
     this.scL = new Float32Array(BLOCK); this.scR = new Float32Array(BLOCK);
     this.fed = false; this.scFed = false; this.tail = 0; this.active = false;
     this.fx = new Array(FX_SLOTS).fill(null);
@@ -54,7 +60,12 @@ export class Mixer {
     this.tailBlocks = Math.ceil((TAIL_SECONDS * sr) / BLOCK);
     this.ctx = { scL: null, scR: null };
     this.soloActive = false;
+    this.tap = null;                    // { track, slot } slot -1 = track output
+    this.analyzer = new Analyzer();
+    this.totalLatency = 0;
   }
+
+  setTap(tap) { this.tap = tap; this.analyzer.reset(); }
 
   setProject(project) {
     for (let n = 0; n <= MAX_INSERT; n++) this.updateTrack(n, project.mixer.tracks[n], false);
@@ -66,7 +77,7 @@ export class Mixer {
     t.params = data;
     t.vol = data.vol; t.pan = data.pan; t.sep = data.sep; t.delayMs = data.delay;
     t.mute = !!data.mute; t.solo = !!data.solo; t.swapLR = !!data.swapLR; t.invert = !!data.invertPhase;
-    t.routes = data.routes.map((r) => ({ dest: r[0], level: r[1], sc: !!r[2] }));
+    t.routes = data.routes.map((r) => ({ dest: r[0], level: r[1], sc: !!r[2], delay: 0, dl: null, dr: null }));
     t.eqDirty = true;
     for (let s = 0; s < FX_SLOTS; s++) this.updateSlot(n, s, data.fx[s]);
     if (rebuild) this.rebuild();
@@ -82,6 +93,7 @@ export class Mixer {
       if (data.extra && cur.inst.setExtra) cur.inst.setExtra(data.extra);
     } else t.fx[s] = new FxSlotRT(data, this.sr, this.host);
     t.hasFx = t.fx.some(Boolean);
+    this.latencyDirty = true;
   }
 
   setTrackParam(n, key, v) {
@@ -102,6 +114,7 @@ export class Mixer {
     if (key === 'mix') slot.mix = v;
     else if (key === 'on') slot.on = v !== 0;
     else slot.inst.setParam(key, v);
+    if (key === 'on' || key === 'lookahead') this.latencyDirty = true;
   }
 
   // Topological order (sources first) + solo audibility.
@@ -129,11 +142,29 @@ export class Mixer {
       for (const s of solos) { keep.add(s); down(s); up(s); }
       for (const t of this.tracks) t.audible = keep.has(t.n);
     }
+    this.computeLatency();
+  }
+
+  // Plugin delay compensation: align every signal that meets at a track input.
+  computeLatency() {
+    const arrival = new Array(MAX_INSERT + 1).fill(0), out = new Array(MAX_INSERT + 1).fill(0);
+    for (const n of this.order) {
+      const t = this.tracks[n];
+      t.latency = t.fx.reduce((a, s) => a + (s ? s.delay : 0), 0);
+      out[n] = arrival[n] + t.latency;
+      for (const r of t.routes) if (!r.sc && out[n] > arrival[r.dest]) arrival[r.dest] = out[n];
+    }
+    for (const n of this.order) {
+      const t = this.tracks[n];
+      t.directDelay = arrival[n];
+      for (const r of t.routes) r.delay = r.sc ? 0 : arrival[r.dest] - out[n];
+    }
+    this.totalLatency = out[0];
   }
 
   clearBuffers() {
     for (const t of this.tracks) {
-      t.inL.fill(0); t.inR.fill(0);
+      t.inL.fill(0); t.inR.fill(0); t.dirL.fill(0); t.dirR.fill(0);
       if (t.scFed) { t.scL.fill(0); t.scR.fill(0); }
       t.scFed = false;
       t.prevFed = t.fed; t.fed = false;
@@ -143,7 +174,7 @@ export class Mixer {
   // Feed a channel's output into an insert's input bus.
   feed(trackN, L, R, n, gl, gr) {
     const t = this.tracks[trackN];
-    const a = t.inL, b = t.inR;
+    const a = t.dirL, b = t.dirR;
     for (let i = 0; i < n; i++) { a[i] += L[i] * gl; b[i] += R[i] * gr; }
     t.fed = true;
   }
@@ -176,6 +207,7 @@ export class Mixer {
   }
 
   process(n) {
+    if (this.latencyDirty) { this.latencyDirty = false; this.computeLatency(); }
     const ctx = this.ctx;
     for (const idx of this.order) {
       const t = this.tracks[idx];
@@ -186,6 +218,17 @@ export class Mixer {
       }
       t.active = true;
       const L = t.inL, R = t.inR;
+      // channel feeds join the routed signals, delayed so everything stays time-aligned (PDC)
+      if (t.directDelay > 0) {
+        if (!t.ddL || t.ddL.buf.length < t.directDelay + 8) { t.ddL = new DelayLine(t.directDelay + 8); t.ddR = new DelayLine(t.directDelay + 8); }
+        for (let i = 0; i < n; i++) {
+          t.ddL.write(t.dirL[i]); t.ddR.write(t.dirR[i]);
+          L[i] += t.ddL.readInt(t.directDelay); R[i] += t.ddR.readInt(t.directDelay);
+        }
+      } else {
+        const dl = t.dirL, dr = t.dirR;
+        for (let i = 0; i < n; i++) { L[i] += dl[i]; R[i] += dr[i]; }
+      }
 
       // input delay (ms)
       if (t.delayMs > 0.01) {
@@ -209,6 +252,7 @@ export class Mixer {
           const dl = slot.dryL, dr = slot.dryR, d = 1 - wet;
           for (let i = 0; i < n; i++) { L[i] = dl[i] * d + L[i] * wet; R[i] = dr[i] * d + R[i] * wet; }
         }
+        if (this.tap && this.tap.track === idx && this.tap.slot === s) this.analyzer.push(L, R, n);
       }
 
       this._eq(t, n);
@@ -240,6 +284,7 @@ export class Mixer {
       t.gL = tl; t.gR = tr;
       if (pl > t.peakL) t.peakL = pl;
       if (pr > t.peakR) t.peakR = pr;
+      if (this.tap && this.tap.track === idx && this.tap.slot === -1) this.analyzer.push(L, R, n);
 
       if (master) continue;
       if (silent) continue;
@@ -252,7 +297,13 @@ export class Mixer {
           for (let i = 0; i < n; i++) { sL[i] += L[i] * lv; sR[i] += R[i] * lv; }
         } else {
           const dL = d.inL, dR = d.inR;
-          for (let i = 0; i < n; i++) { dL[i] += L[i] * lv; dR[i] += R[i] * lv; }
+          if (r.delay > 0) {
+            if (!r.dl || r.dl.buf.length < r.delay + 8) { r.dl = new DelayLine(r.delay + 8); r.dr = new DelayLine(r.delay + 8); }
+            for (let i = 0; i < n; i++) {
+              r.dl.write(L[i]); r.dr.write(R[i]);
+              dL[i] += r.dl.readInt(r.delay) * lv; dR[i] += r.dr.readInt(r.delay) * lv;
+            }
+          } else for (let i = 0; i < n; i++) { dL[i] += L[i] * lv; dR[i] += R[i] * lv; }
           d.fed = true;
         }
       }
