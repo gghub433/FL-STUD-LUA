@@ -98,6 +98,7 @@ export function createChannel(p, type, opts = {}) {
   if (schema) ch.params = defaults(schema);
   if (opts.params) Object.assign(ch.params, opts.params);
   if (type === 'sampler' || type === 'audio') ch.sample = opts.sample || null;
+  if (type === 'controller') ch.links = opts.links ? JSON.parse(JSON.stringify(opts.links)) : [];
   if (type === 'layer') ch.children = opts.children || [];
   if (type === 'fpc') { ch.pads = opts.pads || defaultPads(); ch.padBank = 0; }
   if (type === 'slicer') { ch.sample = opts.sample || null; ch.slices = opts.slices || []; ch.loopBpm = opts.loopBpm || 0; }
@@ -235,6 +236,13 @@ export function normalize(raw) {
             out.layers.push({ sample: { id: str(l.sample.id, '', 80), name: str(l.sample.name, '', 80) }, vol: num(l.vol, 0, 2, 1), pan: num(l.pan, -1, 1, 0), pitch: num(l.pitch, -48, 48, 0), start: num(l.start, 0, 0.99, 0) });
           }
         }
+      }
+    }
+    if (type === 'controller') {
+      ch.links = [];
+      for (const l of Array.isArray(c.links) ? c.links.slice(0, 64) : []) {
+        if (!l || typeof l.addr !== 'string') continue;
+        ch.links.push({ addr: l.addr.slice(0, 80), min: num(l.min, 0, 1, 0), max: num(l.max, 0, 1, 1), inv: bit(l.inv) });
       }
     }
     if (type === 'layer') ch.children = Array.isArray(c.children) ? c.children.filter((x) => Number.isInteger(x)).slice(0, 64) : [];

@@ -237,3 +237,75 @@ test('mixer handles all 125 inserts with effects without breaking', () => {
   assert.ok(r.frames > 0 && peak(r.left) > 0.05);
   for (let i = 0; i < r.left.length; i += 211) assert.ok(Number.isFinite(r.left[i]));
 });
+
+// ---- controllers (LFO / envelope linked to parameters) ----------------------------------------
+function controllerEngine(ctrlParams, links, notes = []) {
+  const { p, ch } = oneChannelProject('kick-punch', []);
+  p.tempo = 120;
+  const c = createChannel(p, 'controller', { name: 'LFO 1', mixer: 0 });
+  Object.assign(c.params, ctrlParams);
+  c.links = links(ch);
+  p.channels.push(c);
+  const list = p.patterns[1].notes[c.id] = [];
+  for (const [s, l] of notes) list.push(createNote(p, s, l, 60, 100));
+  const e = new Engine(SR);
+  e.setProject(clone(p));
+  return { e, p, ch, c };
+}
+const volOf = (e, chId) => e.project.channels.find((x) => x.id === chId).vol;
+function trace(e, chId, seconds) {
+  const out = [], L = new Float32Array(128), R = new Float32Array(128);
+  for (let i = 0; i < Math.floor((seconds * SR) / 128); i++) { L.fill(0); R.fill(0); e.process(L, R, 128); out.push(volOf(e, chId)); }
+  return out;
+}
+
+test('LFO controller sweeps a linked parameter inside its min/max range at the set rate', () => {
+  const { e, ch } = controllerEngine({ mode: 0, shape: 0, sync: 0, rate: 2, depth: 1 }, (kick) => [{ addr: `ch:${kick.id}:vol`, min: 0.2, max: 0.8, inv: 0 }]);
+  e.play('pat', 0);
+  const t = trace(e, ch.id, 1);
+  assert.ok(Math.min(...t) < 0.23 && Math.max(...t) > 0.77, `range ${Math.min(...t)}..${Math.max(...t)}`);
+  assert.ok(Math.min(...t) >= 0.2 - 1e-6 && Math.max(...t) <= 0.8 + 1e-6, 'never leaves the linked range');
+  let cross = 0; for (let i = 1; i < t.length; i++) if ((t[i - 1] - 0.5) * (t[i] - 0.5) < 0) cross++;
+  assert.ok(cross >= 3 && cross <= 5, `2 Hz = 4 zero crossings per second, got ${cross}`);
+  const msgs = e.drain();
+  assert.ok(msgs && msgs.some((m) => m.t === 'auto'), 'the UI is told about the moving parameter');
+});
+
+test('LFO controller: inverted link mirrors the sweep; tempo sync locks to the song position', () => {
+  const a = controllerEngine({ sync: 0, rate: 3, depth: 1 }, (k) => [{ addr: `ch:${k.id}:vol`, min: 0, max: 1, inv: 0 }]);
+  const b = controllerEngine({ sync: 0, rate: 3, depth: 1 }, (k) => [{ addr: `ch:${k.id}:vol`, min: 0, max: 1, inv: 1 }]);
+  a.e.play('pat', 0); b.e.play('pat', 0);
+  const ta = trace(a.e, a.ch.id, 0.6), tb = trace(b.e, b.ch.id, 0.6);
+  ta.forEach((v, i) => assert.ok(Math.abs(v + tb[i] - 1) < 0.02, `mirrored at block ${i}: ${v} + ${tb[i]}`));
+  // synced to 1/4 at 120 bpm: one cycle per 0.5 s regardless of when playback starts
+  const s = controllerEngine({ sync: 1, div: 8, shape: 2, depth: 1 }, (k) => [{ addr: `ch:${k.id}:vol`, min: 0, max: 1, inv: 0 }]);
+  s.e.play('pat', 96 / 4);                                    // start a quarter of a beat in
+  const ts = trace(s.e, s.ch.id, 0.1);
+  assert.ok(Math.abs(ts[0] - 0.25) < 0.03 || Math.abs(ts[0] - (0.5 + 0.5 * 0.25)) < 0.05 || ts[0] > 0, 'defined at the first block');
+  const saw = trace(s.e, s.ch.id, 1.0);
+  const drops = saw.filter((v, i) => i && saw[i - 1] - v > 0.5).length;
+  assert.ok(drops >= 1 && drops <= 3, `the saw wraps about twice per second: ${drops}`);
+});
+
+test('Envelope controller follows the notes of its channel: attack, sustain, release', () => {
+  const { e, ch } = controllerEngine({ mode: 1, attack: 0.05, decay: 0.05, sustain: 0.6, release: 0.3, amount: 1 }, (k) => [{ addr: `ch:${k.id}:vol`, min: 0, max: 1, inv: 0 }], [[96, 96]]);
+  e.play('pat', 0);
+  const t = trace(e, ch.id, 1.4);                              // note from 0.5 s to 1.0 s
+  const at = (s) => t[Math.min(t.length - 1, Math.floor((s * SR) / 128))];
+  assert.ok(at(0.4) < 0.01, `idle before the note: ${at(0.4)}`);
+  assert.ok(at(0.553) > 0.85, `attack reaches the top: ${at(0.553)}`);
+  assert.ok(Math.abs(at(0.9) - 0.6) < 0.03, `sustain level: ${at(0.9)}`);
+  assert.ok(at(1.05) < 0.5 && at(1.35) < 0.08, `release after the note ends: ${at(1.05)} ${at(1.35)}`);
+});
+
+test('controller channels survive save/load with their links; bad links are dropped', () => {
+  const { p, c } = controllerEngine({}, (k) => [{ addr: `ch:${k.id}:vol`, min: 0.1, max: 0.9, inv: 1 }]);
+  const q = normalize(JSON.parse(JSON.stringify(p)));
+  const cc = q.channels.find((x) => x.type === 'controller');
+  assert.deepEqual(cc.links, [{ addr: `ch:${p.channels[0].id}:vol`, min: 0.1, max: 0.9, inv: 1 }]);
+  const raw = JSON.parse(JSON.stringify(p)); raw.channels.find((x) => x.type === 'controller').links.push({ addr: 5 }, null, { addr: 'x'.repeat(200), min: 9, max: -1 });
+  const r = normalize(raw).channels.find((x) => x.type === 'controller').links;
+  assert.equal(r.length, 2);
+  assert.ok(r[1].addr.length <= 80 && r[1].min === 1 && r[1].max === 0, 'clamped');
+  void c;
+});

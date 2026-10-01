@@ -76,3 +76,80 @@ export function renderCurve(points, len, n) {
   for (let i = 0; i < n; i++) out[i] = evalPoints(points, (i / (n - 1)) * len) ?? 0;
   return out;
 }
+
+// ---- LFO tool: write a periodic shape into an automation clip ---------------------------------
+export const LFO_TOOL_SHAPES = ['Sine', 'Triangle', 'Saw up', 'Saw down', 'Square', 'Random', 'Smooth random'];
+
+const lfoValue = (shape, u) => {              // u = position in the cycle 0..1 -> -1..1
+  switch (shape) {
+    case 1: return u < 0.5 ? 4 * u - 1 : 3 - 4 * u;
+    case 2: return 2 * u - 1;
+    case 3: return 1 - 2 * u;
+    case 4: return u < 0.5 ? 1 : -1;
+    default: return Math.sin(2 * Math.PI * u);
+  }
+};
+
+// opts: { shape, cycles (over `len` ticks), amp 0..1, center 0..1, phase 0..1 (fraction of a cycle),
+//         pointsPerCycle (sine), seed, from, to (ticks; default the whole clip) } -> sorted points in [from, to].
+// Triangle, saw and square are written with exactly the points they need; sine uses pointsPerCycle line segments.
+export function generateLfoPoints(len, opts = {}) {
+  const { shape = 0, cycles = 4, amp = 1, center = 0.5, phase = 0, pointsPerCycle = 24, seed = 1, from = 0, to = len } = opts;
+  const cycleLen = len / Math.max(0.01, cycles);
+  const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+  const pts = [];
+  const put = (t, v, type = 'single') => pts.push({ t: Math.max(from, Math.min(to, Math.round(t))), v: clamp01(center + (amp * v) / 2), type, tension: 0, count: 4 });
+  const uAt = (t) => (((t / cycleLen + phase) % 1) + 1) % 1;
+  if (shape === 5 || shape === 6) {            // random: a new value every quarter cycle, held (5) or eased (6)
+    let s = (seed >>> 0) || 1;
+    const rnd = () => { s = (Math.imul(s ^ (s >>> 15), 1 | s) + 0x6d2b79f5) >>> 0; return s / 4294967296; };
+    const step = cycleLen / 4;
+    for (let t = from; t < to; t += step) put(t, rnd() * 2 - 1, shape === 5 ? 'hold' : 'smooth');
+    put(to, rnd() * 2 - 1, 'single');
+    return dedupe(pts);
+  }
+  if (shape === 0) {                           // sine: dense line segments
+    const step = cycleLen / Math.max(6, pointsPerCycle);
+    for (let t = from; t < to; t += step) put(t, lfoValue(0, uAt(t)));
+    put(to, lfoValue(0, uAt(to)));
+    return dedupe(pts);
+  }
+  // triangle / saw / square: breakpoints at cycle fractions (value, type of the segment that STARTS there)
+  const bps = shape === 1 ? [[0, -1], [0.5, 1]] : shape === 4 ? [[0, 1, 'hold'], [0.5, -1, 'hold']] : shape === 2 ? [[0, -1], [1, 1]] : [[0, 1], [1, -1]];
+  put(from, lfoValue(shape, uAt(from)), shape === 4 ? 'hold' : 'single');
+  const k0 = Math.floor(from / cycleLen - phase) - 1, k1 = Math.ceil(to / cycleLen - phase) + 1;
+  for (let k = k0; k <= k1; k++) {
+    for (const [u, v, type] of bps) {
+      // saw: the end of one cycle and the start of the next are one tick apart (a vertical edge)
+      const t = (k + u - phase) * cycleLen - (u === 1 ? 1 : 0);
+      if (t <= from || t >= to) continue;
+      put(t, v, type || 'single');
+    }
+  }
+  put(to, lfoValue(shape, uAt(to)), shape === 4 ? 'hold' : 'single');
+  return dedupe(pts);
+}
+
+function dedupe(pts) {
+  pts.sort((a, b) => a.t - b.t);
+  const out = [];
+  for (const p of pts) {
+    const last = out[out.length - 1];
+    if (last && last.t === p.t) { last.v = p.v; last.type = p.type; } else out.push(p);
+  }
+  return out;
+}
+
+// Remove points that lie (within `tol`) on the straight line between their neighbours (single-curve segments only).
+export function thinPoints(points, tol = 0.004) {
+  if (points.length < 3) return points.slice();
+  const out = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    const a = out[out.length - 1], b = points[i], c = points[i + 1];
+    const straight = (a.type || 'single') === 'single' && (b.type || 'single') === 'single' && !(a.tension || b.tension);
+    const u = (b.t - a.t) / Math.max(1, c.t - a.t), lin = a.v + (c.v - a.v) * u;
+    if (!(straight && Math.abs(lin - b.v) < tol)) out.push(b);
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}

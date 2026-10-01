@@ -35,6 +35,13 @@ export function removeChannel(store, id) {
     for (const c of p.channels) if (c.children) c.children = c.children.filter((x) => x !== id);
     for (const arr of p.playlist.arrangements) arr.clips = arr.clips.filter((c) => c.type === 'pattern' || c.ref !== id);
     p.controllers = p.controllers.filter((l) => !l.addr.startsWith(`ch:${id}:`));
+    // automation clips and controller links that pointed at the deleted channel's parameters go with it
+    const orphan = new Set(p.channels.filter((c) => c.type === 'automation' && c.target && c.target.startsWith(`ch:${id}:`)).map((c) => c.id));
+    if (orphan.size) {
+      p.channels = p.channels.filter((c) => !orphan.has(c.id));
+      for (const arr of p.playlist.arrangements) arr.clips = arr.clips.filter((c) => !orphan.has(c.ref));
+    }
+    for (const c of p.channels) if (c.type === 'controller') c.links = c.links.filter((l) => !l.addr.startsWith(`ch:${id}:`));
   }, [['channels'], ['patterns'], ['playlist']]);
   if (store.selected === id) store.select(store.project.channels[0] ? store.project.channels[0].id : null);
 }
@@ -661,4 +668,105 @@ export function loadInstrumentPreset(store, chId, params, label = 'Load preset')
       if (d) c.params[k] = clampParam(d, v);
     }
   }, CH);
+}
+
+
+// ------------------------------------------------------------------------------ automation clips
+import { paramDef as paramDefOf, paramLabel as paramLabelOf, getParam as getParamOf } from '../core/addr.js';
+import { toNorm as toNormOf } from '../core/schema.js';
+
+export const automationFor = (project, addr) => project.channels.find((c) => c.type === 'automation' && c.target === addr) || null;
+
+// first playlist track where [s, s+l) is free
+function freeTrack(arr, s, l, from = 1) {
+  for (let t = from; t <= MAX_TRACK; t++) if (!arr.clips.some((c) => c.track === t && c.s < s + l && c.s + c.l > s)) return t;
+  return MAX_TRACK;
+}
+
+// Right-click a knob -> "Create automation clip": a channel holding the curve (flat at the knob's current
+// value) plus a clip for it in the current arrangement. An existing curve for the same knob is reused.
+export function createAutomationClip(store, addr, { start = 0, bars = 1 } = {}) {
+  const p0 = store.project;
+  const def = paramDefOf(p0, addr);
+  if (!def) return null;
+  let made = null;
+  store.edit('Create automation clip', (p) => {
+    let ch = automationFor(p, addr);
+    if (!ch) {
+      const len = barTicks(p.timeSig) * bars;
+      const v = toNormOf(def, getParamOf(p, addr) ?? def.def);
+      ch = createChannel(p, 'automation', { name: paramLabelOf(p, addr), target: addr, len, points: [{ t: 0, v, type: 'single', tension: 0, count: 4 }, { t: len, v, type: 'single', tension: 0, count: 4 }] });
+      p.channels.push(ch);
+    }
+    const arr = currentArrangement(p);
+    const l = ch.len || barTicks(p.timeSig);
+    const s = Math.max(0, Math.round(start));
+    const clip = createClip(p, 'automation', freeTrack(arr, s, l), s, l, ch.id);
+    arr.clips.push(clip);
+    arr.clips = sortClips(arr.clips);
+    made = { channel: ch, clip };
+  }, [['channels'], ['playlist']]);
+  return made;
+}
+
+export function setAutomationPoints(store, chId, points, label = 'Edit automation', coalesce) {
+  store.edit(label, () => {
+    const c = store.channel(chId);
+    if (c && c.type === 'automation') { c.points = points.slice(0, 4096).sort((a, b) => a.t - b.t); }
+  }, CH, coalesce ? { coalesce } : {});
+}
+
+// fn(points) mutates a copy of the points; the result is stored
+export function editAutomation(store, chId, fn, label = 'Edit automation', coalesce) {
+  store.edit(label, () => {
+    const c = store.channel(chId);
+    if (!c || c.type !== 'automation') return;
+    const pts = c.points.map((q) => ({ ...q }));
+    const out = fn(pts, c) || pts;
+    c.points = out.slice(0, 4096).sort((a, b) => a.t - b.t);
+  }, CH, coalesce ? { coalesce } : {});
+}
+
+export function setAutomationLength(store, chId, len) {
+  store.edit('Automation length', () => { const c = store.channel(chId); if (c) c.len = Math.max(STEP, Math.round(len)); }, CH, { coalesce: `autolen:${chId}` });
+}
+
+export function setAutomationTarget(store, chId, addr) {
+  store.edit('Automation target', () => { const c = store.channel(chId); if (c) { c.target = addr; c.name = paramLabelOf(store.project, addr); } }, CH);
+}
+
+// ------------------------------------------------------------------------------ controllers (LFO / envelope)
+export function addController(store, mode = 0, name) {
+  return addChannel(store, 'controller', { name: name || (mode === 1 ? 'Envelope 1' : 'LFO 1'), params: { mode } });
+}
+
+export function linkController(store, ctrlId, addr, { min = 0, max = 1, inv = 0 } = {}) {
+  store.edit('Link to controller', () => {
+    const c = store.channel(ctrlId);
+    if (!c || c.type !== 'controller') return;
+    const l = c.links.find((x) => x.addr === addr);
+    if (l) Object.assign(l, { min, max, inv }); else c.links.push({ addr, min, max, inv });
+  }, CH);
+}
+
+export function updateLink(store, ctrlId, index, patch, coalesce) {
+  store.edit('Edit link', () => { const c = store.channel(ctrlId); const l = c && c.links[index]; if (l) Object.assign(l, patch); }, CH, coalesce ? { coalesce } : {});
+}
+
+export function unlinkController(store, ctrlId, addr) {
+  store.edit('Remove link', () => { const c = store.channel(ctrlId); if (c && c.type === 'controller') c.links = c.links.filter((l) => l.addr !== addr); }, CH);
+}
+
+export const controllersFor = (project, addr) => project.channels.filter((c) => c.type === 'controller' && c.links.some((l) => l.addr === addr));
+
+// ------------------------------------------------------------------------------ MIDI links (project.controllers)
+export function setMidiLink(store, link) {
+  store.edit('Link to MIDI controller', (p) => {
+    p.controllers = p.controllers.filter((l) => l.addr !== link.addr);
+    p.controllers.push({ addr: link.addr, chan: link.chan ?? 0, cc: link.cc, min: link.min ?? 0, max: link.max ?? 1, invert: link.invert ? 1 : 0 });
+  }, [['controllers']]);
+}
+
+export function removeMidiLink(store, addr) {
+  store.edit('Remove MIDI link', (p) => { p.controllers = p.controllers.filter((l) => l.addr !== addr); }, [['controllers']]);
 }

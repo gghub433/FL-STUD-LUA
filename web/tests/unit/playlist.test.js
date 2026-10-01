@@ -200,3 +200,18 @@ test('clip pitch resamples (+12 st halves the duration)', () => {
   const at = firstSound(r.left, 0, 0.05);
   assert.ok(Math.abs(at - SR * 0.4) < SR * 0.004, `burst moves to 0.4 s, got ${at / SR}`);
 });
+
+// ---- built-in project templates ---------------------------------------------------------
+import { TEMPLATES } from '../../src/core/templates.js';
+
+test('every built-in template is a valid project that survives save/load and plays', () => {
+  for (const t of TEMPLATES) {
+    const p = t.build();
+    const q = normalize(JSON.parse(JSON.stringify(p)));
+    assert.equal(q.channels.length, p.channels.length, `${t.id}: channels survive`);
+    assert.equal(JSON.stringify(Object.keys(q.patterns)), JSON.stringify(Object.keys(p.patterns)), `${t.id}: patterns survive`);
+    if (!p.channels.length || t.silent) continue;              // empty rack / empty patterns make no sound by design
+    const r = renderSong(p.playlist.arrangements[0].clips.length ? p : (p.playlist.arrangements[0].clips.push(createClip(p, 'pattern', 1, 0, barTicks(p.timeSig), 1)), p), { tail: 0.3 });
+    assert.ok(peak(r.left) > 0.02 && peak(r.left) < 3 && r.left.every(Number.isFinite), `${t.id}: audible and bounded (${peak(r.left)})`);
+  }
+});

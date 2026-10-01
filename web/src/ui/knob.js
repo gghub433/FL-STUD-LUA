@@ -47,7 +47,8 @@ export class Knob {
     this.el.addEventListener('dblclick', (e) => { e.preventDefault(); this.edit(); });
     this.el.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     this.el.addEventListener('contextmenu', (e) => this.menu(e));
-    this.el.addEventListener('pointerenter', () => this.updateHint());
+    this.el.addEventListener('pointerenter', () => { this.updateHint(); if (this.addr) app.hoverAddr = this.addr; });
+    this.el.addEventListener('pointerleave', () => { if (app.hoverAddr === this.addr) app.hoverAddr = null; });
     registry.add(this);
     this.draw();
     this.markState();
@@ -91,6 +92,7 @@ export class Knob {
     const auto = p.channels.some((c) => c.type === 'automation' && c.target === this.addr);
     this.el.classList.toggle('auto', auto);
     this.el.classList.toggle('linked', p.controllers.some((l) => l.addr === this.addr));
+    this.el.classList.toggle('ctl', p.channels.some((c) => c.type === 'controller' && c.links.some((l) => l.addr === this.addr)));
   }
 
   text() { return this.def ? format(this.def, this.value) : String(this.value); }

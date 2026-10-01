@@ -305,3 +305,7 @@ canvas { display: block; }
 .organ-knob { position: absolute; left: 6px; width: 32px; height: 18px; margin-top: -9px; border-radius: 3px; border: 1px solid #000; box-shadow: 0 2px 3px rgba(0,0,0,.6); font-size: 10px; text-align: center; line-height: 16px; }
 .organ-label { position: absolute; bottom: 16px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--dim); }
 .organ-val { position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; font-family: var(--mono); color: var(--accent); }
+
+.knob.ctl .val { stroke: #b968d6; }
+.knob.ctl::before { content: ''; position: absolute; left: 0; top: 0; width: 5px; height: 5px; border-radius: 50%; background: #b968d6; box-shadow: 0 0 4px #b968d6; z-index: 1; }
+body.midi-learn .knob, body.midi-learn .btn { outline: 1px dashed rgba(127,220,92,.5); }

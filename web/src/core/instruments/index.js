@@ -8,8 +8,9 @@ import * as fm from './fmsynth.js';
 import * as pluck from './pluck.js';
 import * as organ from './organ.js';
 import * as wavetable from './wavetable.js';
+import * as controller from './controller.js';
 
-export const INSTRUMENTS = { sampler, fpc, slicer, subsynth, fm, drums, wavetable, pluck, organ };
+export const INSTRUMENTS = { sampler, fpc, slicer, subsynth, fm, drums, wavetable, pluck, organ, controller };
 
 export function registerInstrument(type, mod) { INSTRUMENTS[type] = mod; }
 export const hasInstrument = (type) => Object.prototype.hasOwnProperty.call(INSTRUMENTS, type);

@@ -60,6 +60,8 @@ export class PianoRoll {
     this.build();
     this.centerOn(60);
     this.bind();
+    this.ro = new ResizeObserver(() => this.layout());     // header wrapping or window resizes change the canvas area
+    this.ro.observe(this.centerWrap);
   }
 
   get store() { return this.app.store; }
@@ -178,7 +180,7 @@ export class PianoRoll {
   onResize() { this.layout(); }
   onShow() { this.layout(); this.startLoop(); this.syncSelection(); }
   onHide() { this.stopLoop(); }
-  destroy() { this.stopLoop(); for (const off of this.subs || []) off(); }
+  destroy() { this.stopLoop(); if (this.ro) this.ro.disconnect(); for (const off of this.subs || []) off(); }
 
   // ------------------------------------------------------------------ view helpers
   tx(t) { return (t - this.view.x0) * this.view.px; }
@@ -1143,7 +1145,7 @@ export class PianoRoll {
 export function createPianoRoll(win, app) {
   const pr = new PianoRoll(win, app);
   app.pianoRoll = pr;
-  const prevHook = app.keyHook;
-  app.keyHook = (e) => pr.keyHook(e) || (prevHook ? prevHook(e) : false);
-  return { el: pr.el, onResize: () => pr.onResize(), onShow: () => pr.onShow(), onHide: () => pr.onHide(), destroy: () => pr.destroy() };
+  const hook = (e) => pr.keyHook(e);
+  app.keyHooks.add(hook);
+  return { el: pr.el, onResize: () => pr.onResize(), onShow: () => pr.onShow(), onHide: () => pr.onHide(), destroy: () => { app.keyHooks.delete(hook); pr.destroy(); } };
 }

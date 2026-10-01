@@ -429,6 +429,29 @@ export class Engine {
     }
   }
 
+  _applyControllers(m) {
+    for (const rt of this.chList) {
+      if (rt.type !== 'controller' || !rt.enabled || !rt.inst) continue;
+      const links = rt.data.links;
+      const v = rt.inst.control(m);
+      if (!links || !links.length) continue;
+      for (const l of links) {
+        const d = this._autoDef(l.addr);
+        if (!d) continue;
+        const a = l.min + (l.max - l.min) * (l.inv ? 1 - v : v);
+        const val = fromNorm(d.def, a);
+        const key = `${rt.id}>${l.addr}`;
+        const prev = this.lastAuto.get(key);
+        if (prev !== undefined && Math.abs(prev - val) < 1e-7) continue;
+        this.lastAuto.set(key, val);
+        if (d.a.kind === 'transport' && d.a.key === 'tempo') { this.project.tempo = val; continue; }
+        setProjectParam(this.project, d.a, val);
+        this._applyRuntime(d.a, val);
+        this.autoOut.set(l.addr, val);
+      }
+    }
+  }
+
   // ------------------------------------------------------------------ rendering
   process(outL, outR, n, offset = 0) {
     let done = 0;
@@ -459,6 +482,9 @@ export class Engine {
     const evs = this.evs;
     evs.length = 0;
     if (tr.playing) this._collect(m, evs);
+
+    // ---- controllers (LFO / Envelope) write their value into the linked parameters once per block ----
+    this._applyControllers(m);
 
     // ---- render instruments in slices between events ----
     let pos = 0;

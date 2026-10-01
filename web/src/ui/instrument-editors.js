@@ -16,6 +16,9 @@ import { detectSlices, evenSlices, estimateLoop } from '../core/slice-detect.js'
 import { FACTORY } from '../core/factory.js';
 import { schemaMap } from '../core/schema.js';
 import { instrumentPresetItems } from './presets-ui.js';
+import { pickParam } from './param-picker.js';
+import { paramLabel } from '../core/addr.js';
+import { LFO_SHAPES } from '../core/dsp.js';
 import { FOOTAGE, PRESETS as ORGAN_PRESETS } from '../core/instruments/organ.js';
 import { frameWave, WT_FRAMES, TABLE_NAMES } from '../core/instruments/wavetable.js';
 
@@ -623,3 +626,72 @@ export function wavetableEditor(win, app, chId) {
   return { el, onResize: draw, destroy() { for (const s of subs) s(); } };
 }
 wavetableEditor.rect = { w: 640, h: 520 };
+
+
+// =================================================================================== CONTROLLER (LFO / ENVELOPE)
+export function controllerEditor(win, app, chId) {
+  const store = app.store, cmd = app.cmd;
+  const ch = () => store.channel(chId);
+  const schema = instrumentSchema('controller');
+  win.setTitle(ch().name, 'Controller');
+  const head = h('div.rack-head', h('span.dim', 'Name'), (() => { const i = h('input.field', { type: 'text', value: ch().name, style: { width: '140px' } }); i.addEventListener('keydown', (e) => e.stopPropagation()); i.addEventListener('change', () => cmd.renameChannel(store, chId, i.value || ch().name)); return i; })(),
+    h('div.grow'),
+    h('div.btn', { hint: 'Trigger the envelope once (an LFO needs no trigger)', onclick: () => app.preview(chId) }, '▶ Trigger'));
+  const cv = h('canvas', { width: 520, height: 110, style: { width: '100%', height: '110px', display: 'block', background: '#0e1012' } });
+  const draw = () => {
+    const c = ch(); if (!c) return;
+    const W = Math.max(200, Math.floor(cv.clientWidth || 520)); if (cv.width !== W) cv.width = W;
+    const p = c.params;
+    if (p.mode === 1) {
+      const st = [{ t: p.delay, to: 0 }, { t: p.attack, to: 1 }, { t: p.hold, to: 1 }, { t: p.decay, to: p.sustain, curve: 'exp' }, { t: 0.4, to: p.sustain, hold: 1 }, { t: p.release, to: 0, curve: 'exp' }];
+      drawEnv(cv, st.map((x) => ({ ...x, to: x.to * p.amount })), { color: '#b968d6' });
+      return;
+    }
+    const g = cv.getContext('2d'), H = cv.height;
+    g.fillStyle = '#0e1012'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#1f2529'; g.fillRect(0, H / 2, W, 1);
+    g.strokeStyle = '#b968d6'; g.lineWidth = 2; g.beginPath();
+    for (let x = 0; x <= W; x++) {
+      const u = (((x / W) * 2 + p.phase) % 1);
+      let v;
+      switch (p.shape) { case 0: v = Math.sin(2 * Math.PI * u); break; case 1: v = u < 0.5 ? 4 * u - 1 : 3 - 4 * u; break; case 2: v = 2 * u - 1; break; case 3: v = 1 - 2 * u; break; case 4: v = u < 0.5 ? 1 : -1; break; default: v = Math.sin(u * 37) * Math.cos(u * 11); }
+      const y = H / 2 - (0.5 * p.depth * v + p.offset * 0.5) * (H - 16);
+      if (x === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.stroke();
+    g.fillStyle = '#8e989f'; g.font = '10px sans-serif'; g.fillText(`${LFO_SHAPES[p.shape]}  ·  ${p.sync ? 'synced' : p.rate.toFixed(2) + ' Hz'}`, 8, H - 6);
+  };
+  const body = h('div.scroll', { style: { flex: 1, minHeight: 0 } });
+  const render = () => {
+    clear(body);
+    const c = ch(); if (!c) return;
+    const group = c.params.mode === 1 ? 'Envelope' : 'LFO';
+    body.append(h('div.mx-title', 'Type'), h('div', { style: { padding: '6px 10px' } }, paramControl(app, addrOf(chId)('mode'), schema.find((d) => d.id === 'mode'))));
+    body.append(h('div.mx-title', group === 'LFO' ? 'LFO' : 'Envelope (triggered by the notes of this channel)'));
+    body.append(h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '10px 14px', padding: '8px 10px' } }, schema.filter((d) => d.group === group).map((d) => paramControl(app, addrOf(chId)(d.id), d))));
+    body.append(h('div.mx-title', 'Linked parameters'));
+    const list = h('div', { style: { padding: '4px 8px' } });
+    if (!c.links.length) list.append(h('div.dim', { style: { padding: '6px 4px' } }, 'Nothing linked yet. Right-click any knob → Link to controller → this controller, or use + Link parameter.'));
+    c.links.forEach((l, i) => {
+      const range = (key, label) => { const inp = h('input', { type: 'range', min: 0, max: 100, value: Math.round(l[key] * 100), style: { width: '90px', accentColor: '#b968d6' }, hint: `${label} of the linked knob's range that the controller maps to` }); inp.addEventListener('input', () => cmd.updateLink(store, chId, i, { [key]: inp.value / 100 }, `link:${chId}:${i}:${key}`)); return inp; };
+      list.append(h('div.row', { style: { gap: '8px', padding: '3px 0', borderBottom: '1px solid #1b1e21' } },
+        h('div', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, hint: l.addr }, paramLabel(store.project, l.addr)),
+        h('span.dim', 'min'), range('min', 'Minimum'), h('span.dim', 'max'), range('max', 'Maximum'),
+        h('div.btn.sm' + (l.inv ? '.on' : ''), { hint: 'Invert the controller for this link', onclick: () => cmd.updateLink(store, chId, i, { inv: l.inv ? 0 : 1 }) }, 'Inv'),
+        h('div.btn.sm', { hint: 'Remove this link', onclick: () => cmd.unlinkController(store, chId, l.addr) }, '✕')));
+    });
+    list.append(h('div.row', { style: { padding: '8px 0' } }, h('div.btn', { hint: 'Choose a parameter from a list', onclick: async () => { const a = await pickParam(app, { title: 'Link which parameter?' }); if (a) cmd.linkController(store, chId, a, { min: 0, max: 1, inv: 0 }); } }, '＋ Link parameter…')));
+    body.append(list);
+    draw();
+  };
+  const el = h('div.rack', head, h('div', { style: { padding: '0 8px', background: '#0e1012', flex: 'none' } }, cv), body);
+  const subs = [
+    store.bus.on('param', (a) => { if (a.startsWith(`ch:${chId}:p:`)) { if (a.endsWith(':mode')) render(); else draw(); } }),
+    store.bus.on('change', ({ paths }) => { if (paths.some((p) => p[0] === 'channels')) { if (!ch()) { win.close(); return; } if (!body.contains(document.activeElement)) render(); else draw(); win.setTitle(ch().name, 'Controller'); } }),
+    store.bus.on('project', () => { if (!ch()) win.close(); else render(); }),
+  ];
+  render();
+  requestAnimationFrame(draw);
+  return { el, onResize: draw, destroy() { for (const s of subs) s(); } };
+}
+controllerEditor.rect = { w: 560, h: 520 };

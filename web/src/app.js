@@ -34,6 +34,8 @@ export const SNAP_OPTIONS = [
 
 const app = {
   cmd, editors: {}, held: new Map(), pianoBase: 60, typingPiano: true,
+  keyHooks: new Set(),                       // windows register fn(event) -> true when they used the key
+  hoverAddr: null,                           // parameter address of the knob under the pointer
   toast,
 };
 
@@ -125,6 +127,7 @@ app.addChannelItems = () => [
   { sep: true },
   { label: 'Audio clip', fn: () => app.addAudioClipChannel && app.addAudioClipChannel(), disabled: !app.addAudioClipChannel },
   { label: 'Automation clip', fn: () => app.addAutomationChannel && app.addAutomationChannel(), disabled: !app.addAutomationChannel },
+  { label: 'Controller (LFO / Envelope)', submenu: [{ label: 'LFO', fn: () => app.addControllerChannel(0) }, { label: 'Envelope controller', fn: () => app.addControllerChannel(1) }] },
   { label: 'Layer', fn: () => cmd.addChannel(app.store, 'layer', { name: 'Layer' }) },
   { sep: true },
   { label: 'Instrument plugin', submenu: () => Object.keys(INSTRUMENTS).filter((t) => t !== 'sampler').map((t) => ({ label: INSTRUMENTS[t].meta.name, fn: () => app.addInstrument(t) })) },
@@ -312,7 +315,7 @@ function onKeyDown(e) {
   const ctrl = e.ctrlKey || e.metaKey, key = e.key;
   const lower = key.length === 1 ? key.toLowerCase() : key;
   // the focused editor window (piano roll, playlist…) gets the first chance at the key
-  if (app.keyHook && app.keyHook(e)) { e.preventDefault(); return; }
+  for (const hook of app.keyHooks) if (hook(e)) { e.preventDefault(); return; }
   if (ctrl) {
     if (lower === 'z' && !e.shiftKey && !e.altKey) { e.preventDefault(); app.store.undo(); return; }
     if ((lower === 'z' && (e.altKey || e.shiftKey)) || lower === 'y') { e.preventDefault(); app.store.redo(); return; }

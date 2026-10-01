@@ -188,3 +188,42 @@ test('riff machine never produces a one-note motif, for any seed', () => {
     assert.ok(r.every((n) => n.k >= 67 && n.k <= 79 && inScale(n.k, 9, 'minor')), `seed ${seed} in range and key`);
   }
 });
+
+// ---- automation LFO tool ------------------------------------------------------------------
+import { generateLfoPoints, thinPoints, evalPoints } from '../../src/core/automation.js';
+
+test('LFO tool writes sine, triangle, saw and square shapes that evaluate to the wave', () => {
+  const len = 384;
+  const check = (shape, f, tol, opts = {}) => {
+    const pts = generateLfoPoints(len, { shape, cycles: 4, amp: 1, center: 0.5, ...opts });
+    assert.ok(pts.every((p, i) => p.v >= 0 && p.v <= 1 && p.t >= 0 && p.t <= len && (!i || p.t >= pts[i - 1].t)), `shape ${shape}: sorted, in range`);
+    for (let t = 0; t <= len; t += 7) {
+      const u = (((t / (len / 4) + (opts.phase || 0)) % 1) + 1) % 1;
+      const want = 0.5 + 0.5 * f(u), got = evalPoints(pts, t);
+      assert.ok(Math.abs(got - want) < tol, `shape ${shape} t=${t}: ${got} vs ${want}`);
+    }
+    return pts;
+  };
+  check(0, (u) => Math.sin(2 * Math.PI * u), 0.015);
+  check(1, (u) => (u < 0.5 ? 4 * u - 1 : 3 - 4 * u), 0.04);
+  check(2, (u) => 2 * u - 1, 0.05);
+  check(4, (u) => (u < 0.5 ? 1 : -1), 1.01);                      // edges: just stays in range
+  const sq = generateLfoPoints(len, { shape: 4, cycles: 4 });
+  assert.ok(sq.every((p) => p.type === 'hold') && sq.length >= 8, 'square uses hold segments');
+  const sh = generateLfoPoints(len, { shape: 0, cycles: 2, phase: 0.25, amp: 0.5, center: 0.3 });
+  assert.ok(Math.abs(evalPoints(sh, 0) - (0.3 + 0.25)) < 0.02, 'phase and centre apply');
+  assert.ok(Math.max(...sh.map((p) => p.v)) <= 0.55 + 1e-9 && Math.min(...sh.map((p) => p.v)) >= 0.05 - 1e-9, 'amp scales around the centre');
+  const part = generateLfoPoints(len, { shape: 1, cycles: 4, from: 96, to: 192 });
+  assert.ok(part[0].t === 96 && part[part.length - 1].t === 192, 'writes only inside the chosen range');
+});
+
+test('random LFO shapes are deterministic per seed; thinPoints drops collinear points only', () => {
+  const a = generateLfoPoints(384, { shape: 5, cycles: 2, seed: 4 }), b = generateLfoPoints(384, { shape: 5, cycles: 2, seed: 4 }), c = generateLfoPoints(384, { shape: 5, cycles: 2, seed: 5 });
+  assert.deepEqual(a, b); assert.notDeepEqual(a.map((p) => p.v), c.map((p) => p.v));
+  const line = [0, 1, 2, 3, 4].map((i) => ({ t: i * 10, v: i / 4, type: 'single', tension: 0, count: 4 }));
+  assert.equal(thinPoints(line).length, 2);
+  const bent = [...line]; bent[2] = { ...bent[2], v: 0.9 };
+  assert.equal(thinPoints(bent).length, 5);
+  const held = line.map((p) => ({ ...p, type: 'hold' }));
+  assert.equal(thinPoints(held).length, 5, 'curved/held segments are left alone');
+});

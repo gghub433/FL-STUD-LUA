@@ -3,12 +3,45 @@ import { createMixer } from './ui/mixer.js';
 import { openFxEditor, fxPresetItems } from './ui/fx-window.js';
 import { createPianoRoll } from './ui/piano-roll.js';
 import { createPlaylist } from './ui/playlist.js';
-import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor } from './ui/instrument-editors.js';
+import { openAutomationEditor } from './ui/automation-editor.js';
+import { pickParam } from './ui/param-picker.js';
+import { paramMenuItems, linkHovered } from './ui/linking.js';
+import { MidiHub } from './host/midi.js';
+import { formDialog } from './ui/forms.js';
+import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor } from './ui/instrument-editors.js';
 
 export function installExtensions(app) {
   // ---- dedicated instrument editors (types without an entry fall back to the generic parameter editor)
-  app.editors = Object.assign(app.editors || {}, { sampler: samplerEditor, fpc: fpcEditor, slicer: slicerEditor, drums: drumsEditor, subsynth: synthEditor, fm: fmEditor, organ: organEditor, wavetable: wavetableEditor });
+  app.editors = Object.assign(app.editors || {}, { sampler: samplerEditor, fpc: fpcEditor, slicer: slicerEditor, drums: drumsEditor, subsynth: synthEditor, fm: fmEditor, organ: organEditor, wavetable: wavetableEditor, controller: controllerEditor });
   app.store.bus.on('replaced', () => app.wm.closeDynamic());
+
+  // ---- automation, controllers, MIDI
+  app.midi = new MidiHub(app);
+  app.midi.init().then((ok) => { if (ok) app.store.bus.emit('midi-devices', app.midi.inputs); });
+  app.openAutomationEditor = (id) => openAutomationEditor(app, id);
+  app.paramMenuItems = (addr) => paramMenuItems(app, addr);
+  app.linkHovered = () => linkHovered(app);
+  app.addAutomationChannel = async () => {
+    const addr = await pickParam(app, { title: 'Automate which parameter?' });
+    if (!addr) return;
+    const made = app.cmd.createAutomationClip(app.store, addr, { start: app.playlist ? app.playlist.cursorT : 0 });
+    if (made) app.openAutomationEditor(made.channel.id);
+  };
+  app.addControllerChannel = (mode) => { const c = app.cmd.addController(app.store, mode); app.openChannelEditor(c.id); };
+  app.store.bus.on('midi-learn', (l) => document.body.classList.toggle('midi-learn', !!l));
+  app.keyHooks.add((e) => { if (e.key === 'Escape' && app.midi.learn) return app.midi.cancelLearn(); return false; });
+  const prevTools = app.toolsMenuExtra;
+  app.toolsMenuExtra = () => [...(prevTools ? prevTools() : []), { sep: true },
+    { label: 'MIDI input devices…', fn: () => app.midiSettings() },
+    { label: 'Link hovered knob to MIDI controller', key: 'Ctrl+L', fn: () => app.linkHovered() }];
+  app.midiSettings = async () => {
+    const m = app.midi;
+    if (!m.supported) { app.toast('Web MIDI is not available in this browser'); return; }
+    const list = m.inputs;
+    if (!list.length) { app.toast('No MIDI input devices found. Connect one and try again'); return; }
+    const v = await formDialog('MIDI input devices', list.map((d, i) => ({ id: `d${i}`, label: d.name, type: 'check', value: d.on })), { ok: 'Apply', width: 420 });
+    if (v) list.forEach((d, i) => m.setDeviceEnabled(d.name, !!v[`d${i}`]));
+  };
 
   // ---- playlist
   app.wm.register('playlist', { title: 'Playlist', create: createPlaylist, rect: { x: 90, y: 50, w: 1060, h: 540 }, minW: 560, minH: 280 });

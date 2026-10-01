@@ -1,6 +1,7 @@
 // Controls generated from a schema definition, bound to a parameter address.
 import { h } from './h.js';
 import { Knob } from './knob.js';
+import { contextMenu } from './menu.js';
 import { format } from '../core/schema.js';
 
 // choice -> <select>, bool -> toggle button, number -> labelled knob
@@ -10,6 +11,8 @@ export function paramControl(app, addr, def, opts = {}) {
     const sel = h('select.select', { hint: `${def.name}`, onchange: () => store.setParam(addr, +sel.value) },
       def.options.map((o, i) => h('option', { value: i }, o)));
     const sync = (v) => { sel.value = String(Math.round(v)); };
+    sel.addEventListener('pointerenter', () => { app.hoverAddr = addr; });
+    sel.addEventListener('pointerleave', () => { if (app.hoverAddr === addr) app.hoverAddr = null; });
     sync(store.getParam(addr) ?? def.def);
     store.bus.on('param', (a, v) => { if (a === addr && sel.isConnected) sync(v); });
     store.bus.on('project', () => { if (sel.isConnected) sync(store.getParam(addr) ?? def.def); });
@@ -18,6 +21,9 @@ export function paramControl(app, addr, def, opts = {}) {
   if (def.bool) {
     const b = h('div.btn', { hint: def.name, onclick: () => store.setParam(addr, store.getParam(addr) ? 0 : 1) }, opts.label || def.name);
     const sync = (v) => b.classList.toggle('on', !!v);
+    b.addEventListener('pointerenter', () => { app.hoverAddr = addr; });
+    b.addEventListener('pointerleave', () => { if (app.hoverAddr === addr) app.hoverAddr = null; });
+    b.addEventListener('contextmenu', (e) => { if (app.paramMenuItems) contextMenu(e, [{ title: def.name }, ...app.paramMenuItems(addr)]); });
     sync(store.getParam(addr) ?? def.def);
     store.bus.on('param', (a, v) => { if (a === addr && b.isConnected) sync(v); });
     store.bus.on('project', () => { if (b.isConnected) sync(store.getParam(addr) ?? def.def); });

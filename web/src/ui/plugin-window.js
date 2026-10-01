@@ -12,6 +12,7 @@ export function openChannelEditor(app, chId) {
   const ch = store.channel(chId);
   if (!ch) return null;
   const id = `plugin:${chId}`;
+  if (ch.type === 'automation') return app.openAutomationEditor ? app.openAutomationEditor(chId) : null;
   if (app.wm.isOpen(id)) { app.wm.focus(id); return app.wm.get(id); }
   const custom = app.editors[ch.type];
   const meta = instrumentMeta(ch.type);

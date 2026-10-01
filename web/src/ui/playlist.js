@@ -45,6 +45,8 @@ export class Playlist {
     this.cache = new Map();
     this.build();
     this.bind();
+    this.ro = new ResizeObserver(() => this.layout());     // header wrapping or window resizes change the canvas area
+    this.ro.observe(this.centerWrap);
   }
 
   get store() { return this.app.store; }
@@ -159,7 +161,7 @@ export class Playlist {
   onResize() { this.layout(); }
   onShow() { this.buildTabs(); this.buildSide(); this.layout(); this.startLoop(); }
   onHide() { this.stopLoop(); }
-  destroy() { this.stopLoop(); for (const off of this.subs || []) off(); }
+  destroy() { this.stopLoop(); if (this.ro) this.ro.disconnect(); for (const off of this.subs || []) off(); }
 
   // ------------------------------------------------------------------ view
   tx(t) { return (t - this.view.x0) * this.view.px; }
@@ -1077,7 +1079,7 @@ export class Playlist {
 export function createPlaylist(win, app) {
   const pl = new Playlist(win, app);
   app.playlist = pl;
-  const prevHook = app.keyHook;
-  app.keyHook = (e) => pl.keyHook(e) || (prevHook ? prevHook(e) : false);
-  return { el: pl.el, onResize: () => pl.onResize(), onShow: () => pl.onShow(), onHide: () => pl.onHide(), destroy: () => pl.destroy() };
+  const hook = (e) => pl.keyHook(e);
+  app.keyHooks.add(hook);
+  return { el: pl.el, onResize: () => pl.onResize(), onShow: () => pl.onShow(), onHide: () => pl.onHide(), destroy: () => { app.keyHooks.delete(hook); pl.destroy(); } };
 }
