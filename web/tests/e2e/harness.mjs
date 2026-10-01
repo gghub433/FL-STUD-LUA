@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { loadPlaywright } from './pw.mjs';
 import { createServer } from '../../tools/serve.mjs';
 
-const only = process.argv[2];
+const only = process.argv[3];
 const pw = await loadPlaywright();
 const chromium = pw.chromium || pw.default.chromium;
 const srv = createServer().listen(0);

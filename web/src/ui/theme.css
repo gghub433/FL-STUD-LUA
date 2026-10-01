@@ -254,3 +254,26 @@ canvas { display: block; }
 .fpc-pad.mute { opacity: .45; }
 .fpc-n { font-family: var(--mono); font-size: 10px; color: var(--accent); }
 .fpc-l { font-size: 10px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ------------------------------------------------------------ piano roll */
+.pr { background: #1d2023; }
+.pr-head { gap: 6px; row-gap: 4px; }
+.pr-sep { width: 1px; height: 18px; background: #14161a; margin: 0 2px; }
+.pr-head .seg .btn { padding: 0 5px; min-width: 24px; display: flex; align-items: center; justify-content: center; }
+.pr-main { display: flex; flex: 1; min-height: 0; position: relative; }
+.pr-keyswrap { position: relative; width: 64px; flex: none; background: #1b1d20; }
+.pr-keys { position: absolute; left: 0; cursor: pointer; }
+.pr-center { position: relative; flex: 1; min-width: 0; overflow: hidden; background: #25282b; }
+.pr-center canvas { position: absolute; left: 0; }
+.pr-ruler { cursor: pointer; }
+.pr-lanebar { position: absolute; left: 0; right: 0; height: 22px; display: flex; align-items: center; gap: 8px; padding: 0 8px; background: var(--bg2); border-top: 1px solid #000; border-bottom: 1px solid #000; }
+.pr-lanehelp { margin-left: auto; font-size: 10px; }
+.pr-playhead { position: absolute; left: 0; top: 0; width: 1px; background: #fff; box-shadow: 0 0 4px rgba(255,255,255,.7); pointer-events: none; display: none; z-index: 3; }
+.pr-empty { position: absolute; inset: 22px 0 0 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--dim); background: rgba(24,26,28,.82); z-index: 4; }
+.pr-props { width: 210px; flex: none; overflow-y: auto; border-left: 1px solid #000; background: var(--bg1); padding-bottom: 6px; }
+.pr-prop { display: flex; align-items: center; justify-content: space-between; padding: 3px 8px; gap: 6px; }
+.pr-prop span { color: var(--dim); }
+.pr-prop input:disabled { opacity: .45; }
+.pr-swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; padding: 6px 8px; }
+.pr-swatches i { height: 16px; border-radius: 3px; border: 1px solid #000; cursor: pointer; }
+.pr-swatches i:hover { outline: 1px solid var(--accent); }

@@ -69,7 +69,8 @@ export class Store {
 
   _push(label, key) {
     const now = performance.now();
-    if (key && key === this.lastKey && now - this.lastTime < COALESCE_MS) { this.lastTime = now; return; }
+    // keys starting with 'gesture:' belong to one pointer drag and never time out
+    if (key && key === this.lastKey && (key.startsWith('gesture:') || now - this.lastTime < COALESCE_MS)) { this.lastTime = now; return; }
     this.lastKey = key || null;
     this.lastTime = now;
     this.history.push({ label, time: Date.now(), json: this._snap() });

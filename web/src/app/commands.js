@@ -384,3 +384,71 @@ export function sliceToPattern(store, chId, grid = 24) {
   }, [['patterns', pat.id]]);
   return notes.length;
 }
+
+// ------------------------------------------------------------------------------ piano roll notes
+// All note edits go to the *current pattern*. `ids` are note ids; each call is one undo step (or
+// part of a coalesced gesture when `coalesce` is given).
+
+const sortNotes = (list) => list.sort((a, b) => a.s - b.s || a.k - b.k);
+const noteEdit = (store, label, fn, coalesce) => {
+  const pat = store.pattern;
+  return store.edit(label, (p) => fn(p, pat), [['patterns', pat.id]], coalesce ? { coalesce } : {});
+};
+
+export function notesOf(store, chId) { const l = store.pattern.notes[chId]; return l || []; }
+
+// create notes from partials {s,l,k,v,...}; returns the created notes
+export function addNotes(store, chId, partials, label = 'Add notes', coalesce) {
+  return noteEdit(store, label, (p, pat) => {
+    const list = pat.notes[chId] || (pat.notes[chId] = []);
+    const made = partials.map((n) => ({ ...n, id: nextId(p) }));
+    for (const n of made) { if (n.v === undefined) n.v = 100; list.push(n); }
+    sortNotes(list);
+    return made;
+  }, coalesce);
+}
+
+export function deleteNotes(store, chId, ids, label = 'Delete notes', coalesce) {
+  const set = new Set(ids);
+  noteEdit(store, label, (p, pat) => { pat.notes[chId] = (pat.notes[chId] || []).filter((n) => !set.has(n.id)); }, coalesce);
+}
+
+// fn(note, index) mutates each selected note in place
+export function updateNotes(store, chId, ids, fn, label = 'Edit notes', coalesce) {
+  const set = new Set(ids);
+  noteEdit(store, label, (p, pat) => {
+    const list = pat.notes[chId] || [];
+    let i = 0;
+    for (const n of list) if (set.has(n.id)) fn(n, i++);
+    sortNotes(list);
+  }, coalesce);
+}
+
+// tool(selectedNotes, newId) -> replacement notes (see core/note-tools.js). Returns the new selection ids.
+export function replaceNotes(store, chId, ids, tool, label = 'Edit notes') {
+  const set = new Set(ids);
+  return noteEdit(store, label, (p, pat) => {
+    const list = pat.notes[chId] || [];
+    const sel = list.filter((n) => set.has(n.id));
+    const rest = list.filter((n) => !set.has(n.id));
+    const out = tool(sel, () => nextId(p)) || [];
+    const merged = rest.concat(out);
+    pat.notes[chId] = sortNotes(merged);
+    return out.map((n) => n.id);
+  });
+}
+
+// notes: complete note objects (ids are reassigned); tick offset and key shift applied
+export function pasteNotes(store, chId, notes, dTick, dKey = 0, label = 'Paste notes') {
+  return noteEdit(store, label, (p, pat) => {
+    const list = pat.notes[chId] || (pat.notes[chId] = []);
+    const made = notes.map((n) => ({ ...n, id: nextId(p), s: Math.max(0, n.s + dTick), k: Math.max(0, Math.min(120, n.k + dKey)) }));
+    list.push(...made);
+    sortNotes(list);
+    return made;
+  });
+}
+
+export function setPatternLength(store, patId, ticks) {
+  store.edit('Pattern length', (p) => { p.patterns[patId].len = ticks || null; }, [['patterns', patId]]);
+}

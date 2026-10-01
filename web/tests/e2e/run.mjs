@@ -1,10 +1,13 @@
 // End-to-end tests in a real Chromium: UI clicks + proof that the AudioWorklet produces sound.
+// usage: node tests/e2e/run.mjs [suite] [test-name-filter]
 import { finish } from './harness.mjs';
 import { run as basic } from './suite-basic.mjs';
 import { run as mixer } from './suite-mixer.mjs';
 import { run as instruments } from './suite-instruments.mjs';
+import { run as roll } from './suite-roll.mjs';
 
-await basic();
-await mixer();
-await instruments();
+const suites = { basic, mixer, instruments, roll };
+const pick = process.argv[2];
+if (pick && !suites[pick]) { console.error(`unknown suite "${pick}" (${Object.keys(suites).join(', ')})`); process.exit(2); }
+for (const [name, run] of Object.entries(suites)) if (!pick || pick === name) await run();
 await finish();

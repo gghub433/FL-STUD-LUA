@@ -33,7 +33,7 @@ export const SNAP_OPTIONS = [
 ];
 
 const app = {
-  cmd, editors: {}, held: new Map(), pianoBase: 60,
+  cmd, editors: {}, held: new Map(), pianoBase: 60, typingPiano: true,
   toast,
 };
 
@@ -311,6 +311,8 @@ function onKeyDown(e) {
   if (isTyping(e) || document.querySelector('.modal-back')) return;
   const ctrl = e.ctrlKey || e.metaKey, key = e.key;
   const lower = key.length === 1 ? key.toLowerCase() : key;
+  // the focused editor window (piano roll, playlist…) gets the first chance at the key
+  if (app.keyHook && app.keyHook(e)) { e.preventDefault(); return; }
   if (ctrl) {
     if (lower === 'z' && !e.shiftKey && !e.altKey) { e.preventDefault(); app.store.undo(); return; }
     if ((lower === 'z' && (e.altKey || e.shiftKey)) || lower === 'y') { e.preventDefault(); app.store.redo(); return; }
@@ -333,9 +335,8 @@ function onKeyDown(e) {
   if (key === ' ') { e.preventDefault(); app.transport.toggle(); return; }
   if (lower === 'l' && !e.repeat) { app.transport.toggleMode(); return; }
   if (key === 'Escape') { closePopups(); return; }
-  if (app.keyHook && app.keyHook(e)) return;
   // typing-to-piano on the selected channel
-  if (!e.repeat && PIANO[lower] !== undefined && !e.shiftKey) {
+  if (app.typingPiano && !e.repeat && PIANO[lower] !== undefined && !e.shiftKey) {
     const ch = app.store.selected;
     if (ch == null) return;
     const note = app.pianoBase + PIANO[lower];
