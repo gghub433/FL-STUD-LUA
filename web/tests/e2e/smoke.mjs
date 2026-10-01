@@ -1,0 +1,16 @@
+import { loadPlaywright } from './pw.mjs';
+import { createServer } from '../../tools/serve.mjs';
+const pw = await loadPlaywright();
+const srv = createServer().listen(0);
+const port = srv.address().port;
+const browser = await (pw.chromium || pw.default.chromium).launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+const page = await browser.newPage({ viewport: { width: 1500, height: 860 } });
+const logs = [];
+page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
+page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}\n${e.stack}`));
+await page.goto(`http://localhost:${port}/`);
+await page.waitForFunction(() => window.__ready, null, { timeout: 15000 }).catch((e) => logs.push('timeout waiting ready: ' + e.message));
+await page.waitForTimeout(600);
+await page.screenshot({ path: 'tests/e2e/out/smoke.png' });
+console.log(logs.join('\n') || '(no console output)');
+await browser.close(); srv.close();
