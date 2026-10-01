@@ -59,6 +59,11 @@ export class Transport {
     this.store.bus.emit('transport');
   }
 
+  // Performance mode: launch / stop playlist clips live (quant = ticks to wait for the next boundary)
+  perfLaunch(clipId, quant = 0) { this.host.resume(); this.host.send({ t: 'perf', op: 'launch', clip: clipId, quant }); this.store.bus.emit('transport'); }
+  perfStop(track, quant = 0) { this.host.send({ t: 'perf', op: 'stop', track, quant }); }
+  perfStopAll(quant = 0) { this.host.send({ t: 'perf', op: 'stopAll', quant }); }
+
   seek(tick) { this.host.send({ t: 'seek', tick: Math.max(0, Math.round(tick)) }); }
 
   setMode(mode) {
@@ -93,6 +98,7 @@ export class Transport {
   // loop bounds used to wrap the drawn playhead
   loopBounds() {
     const p = this.store.project;
+    if (this.host.st.mode === 'perf' && this.playing) return [0, Infinity];
     if (this.mode === 'song') {
       const a = this.store.arrangement;
       return a.loop ? [a.loop.s, a.loop.e] : [0, Infinity];

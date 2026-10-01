@@ -180,3 +180,11 @@ test('duplicate/shift/scaleLengths/fitToScale', () => {
   T.fitToScale(f, 0, 'major');
   assert.ok(inScale(f[0].k, 0, 'major'));
 });
+
+test('riff machine never produces a one-note motif, for any seed', () => {
+  for (let seed = 1; seed <= 400; seed++) {
+    const r = T.riffMachine({ seed, root: 9, scale: 'minor', bars: 2, density: 0.75, lo: 67, hi: 79 }, newId);
+    assert.ok(r.length >= 8, `seed ${seed}: ${r.length} notes`);
+    assert.ok(r.every((n) => n.k >= 67 && n.k <= 79 && inScale(n.k, 9, 'minor')), `seed ${seed} in range and key`);
+  }
+});

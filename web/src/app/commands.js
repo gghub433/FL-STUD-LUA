@@ -452,3 +452,198 @@ export function pasteNotes(store, chId, notes, dTick, dKey = 0, label = 'Paste n
 export function setPatternLength(store, patId, ticks) {
   store.edit('Pattern length', (p) => { p.patterns[patId].len = ticks || null; }, [['patterns', patId]]);
 }
+
+// ------------------------------------------------------------------------------ playlist
+import { resolveOverlaps, splitClip, defaultClipLength, MAX_TRACK, sortClips } from '../core/playlist-ops.js';
+import { createClip, createArrangement } from '../core/project.js';
+export { defaultClipLength, MAX_TRACK };
+
+const PLP = [['playlist']];
+const plEdit = (store, label, fn, coalesce) => store.edit(label, (p) => fn(p, currentArrangement(p)), PLP, coalesce ? { coalesce } : {});
+const clampTrack = (t) => Math.max(1, Math.min(MAX_TRACK, Math.round(t)));
+
+// partials: { type, track, s, l, ref, o?, ...extra }. Existing clips under the new ones are trimmed away.
+export function addClips(store, partials, label = 'Add clips', coalesce, { overlap = true } = {}) {
+  return plEdit(store, label, (p, arr) => {
+    const made = partials.map((c) => {
+      const { type, track, s, l, ref, id, ...extra } = c;
+      for (const k of Object.keys(extra)) if (extra[k] === undefined) delete extra[k];
+      return createClip(p, type, clampTrack(track), Math.max(0, Math.round(s)), Math.max(1, Math.round(l)), ref, extra);
+    });
+    arr.clips.push(...made);
+    arr.clips = overlap ? resolveOverlaps(arr.clips, made, () => nextId(p)) : sortClips(arr.clips);
+    return made;
+  }, coalesce);
+}
+
+export function deleteClips(store, ids, label = 'Delete clips', coalesce) {
+  const set = new Set(ids);
+  plEdit(store, label, (p, arr) => { arr.clips = arr.clips.filter((c) => !set.has(c.id)); }, coalesce);
+}
+
+// fn(clip, index) mutates the selected clips; the result is cleaned up so clips on a track never overlap
+export function updateClips(store, ids, fn, label = 'Edit clips', coalesce, { overlap = true } = {}) {
+  const set = new Set(ids);
+  plEdit(store, label, (p, arr) => {
+    const sel = arr.clips.filter((c) => set.has(c.id));
+    sel.forEach((c, i) => fn(c, i));
+    for (const c of sel) { c.track = clampTrack(c.track); c.s = Math.max(0, c.s); c.l = Math.max(1, c.l); }
+    arr.clips = overlap ? resolveOverlaps(arr.clips, sel, () => nextId(p)) : sortClips(arr.clips);
+  }, coalesce);
+}
+
+// One step of a clip drag. `base` is the clip list as it was when the drag started (after any Ctrl-copy);
+// every step rebuilds the list from it, so clips the dragged ones pass over are cut only while they are
+// on top of them and come back when the drag moves on.
+export function dragClips(store, base, ids, fn, label, coalesce) {
+  const set = new Set(ids);
+  plEdit(store, label, (p, arr) => {
+    const clips = base.map((c) => ({ ...c }));
+    const sel = clips.filter((c) => set.has(c.id));
+    sel.forEach((c, i) => fn(c, i));
+    for (const c of sel) { c.track = clampTrack(c.track); c.s = Math.max(0, c.s); c.l = Math.max(1, c.l); }
+    arr.clips = resolveOverlaps(clips, sel, () => nextId(p));
+  }, coalesce);
+}
+
+// tool(selClips, newId) -> replacement clips (slice, glue…); returns the ids of the replacement clips
+export function replaceClips(store, ids, tool, label = 'Edit clips') {
+  const set = new Set(ids);
+  return plEdit(store, label, (p, arr) => {
+    const sel = arr.clips.filter((c) => set.has(c.id));
+    const rest = arr.clips.filter((c) => !set.has(c.id));
+    const out = tool(sel, () => nextId(p)) || [];
+    arr.clips = sortClips(rest.concat(out));
+    return out.map((c) => c.id);
+  });
+}
+
+export function sliceClips(store, cuts /* [[clipId, tick]] */, label = 'Slice clips') {
+  const map = new Map(cuts);
+  return replaceClips(store, [...map.keys()], (sel, newId) => {
+    const out = [];
+    for (const c of sel) { out.push(c); const r = splitClip(c, map.get(c.id), newId); if (r) out.push(r); }
+    return out;
+  }, label);
+}
+
+export function pasteClips(store, clips, dTick, dTrack = 0, label = 'Paste clips') {
+  return addClips(store, clips.map((c) => ({ ...c, id: undefined, s: c.s + dTick, track: c.track + dTrack })), label);
+}
+
+// give pattern clips their own copy of the pattern so editing it no longer changes the other clips
+export function makeUnique(store, ids) {
+  const set = new Set(ids);
+  return plEdit(store, 'Make pattern unique', (p, arr) => {
+    const cache = new Map();
+    for (const c of arr.clips) {
+      if (!set.has(c.id) || c.type !== 'pattern') continue;
+      if (!cache.has(c.ref)) {
+        const src = p.patterns[c.ref];
+        let nid = 1; while (p.patterns[nid]) nid++;
+        const copy = { ...clone(src), id: nid, name: `${src.name} (unique)` };
+        for (const k of Object.keys(copy.notes)) copy.notes[k] = copy.notes[k].map((n) => ({ ...n, id: nextId(p) }));
+        p.patterns[nid] = copy;
+        cache.set(c.ref, nid);
+      }
+      c.ref = cache.get(c.ref);
+    }
+  }, [['playlist'], ['patterns']]);
+}
+
+// ---- arrangements
+export function selectArrangement(store, id) {
+  store.edit('Select arrangement', (p) => { p.playlist.current = id; }, PLP, { noUndo: true });
+  store.bus.emit('arrangement', id);
+}
+
+export function addArrangement(store, name) {
+  const a = store.edit('Add arrangement', (p) => {
+    const arr = createArrangement(nextId(p), name || `Arrangement ${p.playlist.arrangements.length + 1}`);
+    p.playlist.arrangements.push(arr);
+    p.playlist.current = arr.id;
+    return arr;
+  }, PLP);
+  store.bus.emit('arrangement', a.id);
+  return a;
+}
+
+export function cloneArrangement(store, id) {
+  const a = store.edit('Duplicate arrangement', (p) => {
+    const src = p.playlist.arrangements.find((x) => x.id === id);
+    if (!src) return null;
+    const copy = clone(src);
+    copy.id = nextId(p); copy.name = `${src.name} (copy)`;
+    for (const c of copy.clips) c.id = nextId(p);
+    for (const m of copy.markers) m.id = nextId(p);
+    p.playlist.arrangements.push(copy);
+    p.playlist.current = copy.id;
+    return copy;
+  }, PLP);
+  if (a) store.bus.emit('arrangement', a.id);
+  return a;
+}
+
+export function renameArrangement(store, id, name) {
+  store.edit('Rename arrangement', (p) => { const a = p.playlist.arrangements.find((x) => x.id === id); if (a) a.name = name.slice(0, 40) || a.name; }, PLP);
+}
+
+export function deleteArrangement(store, id) {
+  if (store.project.playlist.arrangements.length < 2) return false;
+  store.edit('Delete arrangement', (p) => {
+    p.playlist.arrangements = p.playlist.arrangements.filter((x) => x.id !== id);
+    if (p.playlist.current === id) p.playlist.current = p.playlist.arrangements[0].id;
+  }, PLP);
+  store.bus.emit('arrangement', store.project.playlist.current);
+  return true;
+}
+
+// ---- markers, loop, start, punch (all live in the current arrangement)
+export function addMarker(store, marker) {
+  return plEdit(store, 'Add marker', (p, arr) => { const m = { id: nextId(p), name: '', num: 4, den: 4, len: 384, ...marker }; arr.markers.push(m); arr.markers.sort((a, b) => a.t - b.t); return m; });
+}
+
+export function updateMarker(store, id, fn, label = 'Edit marker', coalesce) {
+  plEdit(store, label, (p, arr) => { const m = arr.markers.find((x) => x.id === id); if (m) { fn(m); arr.markers.sort((a, b) => a.t - b.t); } }, coalesce);
+}
+
+export function removeMarker(store, id) { plEdit(store, 'Delete marker', (p, arr) => { arr.markers = arr.markers.filter((m) => m.id !== id); }); }
+export function setLoop(store, loop, coalesce) { plEdit(store, 'Loop region', (p, arr) => { arr.loop = loop && loop.e > loop.s ? { s: Math.max(0, Math.round(loop.s)), e: Math.round(loop.e) } : null; }, coalesce); }
+export function setStartMarker(store, t) { plEdit(store, 'Start marker', (p, arr) => { arr.start = t == null ? null : Math.max(0, Math.round(t)); }); }
+export function setPunch(store, punch) { plEdit(store, 'Punch region', (p, arr) => { arr.punch = punch && punch.out > punch.in ? { in: Math.round(punch.in), out: Math.round(punch.out) } : null; }); }
+
+// ---- per-track settings: { name, color, mute, solo, lock, height }
+export function setPlaylistTrack(store, track, patch, label = 'Edit track') {
+  plEdit(store, label, (p, arr) => {
+    const t = arr.tracks[track] || (arr.tracks[track] = {});
+    for (const [k, v] of Object.entries(patch)) { if (v === undefined || v === null || v === 0 || v === '') delete t[k]; else t[k] = v; }
+    if (!Object.keys(t).length) delete arr.tracks[track];
+  });
+}
+
+// ---- audio / automation sources for clips
+export function addAudioChannel(store, sample, name) {
+  const ch = addChannel(store, 'audio', { name: name || sample.name, sample: { id: sample.id, name: sample.name } });
+  return ch;
+}
+
+// Time-stretch / pitch-shift one audio clip: renders a derived copy of the sample and points the clip at it.
+export async function stretchClip(store, clipId, ratio, semitones) {
+  const arr = store.arrangement;
+  const clip = arr.clips.find((c) => c.id === clipId);
+  const ch = clip && store.channel(clip.ref);
+  if (!clip || !ch || !ch.sample) return false;
+  const baseId = ch.sample.id;
+  const src = await store.bank.ensure(baseId);
+  if (!src) return false;
+  const id = `stretch:${baseId}:${ratio.toFixed(4)}:${semitones.toFixed(2)}`;
+  if (!store.bank.has(id)) store.bank.addPCM(`${src.name} (stretched)`, src.rate, stretchAudio(src.channels, { ratio, semitones, rate: src.rate }), id);
+  const oldRatio = clip.stretch || 1;
+  updateClips(store, [clipId], (c) => {
+    c.use = id; c.stretch = ratio;
+    c.l = Math.max(1, Math.round((c.l * ratio) / oldRatio));      // the clip keeps showing the same material
+    c.o = Math.round((c.o * ratio) / oldRatio);
+    delete c.pitch;
+  }, 'Time-stretch clip');
+  return true;
+}

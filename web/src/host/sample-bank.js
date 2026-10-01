@@ -2,6 +2,7 @@
 // streams each sample to the audio engine exactly once.
 import { renderFactorySample, isFactoryId, factoryName } from '../core/factory.js';
 import { idbGet, idbPut } from './idb.js';
+import { stretchAudio } from '../core/stretch.js';
 
 // cyrb53 string/array hash, used to give identical audio the same id
 function hashPCM(ch, rate) {
@@ -76,6 +77,13 @@ export class SampleBank {
         if (!data) return null;
         return this.addPCM(factoryName(id), this.host.sampleRate, Array.isArray(data) ? data : [data], id, false);
       }
+      const st = /^stretch:(.+):([\d.]+):(-?[\d.]+)$/.exec(id);
+      if (st) {                              // derived time-stretched copy: rebuild it from its source
+        const src = await this.ensure(st[1]);
+        if (!src) return null;
+        const channels = stretchAudio(src.channels, { ratio: +st[2], semitones: +st[3], rate: src.rate });
+        return this.addPCM(`${src.name} (stretched)`, src.rate, channels, id, false);
+      }
       const rec = await idbGet('samples', id);
       if (!rec) return null;
       return this.addPCM(rec.name, rec.rate, rec.channels, id, false);
@@ -93,6 +101,7 @@ export class SampleBank {
       if (ch.pads) for (const pad of ch.pads) for (const l of pad.layers || []) if (l.sample) ids.add(l.sample.id);
     }
     for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) ids.add(f.extra.irId);
+    for (const a of project.playlist.arrangements) for (const c of a.clips) if (c.use) ids.add(c.use);
     const missing = [];
     await Promise.all([...ids].map(async (id) => { if (!(await this.ensure(id))) missing.push(id); }));
     return missing;

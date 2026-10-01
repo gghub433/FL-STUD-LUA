@@ -64,6 +64,7 @@ export class Engine {
     this.noLoop = false;      // offline rendering never loops
     this.live = [];
     this.held = new Map();
+    this.perf = [];            // performance mode: [{ clip, start, stop }]
     this.evs = [];
     this.out = [];
     this.lastAuto = new Map();
@@ -172,6 +173,11 @@ export class Engine {
       this.timeMap = new TimeMap(p.timeSig, arr.markers);
       tr.loopS = arr.loop ? arr.loop.s : 0;
       tr.loopE = arr.loop ? arr.loop.e : Infinity;
+    } else if (tr.mode === 'perf') {
+      const arr = currentArrangement(p);
+      this.seq.compilePerf(p, arr, p.swing, this.perf, tr.tick);
+      this.timeMap = new TimeMap(p.timeSig, arr.markers);
+      tr.loopS = 0; tr.loopE = Infinity;
     } else {
       this.seq.compilePattern(p, p.currentPattern, p.swing);
       this.timeMap = new TimeMap(p.timeSig, []);
@@ -196,7 +202,8 @@ export class Engine {
       return;
     }
     this.allNotesOff(true);
-    tr.mode = mode === 'song' ? 'song' : 'pat';
+    tr.mode = mode === 'song' ? 'song' : mode === 'perf' ? 'perf' : 'pat';
+    if (tr.mode === 'perf') this.perf = [];
     tr.tick = from !== undefined ? from : this.startPosition(tr.mode);
     tr.startTick = tr.tick;
     tr.paused = false;
@@ -249,6 +256,41 @@ export class Engine {
     } else if (!tr.paused) tr.startTick = tick;
   }
 
+  // ------------------------------------------------------------------ performance mode
+  // Clips are launched live. quant = ticks to wait for (0 = at once); the clip starts on that boundary.
+  _perfBoundary(quant) { const t = Math.max(0, this.tr.tick); return quant > 0 ? Math.ceil(t / quant - 1e-9) * quant : Math.ceil(t); }
+
+  _perfEnsure() {
+    const tr = this.tr;
+    if (!(tr.playing && tr.mode === 'perf')) { this.play('perf', 0); tr.tick = 0; }
+  }
+
+  perfLaunch(clipId, quant) {
+    const arr = currentArrangement(this.project);
+    const clip = arr.clips.find((c) => c.id === clipId);
+    if (!clip) return;
+    this._perfEnsure();
+    const start = this._perfBoundary(quant);
+    for (const en of this.perf) if (en.clip.track === clip.track && (en.stop == null || en.stop > start)) en.stop = start;
+    this.perf.push({ clip, start, stop: null });
+    this._perfRecompile();
+  }
+
+  perfStop(track, quant) {
+    const tr = this.tr;
+    if (!(tr.playing && tr.mode === 'perf')) return;
+    const at = this._perfBoundary(quant);
+    for (const en of this.perf) if ((track == null || en.clip.track === track) && (en.stop == null || en.stop > at)) en.stop = Math.max(at, en.start);
+    this._perfRecompile();
+  }
+
+  _perfRecompile() {
+    const tr = this.tr;
+    this.perf = this.perf.filter((en) => en.stop == null || en.stop > tr.tick - 1);
+    this._compile();
+    this.out.push({ t: 'perf', entries: this.perf.map((en) => ({ clipId: en.clip.id, track: en.clip.track, start: en.start, stop: en.stop })) });
+  }
+
   // hard = cut every voice immediately; otherwise only release notes the sequencer is holding
   allNotesOff(hard) {
     if (hard) {
@@ -275,14 +317,16 @@ export class Engine {
     const rt = this.channels.get(chId);
     if (!rt || !rt.enabled || !rt.inst || !rt.data.sample) return;
     const sec = 60 / this.project.tempo / PPQ;
-    const smp = this.samples.get(rt.data.sample.id);
+    const sid = clip.use || rt.data.sample.id;              // clip.use: derived (time-stretched) sample
+    const smp = this.samples.get(sid) || this.samples.get(rt.data.sample.id);
     if (!smp) return;
     const lenTicks = clip.l - offsetTicks;
     if (lenTicks <= 0) return;
     this._prepare(rt);
     rt.inst.start({
-      clipId: clip.id, sampleId: rt.data.sample.id,
-      startSrc: (clip.o + offsetTicks) * sec * smp.rate,
+      clipId: clip.id, sampleId: this.samples.has(sid) ? sid : rt.data.sample.id,
+      // reversed clips play their window [o, o + l) backwards, so they start at its end
+      startSrc: (clip.rev ? clip.o + clip.l - offsetTicks : clip.o + offsetTicks) * sec * smp.rate,
       lenFrames: Math.max(1, Math.round(lenTicks * sec * this.sr)),
       gain: clip.gain ? Math.pow(10, clip.gain / 20) : 1,
       fadeIn: Math.round((clip.fi || 0) * sec * this.sr), fadeOut: Math.round((clip.fo || 0) * sec * this.sr),

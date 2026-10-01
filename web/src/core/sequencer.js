@@ -2,7 +2,7 @@
 // array; the engine walks it with a cursor, converting tick positions to sample offsets
 // inside each block, so timing is sample-accurate and independent of any JS timer.
 import { STEP } from './constants.js';
-import { patternLength } from './project.js';
+import { patternLength, barTicks } from './project.js';
 
 export const EV_OFF = 0, EV_ON = 1, EV_AUDIO_ON = 2, EV_AUDIO_OFF = 3;
 
@@ -57,6 +57,9 @@ export class Sequencer {
     for (const k of Object.keys(arr.tracks)) if (arr.tracks[k].solo) soloed.add(+k);
     const muted = (track) => (arr.tracks[track]?.mute ? true : soloed.size > 0 && !soloed.has(track));
     const chById = new Map(project.channels.map((c) => [c.id, c]));
+    // "Pattern length" markers override the repeat length of pattern clips that start at or after them
+    const patLens = arr.markers.filter((m) => m.type === 'patlen').sort((a, b) => a.t - b.t);
+    const lenAt = (t, natural) => { let v = natural; for (const m of patLens) { if (m.t <= t) v = m.len; else break; } return v; };
     let end = 0;
     for (const clip of arr.clips) {
       end = Math.max(end, clip.s + clip.l);
@@ -65,7 +68,7 @@ export class Sequencer {
       if (clip.type === 'pattern') {
         const pat = project.patterns[clip.ref];
         if (!pat) continue;
-        const plen = patternLength(project, pat);
+        const plen = lenAt(clip.s, patternLength(project, pat));
         const k0 = Math.floor(clip.o / plen), k1 = Math.ceil((clip.o + clip.l) / plen);
         for (let k = k0; k < k1; k++) {
           const base = clip.s - clip.o + k * plen;
@@ -96,6 +99,51 @@ export class Sequencer {
     for (const list of this.autos.values()) list.sort((a, b) => a.s - b.s);
     this.events.sort(byTime);
     this.length = end;
+  }
+
+  // Performance mode: entries = [{ clip, start, stop }] are playlist clips launched live. Each plays from
+  // its own beginning at `start` and loops (pattern length / clip length) until `stop` (null = forever).
+  compilePerf(project, arr, swing, entries, now) {
+    this.events = []; this.autos = new Map(); this.audioClips = []; this.idx = 0;
+    const chById = new Map(project.channels.map((c) => [c.id, c]));
+    const horizon = Math.max(0, now) + 256 * barTicks(project.timeSig);
+    for (const en of entries) {
+      const clip = en.clip;
+      if (clip.mute) continue;
+      const stop = en.stop == null ? Infinity : en.stop;
+      if (clip.type === 'pattern') {
+        const pat = project.patterns[clip.ref];
+        if (!pat) continue;
+        const plen = patternLength(project, pat);
+        for (let k = Math.max(0, Math.floor((now - en.start) / plen)); ; k++) {
+          const base = en.start + k * plen;
+          if (base >= stop || base > horizon) break;
+          const lim = Math.min(base + plen, stop);
+          for (const key of Object.keys(pat.notes)) for (const n of pat.notes[key]) if (n.s < plen && base + n.s < stop) pushNote(this.events, +key, n, base, lim, swing);
+        }
+      } else {
+        const ch = chById.get(clip.ref);
+        if (!ch) continue;
+        const L = Math.max(1, clip.l);
+        for (let k = Math.max(0, Math.floor((now - en.start) / L)); ; k++) {
+          const base = en.start + k * L;
+          if (base >= stop || base > horizon) break;
+          const e = Math.min(base + L, stop);
+          if (clip.type === 'audio') {
+            const shadow = { ...clip, l: e - base };
+            this.events.push({ t: base, k: EV_AUDIO_ON, ch: clip.ref, clip: shadow, offset: 0 });
+            this.events.push({ t: e, k: EV_AUDIO_OFF, ch: clip.ref, clip: shadow });
+          } else if (ch.target && ch.points.length) {
+            let list = this.autos.get(ch.target);
+            if (!list) { list = []; this.autos.set(ch.target, list); }
+            list.push({ s: base, e, o: clip.o, ch });
+          }
+        }
+      }
+    }
+    for (const list of this.autos.values()) list.sort((a, b) => a.s - b.s);
+    this.events.sort(byTime);
+    this.length = horizon;
   }
 
   seek(tick) {

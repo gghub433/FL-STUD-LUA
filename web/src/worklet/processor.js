@@ -27,6 +27,7 @@ class StepwiseProcessor extends AudioWorkletProcessor {
         case 'sampleDel': e.removeSample(m.id); break;
         case 'play': e.play(m.mode, m.from); break;
         case 'record': e.record(m.mode, m.from, m.countIn || 0); break;
+        case 'perf': if (m.op === 'launch') e.perfLaunch(m.clip, m.quant || 0); else if (m.op === 'stop') e.perfStop(m.track, m.quant || 0); else if (m.op === 'stopAll') e.perfStop(null, m.quant || 0); break;
         case 'stop': e.stop(); break;
         case 'pause': e.pause(); break;
         case 'seek': e.seek(m.tick); break;

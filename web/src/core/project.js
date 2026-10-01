@@ -346,6 +346,7 @@ export function normalize(raw) {
       if (c.pitch) clip.pitch = num(c.pitch, -48, 48, 0);
       if (c.stretch) clip.stretch = num(c.stretch, 0.1, 10, 1);
       if (c.norm) clip.norm = 1;
+      if (typeof c.use === 'string' && c.use) clip.use = c.use.slice(0, 200);
       arr.clips.push(clip);
     }
     arr.clips.sort((x, y) => x.s - y.s);

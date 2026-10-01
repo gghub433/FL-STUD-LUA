@@ -52,7 +52,9 @@ export class AudioClipPlayer {
       if (!v.alive) continue;
       const lData = v.l, rData = v.r, len = v.len, mono = lData === rData;
       for (let i = i0; i < i1; i++) {
-        if (v.left <= 0 || v.pos < 0 || v.pos >= len) { v.alive = false; break; }
+        // a reversed clip may start beyond the sample end (its window is longer than the sample): stay silent until it enters
+        if (v.left <= 0 || v.pos < 0 || (v.pos >= len && v.inc > 0)) { v.alive = false; break; }
+        if (v.pos >= len) { v.pos += v.inc; v.left--; continue; }
         const done = v.total - v.left;
         let g = v.gain;
         if (done < v.fadeIn) g *= done / v.fadeIn;

@@ -306,22 +306,30 @@ export function riffMachine({ seed = 1, root = 0, scale = 'minor', bars = 2, bea
   const ticksPerBar = beatsPerBar * PPQ;
   const motifSteps = Math.max(2, Math.round((ticksPerBar / 2) / grid));         // half a bar
   const home = snapToScale(Math.round((lo + hi) / 2), root, scale);
-  // 1. build the motif: [{step, len(steps), degreeMove}]
-  const motif = [];
-  let step = 0, pos = home;
-  while (step < motifSteps) {
-    const len = [1, 1, 2, 2, 3, 4][Math.floor(rnd() * 6)];
-    const l = Math.min(len, motifSteps - step);
-    if (rnd() < density) {
-      const move = rnd() < leap ? (rnd() < 0.5 ? -1 : 1) * (2 + Math.floor(rnd() * 3)) : [-2, -1, -1, 0, 1, 1, 2][Math.floor(rnd() * 7)];
-      pos = clamp(scaleStep(pos, move, root, scale), lo, hi);
-      if (!inScale(pos, root, scale)) pos = snapToScale(pos, root, scale);
-      motif.push({ step, l, key: pos });
+  // 1. build the motif: [{step, l (steps), key}]. A motif with fewer than 3 notes is drawn again.
+  const buildMotif = () => {
+    const m = [];
+    let step = 0, pos = home;
+    while (step < motifSteps) {
+      const l = Math.min([1, 1, 1, 2, 2, 3][Math.floor(rnd() * 6)], motifSteps - step);
+      if (rnd() < density) {
+        const move = rnd() < leap ? (rnd() < 0.5 ? -1 : 1) * (2 + Math.floor(rnd() * 3)) : [-2, -1, -1, 0, 1, 1, 2][Math.floor(rnd() * 7)];
+        pos = clamp(scaleStep(pos, move, root, scale), lo, hi);
+        if (!inScale(pos, root, scale)) pos = snapToScale(pos, root, scale);
+        m.push({ step, l, key: pos });
+      }
+      step += l;
+      if (rnd() < rests) step += 1;
     }
-    step += l;
-    if (rnd() < rests) step += 1;
+    return m;
+  };
+  let motif = buildMotif();
+  for (let tries = 0; motif.length < 3 && tries < 12; tries++) motif = buildMotif();
+  if (motif.length < 3) {                     // very low density: fall back to a plain walk over the scale
+    motif = [];
+    let pos = home;
+    for (let i = 0; i < motifSteps; i += 2) { motif.push({ step: i, l: 2, key: pos }); pos = clamp(scaleStep(pos, i % 4 ? -1 : 2, root, scale), lo, hi); }
   }
-  if (!motif.length) motif.push({ step: 0, l: 2, key: home });
   // 2. lay out the motif with variations
   const out = [];
   const total = Math.round((bars * ticksPerBar) / (motifSteps * grid)) || 1;

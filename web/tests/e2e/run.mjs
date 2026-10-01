@@ -5,8 +5,9 @@ import { run as basic } from './suite-basic.mjs';
 import { run as mixer } from './suite-mixer.mjs';
 import { run as instruments } from './suite-instruments.mjs';
 import { run as roll } from './suite-roll.mjs';
+import { run as playlist } from './suite-playlist.mjs';
 
-const suites = { basic, mixer, instruments, roll };
+const suites = { basic, mixer, instruments, roll, playlist };
 const pick = process.argv[2];
 if (pick && !suites[pick]) { console.error(`unknown suite "${pick}" (${Object.keys(suites).join(', ')})`); process.exit(2); }
 for (const [name, run] of Object.entries(suites)) if (!pick || pick === name) await run();
