@@ -158,8 +158,32 @@ export class ChannelRack {
     const meta = h('div.ch-meta', led, pan.el, vol.el, fx, pitch ? pitch.el : h('div', { style: { width: '22px' } }), name);
     const stepsEl = h('div.steps');
     const el = h('div.ch-row', { dataset: { ch: ch.id } }, meta, stepsEl);
+    this.wireRowDrop(el, ch);
     el.addEventListener('pointerdown', (e) => { if (!e.target.closest('.step') && !e.target.closest('.mini-roll')) store.select(ch.id); });
     return { el, stepsEl, ch, stepEls: [], mini: null, miniKey: '' };
+  }
+
+  // Things dragged from the Browser onto a row: a sound replaces the sample of a Sampler / audio channel, a preset of the
+  // same plugin is loaded into the channel, a score is pasted into it. Anything else falls through to the workspace.
+  wireRowDrop(el, ch) {
+    const app = this.app, store = this.store;
+    const T = { smp: 'application/x-stepwise-sample', inst: 'application/x-stepwise-inst', score: 'application/x-stepwise-score' };
+    const live = () => store.channel(ch.id);
+    el.addEventListener('dragover', (e) => {
+      const t = e.dataTransfer.types, c = live();
+      if (!c) return;
+      if ((t.includes(T.smp) && (c.type === 'sampler' || c.type === 'audio')) || t.includes(T.inst) || t.includes(T.score)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; el.classList.add('drop'); }
+    });
+    el.addEventListener('dragleave', () => el.classList.remove('drop'));
+    el.addEventListener('drop', async (e) => {
+      el.classList.remove('drop');
+      const c = live(); if (!c) return;
+      const dt = e.dataTransfer;
+      const smp = dt.getData(T.smp), inst = dt.getData(T.inst), score = dt.getData(T.score);
+      if (smp && (c.type === 'sampler' || c.type === 'audio')) { e.preventDefault(); e.stopPropagation(); const s = JSON.parse(smp); await app.bank.ensure(s.id); app.cmd.setChannelSample(store, c.id, s); app.preview(c.id); return; }
+      if (inst) { const d = JSON.parse(inst); if (d.type === c.type) { e.preventDefault(); e.stopPropagation(); app.cmd.loadInstrumentPreset(store, c.id, d.params); app.preview(c.id); } return; }
+      if (score) { e.preventDefault(); e.stopPropagation(); app.pasteScore(JSON.parse(score), c.id, 0); }
+    });
   }
 
   wireFx(el, ch) {
@@ -201,6 +225,7 @@ export class ChannelRack {
       { label: 'Clear steps in this pattern', fn: () => cmd.clearChannelNotes(store, ch.id) },
       { sep: true },
       { label: 'Piano roll', key: 'F7', fn: () => { store.select(ch.id); app.openWindow('pianoroll'); } },
+      { label: 'Save as channel preset…', fn: () => app.saveChannelPreset(ch.id) },
     ];
     if (isInst) {
       items.push({ label: 'Cut itself', checked: !!ch.params.cutItself, fn: () => store.setParam(`ch:${ch.id}:p:cutItself`, ch.params.cutItself ? 0 : 1) });

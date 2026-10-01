@@ -186,6 +186,10 @@ app.exportWav = async (bits = 16) => {
   const bytes = encodeWav(r.left, r.right, r.sampleRate, { bits, dither: bits < 32 });
   const title = (app.store.project.meta.title || 'project').replace(/[^\w\- ]+/g, '_');
   downloadBlob(bytes, `${title}-${mode === 'song' ? 'song' : 'pattern'}.wav`, 'audio/wav');
+  try {                       // keep a copy in the Browser's "Rendered" section so it can be dragged back into the project
+    const e = app.bank.addPCM(`${title} ${mode === 'song' ? 'song' : 'pattern'}`, r.sampleRate, [r.left, r.right]);
+    await app.library.save('rendered', e.name, { id: e.id });
+  } catch (_) { /* storage unavailable: the download is what matters */ }
   toast(`Exported ${(r.frames / r.sampleRate).toFixed(1)} s (${bits === 32 ? '32-bit float' : bits + '-bit'} WAV)`);
 };
 

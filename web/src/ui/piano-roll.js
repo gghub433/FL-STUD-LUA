@@ -576,6 +576,15 @@ export class PianoRoll {
     g.addEventListener('pointerleave', () => { this.hover = null; this.invalidate(); });
     g.addEventListener('contextmenu', (e) => e.preventDefault());
     g.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
+    g.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('application/x-stepwise-score') && this.isSound) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+    g.addEventListener('drop', (e) => {
+      const v = e.dataTransfer.getData('application/x-stepwise-score');
+      if (!v || !this.isSound) return;
+      e.preventDefault(); e.stopPropagation();
+      const { x } = this.local(e);
+      const made = this.app.pasteScore(JSON.parse(v), this.chId, Math.max(0, this.floorT(this.xt(x), e)));
+      this.setSel(made.map((n) => n.id));
+    });
     this.keys.addEventListener('pointerdown', (e) => this.keysDown(e));
     this.keys.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     this.ruler.addEventListener('pointerdown', (e) => this.rulerDown(e));

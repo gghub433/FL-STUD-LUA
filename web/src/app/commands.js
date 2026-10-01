@@ -770,3 +770,52 @@ export function setMidiLink(store, link) {
 export function removeMidiLink(store, addr) {
   store.edit('Remove MIDI link', (p) => { p.controllers = p.controllers.filter((l) => l.addr !== addr); }, [['controllers']]);
 }
+
+// ------------------------------------------------------------------------------ library: presets, snapshots, scores
+// a channel saved with channelSnapshot() comes back as a new channel (fresh id, same sounds and settings)
+export function addChannelSnapshot(store, snap, opts = {}) {
+  const ch = store.edit(`Add ${snap.name || 'channel'}`, (p) => {
+    const c = JSON.parse(JSON.stringify(snap));
+    c.id = nextId(p);
+    c.mixer = opts.mixer ?? 0;
+    c.name = opts.name || snap.name;
+    if (c.type === 'controller') c.links = [];                       // links point at other channels' parameters
+    p.channels.push(c);
+    return c;
+  }, CH);
+  store.select(ch.id);
+  const ids = new Set();
+  if (ch.sample) { ids.add(ch.sample.id); if (ch.sample.use) ids.add(ch.sample.use); }
+  if (ch.pads) for (const pd of ch.pads) for (const l of pd.layers || []) ids.add(l.sample.id);
+  for (const id of ids) store.bank.ensure(id);
+  return ch;
+}
+
+// replace the settings and the effect chain of one mixer track with a saved snapshot
+export function applyMixerSnapshot(store, track, snap) {
+  store.edit('Load mixer preset', (p) => {
+    const t = p.mixer.tracks[track];
+    const s = JSON.parse(JSON.stringify(snap));
+    for (const k of ['vol', 'pan', 'sep', 'delay', 'eqLowG', 'eqLowF', 'eqMidG', 'eqMidF', 'eqMidQ', 'eqHighG', 'eqHighF']) if (s[k] !== undefined) t[k] = s[k];
+    t.fx = Array.from({ length: t.fx.length }, (_, i) => (s.fx && s.fx[i] && effectSchema(s.fx[i].type) ? s.fx[i] : null));
+  }, [['mixer', 'tracks', track]]);
+  const t = store.project.mixer.tracks[track];
+  for (const f of t.fx) if (f && f.extra && f.extra.irId) store.bank.ensure(f.extra.irId);
+}
+
+// put an effect (with preset values) into a slot; slot < 0 = first free slot. Returns the slot used or -1
+export function setFxPreset(store, track, slot, type, params = {}, extra = null) {
+  const t0 = store.project.mixer.tracks[track];
+  const at = slot >= 0 ? slot : t0.fx.findIndex((s) => !s);
+  if (at < 0) return -1;
+  store.edit('Insert effect', (p) => {
+    const s = createFxSlot(type);
+    const schema = effectSchema(type) || [];
+    for (const [k, v] of Object.entries(params)) { const d = schema.find((x) => x.id === k); if (d) s.params[k] = clampParam(d, v); }
+    if (extra) s.extra = JSON.parse(JSON.stringify(extra));
+    p.mixer.tracks[track].fx[at] = s;
+  }, [['mixer', 'tracks', track]]);
+  const f = store.project.mixer.tracks[track].fx[at];
+  if (f && f.extra && f.extra.irId) store.bank.ensure(f.extra.irId);
+  return at;
+}

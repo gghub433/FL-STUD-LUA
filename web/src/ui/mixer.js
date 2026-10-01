@@ -69,6 +69,14 @@ export class MixerView {
     const name = h('div.mx-name', { hint: 'Track name — double-click to rename, right-click for options', dataset: { track: n } }, num, label);
     name.addEventListener('dblclick', () => this.rename(n));
     name.addEventListener('contextmenu', (e) => contextMenu(e, this.trackMenu(n)));
+    name.addEventListener('dragover', (e) => { const t = e.dataTransfer.types; if (t.includes('application/x-stepwise-fx') || t.includes('application/x-stepwise-mixer')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+    name.addEventListener('drop', (e) => {
+      const fx = e.dataTransfer.getData('application/x-stepwise-fx'), mx = e.dataTransfer.getData('application/x-stepwise-mixer');
+      if (!fx && !mx) return;
+      e.preventDefault(); e.stopPropagation();
+      if (fx) { const d = JSON.parse(fx); if (app.cmd.setFxPreset(store, n, -1, d.type, d.params, d.extra) < 0) app.toast('All 10 effect slots on this track are used'); }
+      else app.cmd.applyMixerSnapshot(store, n, JSON.parse(mx));
+    });
     const icon = h('div.mx-icon', { hint: 'Track icon — click to change', onclick: (e) => this.iconMenu(e, n) });
     const pan = n === 0 ? null : new Knob(app, { addr: `mx:${n}:pan`, size: 'sm', title: `${trackName(store.project, n)} · Pan` });
     const sep = new Knob(app, { addr: `mx:${n}:sep`, size: 'sm', title: `${trackName(store.project, n)} · Stereo separation` });
@@ -186,6 +194,7 @@ export class MixerView {
       { label: 'Color…', fn: () => pickColor(innerWidth / 2 - 100, innerHeight / 3, store.project.mixer.tracks[n].color, (c) => cmd.setTrackField(store, n, 'color', c, 'Track color')) },
       { label: 'Clear color', fn: () => cmd.setTrackField(store, n, 'color', null, 'Track color') },
       { sep: true },
+      { label: 'Save as mixer preset…', fn: () => this.app.saveMixerPreset(n) },
       { label: 'Reset track (clear effects and routing)', disabled: n === 0, fn: () => cmd.clearTrack(store, n) },
     ];
   }
@@ -332,6 +341,17 @@ export class MixerView {
     const row = h('div.mx-slot', { dataset: { slot: i } }, led, nameEl, mix);
     nameEl.addEventListener('click', (e) => { if (row._dragged) return; if (slot) app.openFxEditor(n, i); else this.pickEffect(e, n, i); });
     row.addEventListener('contextmenu', (e) => contextMenu(e, this.slotMenu(n, i)));
+    // an effect preset dragged from the Browser lands in this slot
+    row.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('application/x-stepwise-fx')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; row.classList.add('drop'); } });
+    row.addEventListener('dragleave', () => row.classList.remove('drop'));
+    row.addEventListener('drop', (e) => {
+      row.classList.remove('drop');
+      const v = e.dataTransfer.getData('application/x-stepwise-fx');
+      if (!v) return;
+      e.preventDefault(); e.stopPropagation();
+      const d = JSON.parse(v);
+      app.cmd.setFxPreset(store, n, i, d.type, d.params, d.extra);
+    });
     // reorder by dragging the name
     nameEl.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || !slot) return;

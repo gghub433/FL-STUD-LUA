@@ -210,6 +210,7 @@ export function toolsMenu(roll) {
     { label: 'Claw machine…', fn: t('claw') },
     { label: 'Riff machine…', fn: t('riff') },
     { sep: true },
+    { label: 'Save selection as score…', fn: () => roll.app.saveScore(roll.selNotes.length ? roll.selNotes : roll.notes) },
     { label: 'Select all', key: 'Ctrl+A', fn: () => roll.setSel(roll.notes.map((n) => n.id)) },
     { label: 'Invert selection', key: 'Ctrl+I', fn: () => roll.setSel(roll.notes.filter((n) => !roll.sel.has(n.id)).map((n) => n.id)) },
     { label: 'Select same pitch', fn: t('selectSamePitch') },

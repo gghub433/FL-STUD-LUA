@@ -8,6 +8,7 @@ import { pickParam } from './ui/param-picker.js';
 import { paramMenuItems, linkHovered } from './ui/linking.js';
 import { MidiHub } from './host/midi.js';
 import { formDialog } from './ui/forms.js';
+import { installBrowser } from './app-browser.js';
 import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor } from './ui/instrument-editors.js';
 
 export function installExtensions(app) {
@@ -42,6 +43,8 @@ export function installExtensions(app) {
     const v = await formDialog('MIDI input devices', list.map((d, i) => ({ id: `d${i}`, label: d.name, type: 'check', value: d.on })), { ok: 'Apply', width: 420 });
     if (v) list.forEach((d, i) => m.setDeviceEnabled(d.name, !!v[`d${i}`]));
   };
+
+  installBrowser(app);
 
   // ---- playlist
   app.wm.register('playlist', { title: 'Playlist', create: createPlaylist, rect: { x: 90, y: 50, w: 1060, h: 540 }, minW: 560, minH: 280 });

@@ -73,6 +73,7 @@ export class Browser {
     this.stopBtn = h('div.btn.sm', { hint: 'Stop the preview', onclick: () => { this.prev.stop(); this.showInfo(null); } }, '■');
     this.foot = h('div.br-foot', h('div.row', { style: { gap: '6px' } }, this.info, h('div.grow'), this.stopBtn), this.wave);
     this.root.append(h('div.br-head', this.search, this.autoBtn), this.tree, this.foot);
+    this.showInfo(null);
   }
 
   showInfo(text, entry) {
