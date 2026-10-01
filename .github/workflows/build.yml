@@ -1,0 +1,51 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LÖVE 11.5 (Linux runtime for tests)
+        run: |
+          curl -fsSL -o love.AppImage https://github.com/love2d/love/releases/download/11.5/love-11.5-x86_64.AppImage
+          chmod +x love.AppImage
+          ./love.AppImage --appimage-extract > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb zip unzip
+
+      - name: Self-tests (engine, file format, export)
+        run: ./squashfs-root/AppRun src --selftest
+
+      - name: UI smoke test
+        env:
+          ALSOFT_DRIVERS: "null"
+        run: xvfb-run -a -s "-screen 0 1280x800x24" ./squashfs-root/AppRun tests/ui_smoke
+
+      - name: Build Windows package
+        run: tools/build.sh
+
+      - name: Test packaged .love
+        run: ./squashfs-root/AppRun dist/LuaLoops.love --selftest
+
+      - name: Render demo song
+        run: ./squashfs-root/AppRun src --export dist/LuaLoops-demo.wav
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaLoops-win64
+          path: dist/LuaLoops-win64/
+
+      - name: Upload .love and demo
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaLoops-love-and-demo
+          path: |
+            dist/LuaLoops.love
+            dist/LuaLoops-demo.wav
