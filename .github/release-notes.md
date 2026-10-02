@@ -1,24 +1,20 @@
 # FL LUA
 
-Веб-DAW с паттерновым процессом (Channel Rack → Piano Roll → Playlist → Mixer) в одном исполняемом файле: ничего устанавливать не нужно.
+Цифровая звуковая станция с паттерновым процессом (Channel Rack → Piano Roll → Playlist → Mixer). **Отдельное приложение со своим окном: браузер и установка не нужны.**
 
 ## Скачать
 
 | Система | Файл |
 |---|---|
-| **Windows** | **`FL-LUA-windows-x64.exe`**: двойной клик |
-| Linux (x64) | `FL-LUA-linux-x64.tar.gz`: `tar xzf …` и `./fl-lua` |
-| macOS (Apple Silicon) | `FL-LUA-macos-arm64.tar.gz`: `tar xzf …` и `./fl-lua` |
-| любая | `FL-LUA-web.zip`: сайт целиком, раздайте любым статическим сервером (`node tools/serve.mjs dist` в репозитории) |
+| **Windows** | **`FL-LUA-windows-x64.exe`**: один файл, двойной клик |
+| Linux (x64) | `FL-LUA-linux-x64.AppImage`: `chmod +x FL-LUA-linux-x64.AppImage` и запуск (если нет FUSE: `--appimage-extract-and-run`) |
+| macOS (Apple Silicon) | `FL-LUA-macos-arm64.zip`: распаковать и открыть `FL LUA.app` |
 | плагины | `synths.flpack.js`, `effects.flpack.js` и `catalog.json`: пакеты плагинов отдельными файлами (**Tools → Plugin store → Install from file…**). Они уже есть внутри программы |
+| веб-версия | `FL-LUA-web.zip`: тот же сайт для любого статического сервера (нужен современный Chrome, Edge или Firefox) |
 
-## Как запустить
+Проекты, сэмплы, пресеты, установленные плагины и автосохранения хранятся в профиле приложения (Windows: `%APPDATA%\FL LUA`), **File → Save as…** сохраняет проект файлом `.fllua` или ZIP со сэмплами. Приложение помнит размер и положение окна.
 
-Запустите файл: откроется окно консоли и браузер на `http://localhost:8080` (если порт занят, берётся следующий). Закройте окно консоли, чтобы остановить программу.
-Ключи: `--port 9000`, `--no-open`, `--host 0.0.0.0`.
-Нужен современный Chrome, Edge или Firefox (AudioWorklet). Проекты, сэмплы, пресеты и автосохранения хранятся в самом браузере (IndexedDB), поэтому открывайте программу всегда на одном и том же адресе и порту; **File → Save as…** сохраняет проект файлом `.fllua` или ZIP со сэмплами.
-
-> Файлы **не подписаны**. Windows SmartScreen: «Подробнее» → «Выполнить в любом случае». macOS: правый клик → «Открыть» или `xattr -d com.apple.quarantine fl-lua`.
+> Файлы **не подписаны**. Windows SmartScreen: «Подробнее» → «Выполнить в любом случае». macOS: правый клик по приложению → «Открыть» (или `xattr -dr com.apple.quarantine "FL LUA.app"`).
 
 ## Что внутри
 

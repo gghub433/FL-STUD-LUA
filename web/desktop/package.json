@@ -1,0 +1,81 @@
+{
+  "name": "fl-lua-desktop",
+  "productName": "FL LUA",
+  "version": "0.2.0",
+  "private": true,
+  "description": "FL LUA as a desktop application: the same app in its own window, no browser needed",
+  "author": "FL LUA",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "node prepare.mjs && electron .",
+    "smoke": "node prepare.mjs && electron . --smoke",
+    "smoke:built": "node smoke.mjs",
+    "dist": "node prepare.mjs && electron-builder --publish never"
+  },
+  "build": {
+    "appId": "app.fllua.desktop",
+    "productName": "FL LUA",
+    "copyright": "FL LUA",
+    "directories": {
+      "output": "out",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "app/**"
+    ],
+    "asar": true,
+    "compression": "normal",
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "FL-LUA-windows-x64.${ext}"
+    },
+    "portable": {
+      "artifactName": "FL-LUA-windows-x64.exe"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png",
+      "category": "AudioVideo",
+      "artifactName": "FL-LUA-linux-x64.AppImage",
+      "desktop": {
+        "entry": {
+          "Name": "FL LUA",
+          "Comment": "Digital audio workstation",
+          "StartupWMClass": "FL LUA"
+        }
+      }
+    },
+    "mac": {
+      "target": [
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.music",
+      "artifactName": "FL-LUA-macos-${arch}.${ext}",
+      "identity": "-"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "gghub433",
+        "repo": "FL-STUD-LUA"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gghub433/FL-STUD-LUA.git"
+  },
+  "desktopName": "fl-lua.desktop"
+}

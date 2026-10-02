@@ -4,7 +4,7 @@
 
 В репозитории три части:
 
-0. **[FL LUA](web/README.md)** — веб-DAW в браузере: AudioWorklet-движок с сэмпл-точным планированием, Channel Rack + Step Sequencer, Piano Roll, Playlist, микшер на 125 инсертов, 10 инструментов и 21 эффект (включая модульный **Patcher**), **магазин скачиваемых плагинов** (ещё 4 синтезатора и 7 эффектов), аудиоредактор, запись звука, экспорт WAV/FLAC/OGG/MP3/MIDI. Запуск: `cd web && node tools/serve.mjs`.
+0. **[FL LUA](web/README.md)** — веб-DAW в браузере: AudioWorklet-движок с сэмпл-точным планированием, Channel Rack + Step Sequencer, Piano Roll, Playlist, микшер на 125 инсертов, 10 инструментов и 21 эффект (включая модульный **Patcher**), **магазин скачиваемых плагинов** (ещё 4 синтезатора и 7 эффектов), аудиоредактор, запись звука, экспорт WAV/FLAC/OGG/MP3/MIDI. Запуск: готовое приложение из [релизов](https://github.com/gghub433/FL-STUD-LUA/releases) (отдельное окно, браузер не нужен) или `cd web && node tools/serve.mjs`.
 
 1. **[Подробный разбор FL Studio](docs/FL_Studio_razbor.md)**: история, ядро программы, редакции, эксклюзивы All Plugins Edition, что нового в FL Studio 2026, экономика выбора редакции, сильные и слабые стороны.
 2. **LuaLoops** — собственный бесплатный open-source битмейкер на Lua ([LÖVE](https://love2d.org)) с паттерновым воркфлоу в духе FL Studio (Channel Rack → Piano Roll → Playlist). Собирается в Windows `.exe`.

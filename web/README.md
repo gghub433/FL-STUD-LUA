@@ -16,12 +16,18 @@ node tests/e2e/run.mjs        # E2E в настоящем Chromium: клики +
 
 ```bash
 npm run build                 # dist/: те же ES-модули, минифицированные esbuild (структура URL сохранена, worklet и worker работают как есть)
-node tools/serve.mjs dist     # проверить production-сборку
-npm run exe                   # dist-exe/fl-lua(.exe): ОДИН исполняемый файл (Node SEA) со всем приложением внутри
+node tools/serve.mjs dist     # проверить production-сборку в браузере
+
+cd desktop && npm ci          # настольное приложение: тот же сайт в собственном окне (Electron), браузер не нужен
+npm start                     # запустить его из исходников
+npm run dist                  # установочный файл для вашей системы в desktop/out (Windows: один portable .exe, Linux: AppImage, macOS: zip)
+npm run smoke:built -- out/linux-unpacked/fl-lua-desktop   # запустить собранное приложение и проверить, что звук идёт
 ```
 
-`fl-lua` по двойному клику поднимает локальный сервер (`http://localhost:8080`, при занятом порте берёт следующий) и открывает браузер; ключи `--port N`, `--no-open`, `--host H`.
-Исполняемый файл собирается под ту платформу, на которой запущена сборка; Windows/Linux/macOS собирает workflow `.github/workflows/web.yml` (артефакты `fl-lua-windows-latest` и др.). Файл не подписан, SmartScreen может предупредить.
+Окно приложения отдаёт файлы из частной схемы `fllua://app/`, поэтому у приложения один постоянный адрес: проекты, сэмплы и плагины сохраняются между запусками. Разрешения на микрофон и MIDI выдаются сами, меню Electron скрыто (у программы своё меню), положение и размер окна запоминаются. Исходный код оболочки ― `desktop/main.js`.
+Готовые файлы для всех систем собирает и **проверяет запуском** workflow `.github/workflows/release.yml` (в релизе: `FL-LUA-windows-x64.exe`, AppImage, zip для macOS). Файлы не подписаны: Windows SmartScreen покажет предупреждение, на macOS нужен правый клик → «Открыть».
+
+Облегчённый вариант без Electron: `npm run exe` собирает `dist-exe/fl-lua` ― маленький запускатор, который поднимает локальный сервер и открывает **ваш браузер**.
 
 Горячие клавиши: `Space` — play/stop, `F5` Playlist, `F6` Channel Rack, `F7` Piano Roll, `F9` Mixer, `F8` Browser, `Alt+F8` Plugin Picker, `Alt+T` — tap tempo.
 

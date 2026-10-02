@@ -5,3 +5,7 @@ web/node_modules/
 web/dist/
 web/tests/e2e/out/
 web/dist-exe/
+web/desktop/node_modules/
+web/desktop/app/
+web/desktop/build/
+web/desktop/out/

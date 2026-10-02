@@ -8,10 +8,13 @@ npm start            # dev-сервер на http://localhost:8080
 npm test             # unit-тесты движка и форматов (node:test)
 npm run test:e2e     # сквозные тесты в Chromium: UI + реальный звук из AudioWorklet
 npm run build        # dist/ (esbuild): те же модули, минифицированные по файлам
-npm run exe          # dist-exe/fl-lua(.exe): один исполняемый файл с приложением внутри (Node SEA)
+npm run exe          # dist-exe/fl-lua(.exe): запускатор (Node SEA), открывает браузер
+cd desktop && npm run dist   # настольное приложение (Electron): то же приложение в своём окне
 ```
 
 ## 1. Слои
+
+Приложение запускается в любом современном Chromium-подобном браузере или **в собственном окне настольной версии** (`desktop/`, Electron): оболочка отдаёт собранные файлы из частной схемы `fllua://app/` (стабильный origin для IndexedDB, secure context для AudioWorklet), выдаёт разрешения на микрофон и MIDI и больше ничего не добавляет: весь код приложения общий.
 
 ```
 ┌───────────────────────────── main thread ─────────────────────────────┐

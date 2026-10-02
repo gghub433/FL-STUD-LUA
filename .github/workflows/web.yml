@@ -42,33 +42,3 @@ jobs:
         with:
           name: fl-lua-web
           path: web/dist/
-
-  exe:
-    needs: test
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - name: Build the single executable
-        run: npm run exe
-      - name: Smoke test it
-        run: node tools/smoke-exe.mjs
-      - uses: actions/upload-artifact@v4
-        with:
-          name: fl-lua-${{ matrix.os }}
-          path: |
-            web/dist-exe/fl-lua
-            web/dist-exe/fl-lua.exe
-          if-no-files-found: error
