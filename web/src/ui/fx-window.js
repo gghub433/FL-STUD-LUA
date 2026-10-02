@@ -13,6 +13,7 @@ import { defaults } from '../core/schema.js';
 import { EFFECT_PRESETS } from '../core/presets.js';
 import { IRS } from '../core/factory.js';
 import { trackName } from '../core/addr.js';
+import { patcherFxPanel } from './patcher.js';
 
 const BAND_COLORS = ['#e35d5d', '#e8894a', '#e0b84a', '#7fdc5c', '#4cc3a6', '#4aaedc', '#a07fe0'];
 
@@ -26,7 +27,7 @@ export function openFxEditor(app, track, slot) {
   const big = ['eq', 'grossbeat', 'convolver', 'multiband', 'compressor', 'limiter', 'gate'].includes(s.type);
   return app.wm.open(id, {
     title: meta.name, dynamic: true,
-    rect: { x: 220, y: 80, w: s.type === 'grossbeat' ? 820 : big ? 680 : 520, h: s.type === 'grossbeat' ? 640 : s.type === 'eq' ? 560 : 400 },
+    rect: { x: 220, y: 80, w: s.type === 'patcher' ? 980 : s.type === 'grossbeat' ? 820 : big ? 680 : 520, h: s.type === 'patcher' ? 580 : s.type === 'grossbeat' ? 640 : s.type === 'eq' ? 560 : 400 },
     minW: 360, minH: 220,
     create: (win) => fxEditor(win, app, track, slot),
   });
@@ -122,7 +123,9 @@ function fxEditor(win, app, track, slotIdx) {
   state.onBand = () => renderParams();
   renderParams();
 
-  const el = h('div.rack', head, custom, (groups.length > 1 || type === 'eq') ? tabsEl : null, body);
+  // the Patcher brings its own editor (node canvas + macros) instead of the generic parameter area
+  const patcher = type === 'patcher' ? patcherFxPanel(app, win, track, slotIdx) : null;
+  const el = patcher ? h('div.rack', head, patcher.el) : h('div.rack', head, custom, (groups.length > 1 || type === 'eq') ? tabsEl : null, body);
 
   // ---------------------------------------------------------------- engine feedback
   subs.push(app.host.bus.on('spectrum', (m) => { if (m.track === track && m.slot === slotIdx) state.spec = m.mags; }));
@@ -144,7 +147,7 @@ function fxEditor(win, app, track, slotIdx) {
   return {
     el,
     onShow: watching,
-    destroy() { cancelAnimationFrame(rafId); for (const s of subs) s(); app.mixerRewatch && app.mixerRewatch(); },
+    destroy() { cancelAnimationFrame(rafId); for (const s of subs) s(); if (patcher) patcher.destroy(); app.mixerRewatch && app.mixerRewatch(); },
   };
 }
 

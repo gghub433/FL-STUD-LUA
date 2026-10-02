@@ -29,3 +29,5 @@ export const SNAP = {
   none: 1, sixthStep: 4, quarterStep: 6, thirdStep: 8, halfStep: 12, step: 24,
   sixthBeat: 16, quarterBeat: 24, thirdBeat: 32, halfBeat: 48, beat: 96, bar: 384,
 };
+
+export const PATCHER_MACROS = 16;   // macro knobs of the Patcher

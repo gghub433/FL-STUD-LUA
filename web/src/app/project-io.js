@@ -4,6 +4,7 @@ import { zipStore, unzip } from '../core/zip.js';
 import { encodeWav, decodeWav } from '../host/export/wav.js';
 import { normalize } from '../core/project.js';
 import { isFactoryId } from '../core/factory.js';
+import { projectPatchSampleIds } from '../core/patcher/spec.js';
 
 // every sample id a project refers to (factory sounds are rebuilt from code and never stored)
 export function userSampleIds(project) {
@@ -14,6 +15,7 @@ export function userSampleIds(project) {
   }
   for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) ids.add(f.extra.irId);
   for (const a of project.playlist.arrangements) for (const c of a.clips) if (c.use) ids.add(c.use);
+  projectPatchSampleIds(project, ids);
   return [...ids].filter((id) => id && !isFactoryId(id) && !id.startsWith('stretch:'));
 }
 

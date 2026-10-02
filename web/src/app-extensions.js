@@ -13,11 +13,12 @@ import { installAudioRecording } from './app/audio-rec.js';
 import { createHistory } from './ui/history-window.js';
 import { openExportDialog } from './ui/export-dialog.js';
 import { openStartDialog } from './ui/start-dialog.js';
+import { patcherEditor } from './ui/patcher.js';
 import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor } from './ui/instrument-editors.js';
 
 export function installExtensions(app) {
   // ---- dedicated instrument editors (types without an entry fall back to the generic parameter editor)
-  app.editors = Object.assign(app.editors || {}, { sampler: samplerEditor, fpc: fpcEditor, slicer: slicerEditor, drums: drumsEditor, subsynth: synthEditor, fm: fmEditor, organ: organEditor, wavetable: wavetableEditor, controller: controllerEditor });
+  app.editors = Object.assign(app.editors || {}, { sampler: samplerEditor, fpc: fpcEditor, slicer: slicerEditor, drums: drumsEditor, subsynth: synthEditor, fm: fmEditor, organ: organEditor, wavetable: wavetableEditor, controller: controllerEditor, patcher: patcherEditor });
   app.store.bus.on('replaced', () => app.wm.closeDynamic());
 
   // ---- automation, controllers, MIDI

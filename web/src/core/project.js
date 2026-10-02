@@ -6,6 +6,7 @@ import { instrumentSchema, hasInstrument, instrumentMeta } from './instruments/i
 import { effectSchema, hasEffect } from './effects/index.js';
 import { CHANNEL_BUILTIN, TRACK_BUILTIN } from './addr.js';
 import { defaultPads, PADS, MAX_LAYERS } from './instruments/fpc.js';
+import { defaultPatch, normalizePatch, normalizeFxExtra } from './patcher/spec.js';
 
 export const FORMAT = 'stepwise';
 export const VERSION = 1;
@@ -31,7 +32,9 @@ export function createTrack(n) {
 
 export function createFxSlot(type) {
   const s = effectSchema(type);
-  return { type, on: 1, mix: 1, params: s ? defaults(s) : {} };
+  const slot = { type, on: 1, mix: 1, params: s ? defaults(s) : {} };
+  if (type === 'patcher') slot.extra = { patch: defaultPatch('effect') };
+  return slot;
 }
 
 export function createArrangement(id, name = 'Arrangement') {
@@ -100,6 +103,7 @@ export function createChannel(p, type, opts = {}) {
   if (type === 'sampler' || type === 'audio') ch.sample = opts.sample || null;
   if (type === 'controller') ch.links = opts.links ? JSON.parse(JSON.stringify(opts.links)) : [];
   if (type === 'layer') ch.children = opts.children || [];
+  if (type === 'patcher') ch.patch = opts.patch ? clone(opts.patch) : defaultPatch('instrument');
   if (type === 'fpc') { ch.pads = opts.pads || defaultPads(); ch.padBank = 0; }
   if (type === 'slicer') { ch.sample = opts.sample || null; ch.slices = opts.slices || []; ch.loopBpm = opts.loopBpm || 0; }
   if (type === 'automation') { ch.target = opts.target || null; ch.points = opts.points || []; ch.len = opts.len || barTicks(p.timeSig); ch.mixer = 0; }
@@ -245,6 +249,7 @@ export function normalize(raw) {
         ch.links.push({ addr: l.addr.slice(0, 80), min: num(l.min, 0, 1, 0), max: num(l.max, 0, 1, 1), inv: bit(l.inv) });
       }
     }
+    if (type === 'patcher') ch.patch = normalizePatch(c.patch, 'instrument');
     if (type === 'layer') ch.children = Array.isArray(c.children) ? c.children.filter((x) => Number.isInteger(x)).slice(0, 64) : [];
     if (type === 'automation') {
       ch.target = typeof c.target === 'string' ? c.target.slice(0, 80) : null;
@@ -308,7 +313,8 @@ export function normalize(raw) {
       const f = Array.isArray(t.fx) ? t.fx[s] : null;
       if (!f || typeof f.type !== 'string' || !hasEffect(f.type)) continue;
       tr.fx[s] = { type: f.type, on: f.on === 0 ? 0 : 1, mix: num(f.mix, 0, 1, 1), params: normParams(effectSchema(f.type), f.params) };
-      if (f.extra && typeof f.extra === 'object') tr.fx[s].extra = clone(f.extra); // effect-specific data (IR id, curves)
+      if (f.type === 'patcher') tr.fx[s].extra = normalizeFxExtra(f.extra);
+      else if (f.extra && typeof f.extra === 'object') tr.fx[s].extra = clone(f.extra); // effect-specific data (IR id, curves)
     }
   }
   breakCycles(p);

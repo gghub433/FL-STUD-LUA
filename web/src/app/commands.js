@@ -6,6 +6,7 @@ import {
 } from '../core/project.js';
 import { instrumentMeta, instrumentSchema } from '../core/instruments/index.js';
 import { defaults, clampParam } from '../core/schema.js';
+import { defaultPatch, normalizePatch } from '../core/patcher/spec.js';
 
 const CH = [['channels']];
 
@@ -818,4 +819,35 @@ export function setFxPreset(store, track, slot, type, params = {}, extra = null)
   const f = store.project.mixer.tracks[track].fx[at];
   if (f && f.extra && f.extra.irId) store.bank.ensure(f.extra.irId);
   return at;
+}
+
+// ---- Patcher. A target is { ch: channelId } (instrument) or { track, slot } (effect slot).
+// The edit function receives the live patch object; `sync: false` is for edits the audio thread does not care
+// about (node positions) so they do not rebuild the graph.
+function patchHolder(p, t) {
+  if (t.ch !== undefined) { const c = p.channels.find((x) => x.id === t.ch); return c && c.type === 'patcher' ? c : null; }
+  const s = p.mixer.tracks[t.track] && p.mixer.tracks[t.track].fx[t.slot];
+  return s && s.type === 'patcher' ? s : null;
+}
+export function getPatch(store, t) {
+  const hd = patchHolder(store.project, t);
+  if (!hd) return null;
+  return t.ch !== undefined ? hd.patch : hd.extra && hd.extra.patch;
+}
+export function patchEdit(store, t, label, fn, { sync = true, coalesce } = {}) {
+  const p = store.project;
+  const hd = patchHolder(p, t);
+  if (!hd) return null;
+  const path = t.ch !== undefined ? ['channels', p.channels.indexOf(hd), 'patch'] : ['mixer', 'tracks', t.track, 'fx', t.slot, 'extra'];
+  return store.edit(label, () => {
+    const patch = t.ch !== undefined ? (hd.patch || (hd.patch = defaultPatch('instrument'))) : ((hd.extra || (hd.extra = {})).patch || (hd.extra.patch = defaultPatch('effect')));
+    return fn(patch);
+  }, sync ? [path] : [], { coalesce });
+}
+export function setPatch(store, t, patch, label = 'Load patch') {
+  return patchEdit(store, t, label, () => {
+    const hd = patchHolder(store.project, t);
+    const clean = normalizePatch(JSON.parse(JSON.stringify(patch)), t.ch !== undefined ? 'instrument' : 'effect');
+    if (t.ch !== undefined) hd.patch = clean; else hd.extra = { ...(hd.extra || {}), patch: clean };
+  });
 }

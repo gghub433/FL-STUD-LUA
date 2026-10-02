@@ -1,6 +1,7 @@
 // Sample bank: the main thread keeps decoded PCM here, persists user samples in IndexedDB and
 // streams each sample to the audio engine exactly once.
 import { renderFactorySample, isFactoryId, factoryName } from '../core/factory.js';
+import { projectPatchSampleIds } from '../core/patcher/spec.js';
 import { idbGet, idbPut } from './idb.js';
 import { stretchAudio } from '../core/stretch.js';
 
@@ -102,6 +103,7 @@ export class SampleBank {
     }
     for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) ids.add(f.extra.irId);
     for (const a of project.playlist.arrangements) for (const c of a.clips) if (c.use) ids.add(c.use);
+    projectPatchSampleIds(project, ids);
     const missing = [];
     await Promise.all([...ids].map(async (id) => { if (!(await this.ensure(id))) missing.push(id); }));
     return missing;

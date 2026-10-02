@@ -1,6 +1,7 @@
 // Factory sample pack, synthesized from code at startup (no audio files shipped).
 import { renderOneShot } from './instruments/drumsynth.js';
 import { Noise, Biquad, TAU, fastTanh } from './dsp.js';
+import { projectPatchSampleIds } from './patcher/spec.js';
 
 const drum = (params, seconds) => (sr) => renderOneShot(sr, params, seconds);
 
@@ -143,6 +144,7 @@ export function collectFactorySamples(project, sr) {
     if (ch.pads) for (const pad of ch.pads) for (const l of pad.layers || []) if (l.sample) need.add(l.sample.id);
   }
   for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) need.add(f.extra.irId);
+  projectPatchSampleIds(project, need);
   for (const id of need) {
     if (!isFactoryId(id) || map.has(id)) continue;
     const data = renderFactorySample(id, sr);
