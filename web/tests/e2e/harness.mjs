@@ -10,8 +10,8 @@ const srv = createServer().listen(0);
 const port = srv.address().port;
 fs.mkdirSync('tests/e2e/out', { recursive: true });
 
-const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
-const ctx = await browser.newContext({ viewport: { width: 1500, height: 860 }, acceptDownloads: true });
+const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+const ctx = await browser.newContext({ viewport: { width: 1500, height: 860 }, acceptDownloads: true, permissions: ['microphone'] });
 const page = await ctx.newPage();
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });

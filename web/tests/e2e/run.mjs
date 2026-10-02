@@ -10,8 +10,9 @@ import { run as plugins } from './suite-plugins.mjs';
 import { run as automation } from './suite-automation.mjs';
 import { run as browser } from './suite-browser.mjs';
 import { run as exporting } from './suite-export.mjs';
+import { run as record } from './suite-record.mjs';
 
-const suites = { basic, mixer, instruments, roll, playlist, plugins, automation, browser, export: exporting };
+const suites = { basic, mixer, instruments, roll, playlist, plugins, automation, browser, export: exporting, record };
 const pick = process.argv[2];
 if (pick && !suites[pick]) { console.error(`unknown suite "${pick}" (${Object.keys(suites).join(', ')})`); process.exit(2); }
 for (const [name, run] of Object.entries(suites)) if (!pick || pick === name) await run();

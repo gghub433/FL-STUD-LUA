@@ -262,6 +262,18 @@ export class MixerView {
     this.app.host.watch(sel, -1);
   }
 
+  // audio input of an armed track: 0 = the browser's default device, then the devices found
+  inputSelect(n) {
+    const sel = h('select.select', { style: { maxWidth: '110px' }, hint: 'Audio input used when this track is armed and you press Record' }, h('option', { value: 0 }, 'Default input'));
+    const cur = this.store.project.mixer.tracks[n].input || 0;
+    sel.addEventListener('change', () => this.app.cmd.setTrackField(this.store, n, 'input', +sel.value, 'Track input'));
+    if (this.app.audioRec) this.app.audioRec.devices().then((list) => {
+      list.forEach((d, i) => sel.append(h('option', { value: i + 1 }, d.label)));
+      sel.value = String(cur <= list.length ? cur : 0);
+    });
+    return sel;
+  }
+
   buildDetail() {
     const app = this.app, store = this.store, p = store.project;
     const n = p.mixer.selected, t = p.mixer.tracks[n];
@@ -269,7 +281,8 @@ export class MixerView {
     const nm = trackName(p, n);
     this.detail.append(h('div.mx-dhead',
       h('div.mx-dname', { style: { '--c': t.color || '#555d65' }, onclick: () => this.rename(n), hint: 'Selected track — click to rename' }, `${n === 0 ? 'Master' : n + ' · ' + nm}`),
-      n === 0 ? null : h('div.btn.sm' + (t.arm ? '.rec.on' : ''), { hint: 'Record arm — arm this track for audio recording', onclick: () => app.cmd.toggleTrackFlag(store, n, 'arm') }, '●'),
+      n === 0 ? null : h('div.btn.sm' + (t.arm ? '.rec.on' : ''), { hint: 'Record arm — arm this track for audio recording. Press Record in the transport to capture the input into the playlist', onclick: () => app.cmd.toggleTrackFlag(store, n, 'arm') }, '●'),
+      n === 0 ? null : this.inputSelect(n),
       h('div.btn.sm' + (t.invertPhase ? '.on' : ''), { hint: 'Invert phase of this track', onclick: () => app.cmd.toggleTrackFlag(store, n, 'invertPhase') }, 'Ø'),
       h('div.btn.sm' + (t.swapLR ? '.on' : ''), { hint: 'Swap left and right channels', onclick: () => app.cmd.toggleTrackFlag(store, n, 'swapLR') }, 'L↔R')));
 

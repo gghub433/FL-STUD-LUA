@@ -33,6 +33,7 @@ export class Transport {
 
   stop() {
     this.finishRecording();
+    if (this.app.audioRec && this.app.audioRec.recording) this.app.audioRec.end();
     this.host.send({ t: 'stop' });
     this.store.bus.emit('transport');
   }
@@ -52,6 +53,8 @@ export class Transport {
 
   record() {
     this.host.resume();
+    // an armed mixer track also records the audio input; the take lands in the playlist where recording started
+    if (this.app.audioRec) { const from = this.startTick(); this.app.audioRec.begin(this.mode === 'song' ? (from ?? 0) : 0); }
     const s = this.store.project.settings;
     this.clearedChannels.clear();
     this.pending.clear();
