@@ -50,14 +50,14 @@ export function installBrowser(app) {
 
   // ---- projects
   const askDiscard = async (what) => !(store.dirty && store.project.channels.length) || confirmBox(what, 'Discard unsaved changes in the current project?', 'Discard');
-  app.newFromTemplate = async (tpl) => {
-    if (!(await askDiscard('New project from template'))) return;
+  app.newFromTemplate = async (tpl, force = false) => {
+    if (!force && !(await askDiscard('New project from template'))) return;
     const p = tpl.build ? tpl.build() : normalize(JSON.parse(JSON.stringify(tpl.json)));
     await store.replaceProject(p);
     app.toast(`New project: ${tpl.name}`);
   };
-  app.openSavedProject = async (entry) => {
-    if (!(await askDiscard('Open project'))) return;
+  app.openSavedProject = async (entry, force = false) => {
+    if (!force && !(await askDiscard('Open project'))) return;
     try { await store.replaceProject(normalize(JSON.parse(entry.json)), { fileName: entry.name }); app.toast(`Opened ${entry.name}`); }
     catch (err) { app.toast(`Could not open ${entry.name}: ${err.message}`); }
   };

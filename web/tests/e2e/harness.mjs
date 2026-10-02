@@ -28,7 +28,8 @@ const sleep = (ms) => page.waitForTimeout(ms);
 const ev = (fn, arg) => page.evaluate(fn, arg);
 
 async function open(url = '/') {
-  await page.goto(`http://localhost:${port}${url}`);
+  const u = url.includes('nopicker') ? url : url + (url.includes('?') ? '&' : '?') + 'nopicker';
+  await page.goto(`http://localhost:${port}${u}`);
   await page.waitForFunction(() => window.__ready, null, { timeout: 15000 });
   await sleep(300);
 }

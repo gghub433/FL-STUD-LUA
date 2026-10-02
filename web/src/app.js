@@ -19,8 +19,7 @@ import { createProject, normalize, createFxSlot } from './core/project.js';
 import { FACTORY } from './core/factory.js';
 import { INSTRUMENTS } from './core/instruments/index.js';
 import { EFFECTS } from './core/effects/index.js';
-import { renderOffline } from './core/offline.js';
-import { encodeWav, downloadBlob } from './host/export/wav.js';
+import { downloadBlob } from './host/export/wav.js';
 import { STEP, BEAT, SNAP } from './core/constants.js';
 import { installExtensions } from './app-extensions.js';
 
@@ -142,7 +141,7 @@ app.newProject = async () => {
 app.openDemo = async () => { await app.store.replaceProject(demoProject()); toast('Demo project loaded. Press Space to play'); };
 
 app.openFile = () => {
-  const inp = h('input', { type: 'file', accept: '.fllua,.stepwise,.json,application/json', style: { display: 'none' } });
+  const inp = h('input', { type: 'file', accept: '.fllua,.stepwise,.json,.zip,application/json,application/zip', style: { display: 'none' } });
   inp.addEventListener('change', async () => {
     const f = inp.files[0];
     if (!f) return;
@@ -155,9 +154,24 @@ app.openFile = () => {
 
 app.loadProjectFile = async (file) => {
   const name = file.name.replace(/\.[^.]+$/, '');
+  if (/\.zip$/i.test(file.name)) {
+    const { projectFromZip } = await import('./app/project-io.js');
+    const { project, restored } = await projectFromZip(new Uint8Array(await file.arrayBuffer()), app.bank);
+    await app.store.replaceProject(project, { fileName: name });
+    toast(`Opened ${name} (${restored} sample${restored === 1 ? '' : 's'} restored)`);
+    return;
+  }
   const p = normalize(JSON.parse(await file.text()));
   await app.store.replaceProject(p, { fileName: name });
   toast(`Opened ${name}`);
+};
+
+app.downloadProjectZip = async () => {
+  const { projectToZip } = await import('./app/project-io.js');
+  const name = (app.store.project.meta.title || 'project').replace(/[^\w\- ]+/g, '_');
+  const zip = projectToZip(app.store.project, app.bank);
+  downloadBlob(zip, `${name}.zip`, 'application/zip');
+  toast(`Saved ${name}.zip with its samples`);
 };
 
 app.saveProject = async () => {
@@ -177,20 +191,15 @@ app.sampleMap = () => {
   return m;
 };
 
+// quick export of the current mode as WAV (the Export… dialog offers every format)
 app.exportWav = async (bits = 16) => {
-  const mode = app.transport.mode;
+  const { exportProject, defaultSettings } = await import('./app/export.js');
   toast('Rendering…');
-  await new Promise((r) => setTimeout(r, 30));
-  const r = renderOffline(app.store.project, app.sampleMap(), { sampleRate: app.host.sampleRate, mode, tail: 'auto' });
-  if (!r || !r.frames) { toast('Nothing to render. Add notes or clips first'); return; }
-  const bytes = encodeWav(r.left, r.right, r.sampleRate, { bits, dither: bits < 32 });
-  const title = (app.store.project.meta.title || 'project').replace(/[^\w\- ]+/g, '_');
-  downloadBlob(bytes, `${title}-${mode === 'song' ? 'song' : 'pattern'}.wav`, 'audio/wav');
-  try {                       // keep a copy in the Browser's "Rendered" section so it can be dragged back into the project
-    const e = app.bank.addPCM(`${title} ${mode === 'song' ? 'song' : 'pattern'}`, r.sampleRate, [r.left, r.right]);
-    await app.library.save('rendered', e.name, { id: e.id });
-  } catch (_) { /* storage unavailable: the download is what matters */ }
-  toast(`Exported ${(r.frames / r.sampleRate).toFixed(1)} s (${bits === 32 ? '32-bit float' : bits + '-bit'} WAV)`);
+  const cfg = { ...defaultSettings(app.store.project), format: 'wav', quality: String(bits), source: app.transport.mode === 'song' ? 'song' : 'pat', rate: app.host.sampleRate };
+  try {
+    const r = await exportProject(app, cfg);
+    if (r) toast(`Exported ${r.seconds.toFixed(1)} s (${bits === 32 ? '32-bit float' : bits + '-bit'} WAV)`);
+  } catch (err) { toast(String(err.message || err)); }
 };
 
 // ------------------------------------------------------------------------------ menus
@@ -205,7 +214,8 @@ function buildMenus() {
       ...(app.fileMenuExtra ? app.fileMenuExtra() : []),
       { sep: true },
       { label: 'Save in browser', key: 'Ctrl+S', fn: () => app.saveProject() },
-      { label: 'Download project file', fn: () => app.downloadProject() },
+      { label: 'Download project file (.fllua)', fn: () => app.downloadProject() },
+      { label: 'Download project with samples (.zip)', fn: () => app.downloadProjectZip() },
       { sep: true },
       ...(app.exportMenu ? app.exportMenu() : [
         { label: 'Export WAV 16-bit', fn: () => app.exportWav(16) },
@@ -216,6 +226,7 @@ function buildMenus() {
     { label: 'EDIT', items: () => [
       { label: `Undo${st.history.length ? ': ' + st.history[st.history.length - 1].label : ''}`, key: 'Ctrl+Z', disabled: !st.history.length, fn: () => st.undo() },
       { label: `Redo${st.future.length ? ': ' + st.future[st.future.length - 1].label : ''}`, key: 'Ctrl+Alt+Z', disabled: !st.future.length, fn: () => st.redo() },
+      { label: 'Undo history…', fn: () => app.openWindow('history') },
       ...(app.editMenuExtra ? app.editMenuExtra() : []),
     ] },
     { label: 'ADD', items: () => [
@@ -381,7 +392,7 @@ function wireDrop() {
     if (e.defaultPrevented) return;
     e.preventDefault();
     for (const f of e.dataTransfer.files) {
-      if (/\.(fllua|stepwise|json)$/i.test(f.name)) { try { await app.loadProjectFile(f); } catch (err) { toast(`Could not open ${f.name}: ${err.message}`); } continue; }
+      if (/\.(fllua|stepwise|json|zip)$/i.test(f.name)) { try { await app.loadProjectFile(f); } catch (err) { toast(`Could not open ${f.name}: ${err.message}`); } continue; }
       try {
         const smp = await app.bank.decode(f.name, await f.arrayBuffer());
         const ch = cmd.addChannel(app.store, 'sampler', { name: smp.name, sample: { id: smp.id, name: smp.name } });
@@ -438,6 +449,8 @@ export async function boot() {
   app.store.bus.emit('project', app.store.project);
   window.app = app;
   window.__ready = true;
+  // the project picker is for people, not for automated runs (?nopicker) and can be switched off
+  if (!params.has('nopicker') && !params.has('empty')) { const { startDialogWanted } = await import('./ui/start-dialog.js'); if (startDialogWanted()) app.openStartDialog(); }
   return app;
 }
 

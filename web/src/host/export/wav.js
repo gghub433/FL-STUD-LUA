@@ -39,3 +39,33 @@ export function downloadBlob(bytes, name, type = 'application/octet-stream') {
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
+// Read back WAV files written by encodeWav (PCM 16/24 bit, 32-bit float; mono or stereo). Returns { rate, channels: Float32Array[] }.
+export function decodeWav(bytes) {
+  const d = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const dv = new DataView(d.buffer, d.byteOffset, d.byteLength);
+  const tag = (o) => String.fromCharCode(d[o], d[o + 1], d[o + 2], d[o + 3]);
+  if (d.length < 44 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') throw new Error('Not a WAV file');
+  let p = 12, fmt = null, data = null;
+  while (p + 8 <= d.length) {
+    const id = tag(p), len = dv.getUint32(p + 4, true);
+    if (id === 'fmt ') fmt = { format: dv.getUint16(p + 8, true), ch: dv.getUint16(p + 10, true), rate: dv.getUint32(p + 12, true), bits: dv.getUint16(p + 22, true) };
+    else if (id === 'data') { data = { o: p + 8, len: Math.min(len, d.length - p - 8) }; break; }
+    p += 8 + len + (len & 1);
+  }
+  if (!fmt || !data) throw new Error('Broken WAV file');
+  const bytesPer = fmt.bits / 8, n = Math.floor(data.len / (bytesPer * fmt.ch));
+  const channels = Array.from({ length: fmt.ch }, () => new Float32Array(n));
+  let o = data.o;
+  for (let i = 0; i < n; i++) {
+    for (let c = 0; c < fmt.ch; c++) {
+      let v;
+      if (fmt.format === 3 && fmt.bits === 32) v = dv.getFloat32(o, true);
+      else if (fmt.bits === 16) v = dv.getInt16(o, true) / 32768;
+      else if (fmt.bits === 24) { let x = d[o] | (d[o + 1] << 8) | (d[o + 2] << 16); if (x & 0x800000) x -= 0x1000000; v = x / 8388608; }
+      else throw new Error(`Unsupported WAV format (${fmt.bits}-bit)`);
+      channels[c][i] = v; o += bytesPer;
+    }
+  }
+  return { rate: fmt.rate, channels };
+}

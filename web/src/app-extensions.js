@@ -9,6 +9,9 @@ import { paramMenuItems, linkHovered } from './ui/linking.js';
 import { MidiHub } from './host/midi.js';
 import { formDialog } from './ui/forms.js';
 import { installBrowser } from './app-browser.js';
+import { createHistory } from './ui/history-window.js';
+import { openExportDialog } from './ui/export-dialog.js';
+import { openStartDialog } from './ui/start-dialog.js';
 import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor } from './ui/instrument-editors.js';
 
 export function installExtensions(app) {
@@ -45,6 +48,18 @@ export function installExtensions(app) {
   };
 
   installBrowser(app);
+
+  // ---- export, history, start dialog
+  app.wm.register('history', { title: 'Undo history', create: createHistory, rect: { x: 1060, y: 120, w: 280, h: 360 }, minW: 200, minH: 140 });
+  app.exportMenu = () => [
+    { label: 'Export…', key: 'Ctrl+R', fn: () => openExportDialog(app) },
+    { label: 'Quick export', submenu: [
+      { label: 'WAV 16-bit', fn: () => app.exportWav(16) }, { label: 'WAV 24-bit', fn: () => app.exportWav(24) }, { label: 'WAV 32-bit float', fn: () => app.exportWav(32) },
+    ] },
+  ];
+  app.openExportDialog = () => openExportDialog(app);
+  app.openStartDialog = () => openStartDialog(app);
+  app.keyHooks.add((e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r' && !e.altKey) { openExportDialog(app); return true; } return false; });
 
   // ---- playlist
   app.wm.register('playlist', { title: 'Playlist', create: createPlaylist, rect: { x: 90, y: 50, w: 1060, h: 540 }, minW: 560, minH: 280 });
