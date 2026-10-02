@@ -864,6 +864,7 @@ export class Playlist {
         { label: 'Pitch (resample)…', fn: async () => { const v = await formDialog('Clip pitch', [{ id: 'pitch', label: 'Pitch', type: 'range', min: -24, max: 24, step: 1, value: clip.pitch || 0, unit: ' st' }]); if (v) upd((c) => { if (v.pitch) c.pitch = v.pitch; else delete c.pitch; }, 'Clip pitch'); } },
         { label: 'Time-stretch…', fn: () => this.stretchDialog(clip) },
         { label: 'Reset time-stretch', disabled: !all((c) => c.use), fn: () => this.resetStretch(ids) },
+        { label: 'Edit sample in the audio editor', disabled: ids.length !== 1 || !this.app.openAudioEditor, fn: () => { const ch = store.channel(clip.ref); if (ch && ch.sample) this.app.openAudioEditor({ sampleId: clip.use || ch.sample.id, chId: ch.id, name: ch.sample.name }); } },
         { sep: true });
     }
     if (cs.every((c) => c.type === 'automation')) {

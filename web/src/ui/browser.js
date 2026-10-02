@@ -221,7 +221,7 @@ export class Browser {
       h('span.br-icon', icon), h('span.br-label', n.label), n.right ? h('span.br-right', n.right) : null);
     row.addEventListener('click', () => this.click(n, row));
     row.addEventListener('dblclick', () => this.activate(n));
-    row.addEventListener('contextmenu', (e) => contextMenu(e, [{ label: 'Use', fn: () => this.activate(n) }, ...(n.sample || n.preset ? [{ label: 'Preview', fn: () => this.preview(n, true) }] : []), ...(n.menu ? [{ sep: true }, ...n.menu()] : [])]));
+    row.addEventListener('contextmenu', (e) => contextMenu(e, [{ label: 'Use', fn: () => this.activate(n) }, ...(n.sample || n.preset ? [{ label: 'Preview', fn: () => this.preview(n, true) }] : []), ...(n.sample && this.app.openAudioEditor ? [{ label: 'Open in the audio editor', fn: () => this.app.openAudioEditor({ sampleId: n.sample.id, name: n.sample.name }) }] : []), ...(n.menu ? [{ sep: true }, ...n.menu()] : [])]));
     row.addEventListener('dragstart', (e) => this.dragStart(e, n));
     return row;
   }

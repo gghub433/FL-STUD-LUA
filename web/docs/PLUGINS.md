@@ -57,3 +57,19 @@ class MySynth {
 
 Выделения памяти (`new`, массивы-литералы, замыкания в цикле по сэмплам), `Math.random()` (используйте `Noise`), блокирующих вычислений
 (таблицы строят заранее, например в конструкторе или при смене параметра).
+
+## Patcher: свои узлы
+
+Узлы Patcher описаны в `src/core/patcher/spec.js` (`NODE_TYPES`: порты, схема параметров) и реализованы в `runtime.js` (класс-наследник `RT`, регистрация в `IMPL`).
+Минимальный узел управления:
+
+```js
+// spec.js
+double: { name: 'Double', cat: 'Control', ins: [C('in', 'In')], outs: [C('out', 'Out')], params: [def('amount', 'Amount', 0, 1, 1)], desc: 'Doubles a control signal' },
+// runtime.js
+class DoubleNode extends RT { process() { this.co.out = clamp(this.ctl('in', 0) * 2 * this.p.amount, 0, 1); } }
+// IMPL = { …, double: DoubleNode }
+```
+
+Правила: `process(i0, i1)` вызывается на срезе блока; аудио читается из `this.inb[portId]` (`{L, R}` или `undefined`), пишется в `this.outb[portId]`, управляющие значения читаются через `this.ctl(portId, default)` и пишутся в `this.co[portId]`; ноты приходят в `onNote/offNote` и уходят через `emitOn/emitOff`. Входной буфер менять нельзя: он принадлежит другому узлу. Параметры в `this.p` уже учитывают модуляцию; реакция на смену параметра — `onParam(id, v)`.
+Любой зарегистрированный генератор или эффект (кроме самого Patcher) доступен как узел автоматически.

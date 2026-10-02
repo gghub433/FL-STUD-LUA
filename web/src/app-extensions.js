@@ -14,6 +14,7 @@ import { createHistory } from './ui/history-window.js';
 import { openExportDialog } from './ui/export-dialog.js';
 import { openStartDialog } from './ui/start-dialog.js';
 import { patcherEditor } from './ui/patcher.js';
+import { openAudioEditor } from './ui/audio-editor.js';
 import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor } from './ui/instrument-editors.js';
 
 export function installExtensions(app) {
@@ -38,6 +39,8 @@ export function installExtensions(app) {
   app.keyHooks.add((e) => { if (e.key === 'Escape' && app.midi.learn) return app.midi.cancelLearn(); return false; });
   const prevTools = app.toolsMenuExtra;
   app.toolsMenuExtra = () => [...(prevTools ? prevTools() : []), { sep: true },
+    { label: 'Audio editor', fn: () => app.openAudioEditor() },
+    { label: 'Edit an audio file…', fn: () => app.editAudioFile() },
     { label: 'MIDI input devices…', fn: () => app.midiSettings() },
     { label: 'Link hovered knob to MIDI controller', key: 'Ctrl+L', fn: () => app.linkHovered() }];
   app.midiSettings = async () => {
@@ -51,6 +54,25 @@ export function installExtensions(app) {
 
   installBrowser(app);
   installAudioRecording(app);
+
+  // ---- audio editor: opens on a sample of the project, an audio file from disk, or empty (record into it)
+  app.openAudioEditor = (opts = {}) => openAudioEditor(app, opts);
+  app.editAudioFile = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'audio/*,.wav,.mp3,.ogg,.flac,.aif,.aiff,.m4a'; inp.style.display = 'none';
+    inp.addEventListener('change', async () => {
+      const f = inp.files[0];
+      if (f) {
+        try {
+          const buf = await app.host.ctx.decodeAudioData(await f.arrayBuffer());
+          const channels = []; for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) channels.push(buf.getChannelData(c).slice());
+          app.openAudioEditor({ buf: { rate: buf.sampleRate, channels }, name: f.name.replace(/\.[^.]+$/, '') });
+        } catch (err) { app.toast(`Could not decode ${f.name}`); }
+      }
+      inp.remove();
+    });
+    document.body.append(inp); inp.click();
+  };
 
   // ---- export, history, start dialog
   app.wm.register('history', { title: 'Undo history', create: createHistory, rect: { x: 1060, y: 120, w: 280, h: 360 }, minW: 200, minH: 140 });

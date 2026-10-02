@@ -4,7 +4,7 @@ import { modal } from './dialog.js';
 
 // fields: [{ id, label, type: 'range'|'number'|'select'|'check'|'text', min, max, step, value, options: [[value,label]], unit, hint }]
 // returns a promise of the values object, or null when cancelled.
-export function formDialog(title, fields, { ok = 'Apply', width = 360, onChange, extra } = {}) {
+export function formDialog(title, fields, { ok = 'Apply', width = 360, onChange, extra, scroll = false } = {}) {
   return new Promise((resolve) => {
     const inputs = {};
     const vals = () => {
@@ -47,7 +47,7 @@ export function formDialog(title, fields, { ok = 'Apply', width = 360, onChange,
     let done = false;
     const finish = (v) => { if (!done) { done = true; resolve(v); } };
     modal({
-      title, width, body: [...rows, extra ? extra(inputs, vals) : null],
+      title, width, body: [scroll ? h('div', { style: { maxHeight: '62vh', overflowY: 'auto', paddingRight: '6px' } }, rows) : rows, extra ? extra(inputs, vals) : null],
       buttons: [{ label: 'Cancel', fn: () => { finish(null); } }, { label: ok, primary: true, fn: () => { finish(vals()); } }],
       onClose: () => finish(null),
     });

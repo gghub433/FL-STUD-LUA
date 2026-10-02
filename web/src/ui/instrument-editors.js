@@ -111,7 +111,8 @@ export function samplerEditor(win, app, chId) {
   const P = (id) => ch().params[id];
   const sampleName = h('span', { style: { color: 'var(--accent)', minWidth: '90px' } }, '');
   const load = h('div.btn', { hint: 'Choose a sample — from disk, the factory pack or this session', onclick: (e) => sampleMenu(app, (s) => { cmd.setChannelSample(store, chId, s); }, e.currentTarget) }, 'Sample…');
-  const head = chHead(app, win, chId, [sampleName, load]);
+  const edit = h('div.btn', { hint: 'Open the sample in the audio editor (cut, process, add effects, then send it back)', onclick: () => { const c = ch(); if (c && c.sample) app.openAudioEditor({ sampleId: c.sample.use || c.sample.id, chId, name: c.sample.name }); else app.toast('Load a sample first'); } }, 'Edit…');
+  const head = chHead(app, win, chId, [sampleName, load, edit]);
   const wave = h('canvas', { width: 640, height: 130, style: { width: '100%', height: '130px', display: 'block', background: '#0e1012', cursor: 'default' }, hint: 'Waveform — drag the start/end markers (orange) and the loop markers (blue); drop an audio file here' });
   const entry = () => { const c = ch(); return c && c.sample ? store.bank.get(c.sample.use || c.sample.id) : null; };
 

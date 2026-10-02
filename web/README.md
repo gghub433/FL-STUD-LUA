@@ -14,6 +14,33 @@ node tests/e2e/run.mjs        # E2E в настоящем Chromium: клики +
 
 Горячие клавиши: `Space` — play/stop, `F5` Playlist, `F6` Channel Rack, `F7` Piano Roll, `F9` Mixer, `F8` Browser, `Alt+F8` Plugin Picker, `Alt+T` — tap tempo.
 
+## Что внутри
+
+| Область | Возможности |
+|---|---|
+| Транспорт, Channel Rack | Play/Stop/Pause/Record, Pattern/Song, темп с tap, метроном, count-in, overdub; Step Sequencer до 64 шагов, swing, graph-редактор (pan/vel/pitch/mod), группы и слои |
+| Piano Roll | все инструменты (draw, paint, delete, mute, slice, select, zoom, slide, stamp, chord), панели свойств нот, шкалы, Riff machine, Arpeggiator, Strum, Quantize, Chop, Glue, Articulate, Claw machine и др. |
+| Playlist | до 500 треков, клипы паттернов / аудио / автоматизации, маркеры, лупы, Performance mode, аранжировки, time-stretch и pitch клипов, фейды |
+| Mixer | 125 инсертов + Master, 10 слотов эффектов, произвольная маршрутизация, sidechain, PDC, 3-полосный EQ, анализатор спектра |
+| Инструменты | Sampler, FPC, Slicer, SubSynth, FM (6 операторов), Drum synth, Wavetable, Pluck, Organ, **Patcher** |
+| Эффекты | 20 штук + **Patcher** (свой эффект из узлов) |
+| Автоматизация | клипы автоматизации с кривыми, LFO и Envelope-контроллеры, MIDI learn |
+| Browser | дерево, поиск, превью, drag-and-drop, пресеты, шаблоны, бэкапы |
+| Запись | аудио со входа на выбранный инсерт (с компенсацией задержки), ноты с MIDI-клавиатуры и экранного пианино |
+| Аудиоредактор | выделение, cut/copy/paste, нормализация, фейды, реверс, time-stretch / pitch, ресемплинг, любые эффекты микшера на выделении, регионы, спектрограмма, запись, отправка в проект |
+| Экспорт | WAV 16/24/32f, FLAC, OGG (Opus), MP3, MIDI, стемы, дизеринг, хвост; проект `.fllua` и ZIP со сэмплами, автосохранение, история отмен |
+
+## Patcher
+
+Модульная среда как плагин: **Channel Rack → Add → Patcher** (генератор) или слот микшера **→ Patcher** (эффект).
+Узлы: Audio In/Out, Note In, Macro (16 ручек с автоматизацией и MIDI), LFO, Envelope, Envelope follower, Random, Math, Map, Volume/Pan, Crossfade, Transpose, Note filter, Chord, Velocity и **любой генератор и эффект** программы.
+Тяните от точки справа у узла к точке слева у другого; точки раскрашены по виду сигнала (звук, управление, ноты). Кнопка ⇄ у параметра делает из него вход для модулятора. Фабричные патчи: **Patches ▾**.
+
+## Аудиоредактор
+
+**Tools → Audio editor** (пустой, с записью), **Edit an audio file…**, кнопка **Edit…** у Sampler, пункты контекстных меню клипа и сэмпла в Browser.
+`Space` — воспроизведение, `Ctrl+C/X/V`, `Del`, `Ctrl+Z/Y`, колесо — зум, `Shift`+колесо — прокрутка, `Z` — привязка к нулям.
+
 ## Плагины
 
 | Генераторы | Эффекты |
