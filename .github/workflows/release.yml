@@ -79,8 +79,9 @@ jobs:
           ls -la out
       - name: Create the release
         run: |
+          sed "s/__TAG__/$TAG/g" .github/release-notes.md > notes.md
           gh release create "$TAG" out/* \
             --title "FL LUA $TAG" \
-            --notes-file .github/release-notes.md \
+            --notes-file notes.md \
             --target "$GITHUB_SHA" \
             --verify-tag=false
