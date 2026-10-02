@@ -15,6 +15,8 @@ import { openExportDialog } from './ui/export-dialog.js';
 import { openStartDialog } from './ui/start-dialog.js';
 import { patcherEditor } from './ui/patcher.js';
 import { openAudioEditor } from './ui/audio-editor.js';
+import { createStore } from './ui/plugin-store.js';
+import { confirmBox } from './ui/dialog.js';
 import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor } from './ui/instrument-editors.js';
 
 export function installExtensions(app) {
@@ -39,6 +41,7 @@ export function installExtensions(app) {
   app.keyHooks.add((e) => { if (e.key === 'Escape' && app.midi.learn) return app.midi.cancelLearn(); return false; });
   const prevTools = app.toolsMenuExtra;
   app.toolsMenuExtra = () => [...(prevTools ? prevTools() : []), { sep: true },
+    { label: 'Plugin store…', fn: () => app.openStore() },
     { label: 'Audio editor', fn: () => app.openAudioEditor() },
     { label: 'Edit an audio file…', fn: () => app.editAudioFile() },
     { label: 'MIDI input devices…', fn: () => app.midiSettings() },
@@ -54,6 +57,14 @@ export function installExtensions(app) {
 
   installBrowser(app);
   installAudioRecording(app);
+
+  // ---- plugin store (downloadable plugin packs) and projects that need packs which are not installed
+  app.wm.register('store', { title: 'Plugin store', create: createStore, rect: { x: 220, y: 70, w: 760, h: 560 }, minW: 460, minH: 260 });
+  app.openStore = () => app.openWindow('store');
+  app.store.bus.on('missing-plugins', async (list) => {
+    const lines = list.map((m) => `${m.pack === 'unknown' ? 'unknown pack' : m.pack}: ${m.types.join(', ')}`).join('\n');
+    if (await confirmBox('Plugins are missing', `This project uses plugins that are not installed, so they were left out:\n${lines}\n\nInstall the pack, then open the project again. Saving this project now would lose those plugins for good.`, 'Open the Plugin store')) app.openStore();
+  });
 
   // ---- audio editor: opens on a sample of the project, an audio file from disk, or empty (record into it)
   app.openAudioEditor = (opts = {}) => openAudioEditor(app, opts);

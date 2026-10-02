@@ -1,0 +1,87 @@
+{
+  "catalog": 1,
+  "name": "FL LUA plugin packs",
+  "packs": [
+    {
+      "id": "fllua-effects",
+      "name": "FL LUA Effects",
+      "version": "1.0.0",
+      "author": "FL LUA",
+      "license": "MIT",
+      "description": "Soft Clipper, Maximizer, Hyper Chorus, Waveshaper, Overdrive, Delay Bank and Pitcher: mastering, character and vocal tools.",
+      "file": "effects.flpack.js",
+      "size": 30723,
+      "sha256": "0e7b56d7319dc39604d24db8d775f831a7f3c67f45a73dd7499b2f7a14c12495",
+      "plugins": [
+        {
+          "kind": "effect",
+          "name": "Soft Clipper",
+          "description": "Drive into a smooth clipper: tanh, cubic, arctan or hard-knee curve, with oversampling"
+        },
+        {
+          "kind": "effect",
+          "name": "Maximizer",
+          "description": "One-knob three-band loudness maximizer with a look-ahead limiter (reports its latency)"
+        },
+        {
+          "kind": "effect",
+          "name": "Hyper Chorus",
+          "description": "Up to eight modulated delay voices spread across the stereo field"
+        },
+        {
+          "kind": "effect",
+          "name": "Waveshaper",
+          "description": "Eight transfer curves: soft, hard, fold, sine fold, diode, Chebyshev 3 and 5, steps"
+        },
+        {
+          "kind": "effect",
+          "name": "Overdrive",
+          "description": "Tube, crunch or fuzz with a focus pre-filter, asymmetry, tone and low cut"
+        },
+        {
+          "kind": "effect",
+          "name": "Delay Bank",
+          "description": "Four delay taps, each with its own time, level, pan, feedback and damping; tempo-synced or free"
+        },
+        {
+          "kind": "effect",
+          "name": "Pitcher",
+          "description": "Monophonic pitch corrector: snaps a voice or lead to a scale (reports its latency)"
+        }
+      ]
+    },
+    {
+      "id": "fllua-synths",
+      "name": "FL LUA Synths",
+      "version": "1.0.0",
+      "author": "FL LUA",
+      "license": "MIT",
+      "description": "Acid Bass, Tri-Osc, Chip and Additive: four generators for basses, leads, game sounds and evolving pads.",
+      "file": "synths.flpack.js",
+      "size": 27723,
+      "sha256": "76ad5fd61d2091d199ce9149049fe97fe33d786eb4cb7ea43e7b89342e25bb40",
+      "plugins": [
+        {
+          "kind": "instrument",
+          "name": "Acid Bass",
+          "description": "Monophonic bass with a resonant ladder filter, accent (velocity above 80%) and slide (overlap two notes)"
+        },
+        {
+          "kind": "instrument",
+          "name": "Tri-Osc",
+          "description": "Three oscillators with sync, ring modulation and FM, a multimode filter and two envelopes"
+        },
+        {
+          "kind": "instrument",
+          "name": "Chip",
+          "description": "Console-style pulse, triangle and noise voices with arpeggio, sweep, vibrato and bit reduction"
+        },
+        {
+          "kind": "instrument",
+          "name": "Additive",
+          "description": "Up to 64 partials with tilt, odd/even balance, a formant, inharmonicity and a morph between two spectra"
+        }
+      ]
+    }
+  ]
+}

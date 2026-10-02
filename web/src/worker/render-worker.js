@@ -1,9 +1,16 @@
 // Offline render in a module Worker: the same Engine that runs in the AudioWorklet renders the project
 // as fast as the CPU allows without blocking the page. Cancelling terminates the worker.
 import { renderOffline, renderStems } from '../core/offline.js';
+import { installPackHook } from '../core/packs.js';
 
-self.onmessage = (e) => {
-  const { project, samples, opts, stems } = e.data;
+installPackHook(self, { smoke: false });
+
+// installed plugin packs are evaluated here first, so projects that use them render exactly as they sound
+self.onmessage = async (e) => {
+  const { project, samples, opts, stems, packs = [] } = e.data;
+  try {
+    for (const p of packs) { const url = URL.createObjectURL(new Blob([p.source], { type: 'text/javascript' })); try { await import(url); } finally { URL.revokeObjectURL(url); } }
+  } catch (err) { self.postMessage({ t: 'error', message: `A plugin pack could not be loaded: ${err && err.message || err}` }); return; }
   const map = new Map(samples.map((s) => [s.id, { rate: s.rate, channels: s.channels }]));
   const progress = (f) => self.postMessage({ t: 'progress', f });
   try {

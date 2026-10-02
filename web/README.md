@@ -41,6 +41,17 @@ npm run exe                   # dist-exe/fl-lua(.exe): ОДИН исполняе
 | Аудиоредактор | выделение, cut/copy/paste, нормализация, фейды, реверс, time-stretch / pitch, ресемплинг, любые эффекты микшера на выделении, регионы, спектрограмма, запись, отправка в проект |
 | Экспорт | WAV 16/24/32f, FLAC, OGG (Opus), MP3, MIDI, стемы, дизеринг, хвост; проект `.fllua` и ZIP со сэмплами, автосохранение, история отмен |
 
+## Plugin store: скачиваемые плагины
+
+**Tools → Plugin store…** (также ADD → Get more plugins…, кнопка **Get more…** в Plugin picker). В комплекте два пакета, ставятся в один клик и работают везде, как встроенные плагины:
+
+| Пакет | Что внутри |
+|---|---|
+| **FL LUA Synths** | Acid Bass (лестничный фильтр, accent, slide), Tri-Osc (3 осциллятора, sync, кольцевая модуляция, FM), Chip (пульс / треугольник / шум, арпеджио), Additive (до 64 парциалов, форманта, морфинг спектров) |
+| **FL LUA Effects** | Soft Clipper, Maximizer (3 полосы + look-ahead), Hyper Chorus, Waveshaper (8 кривых), Overdrive, Delay Bank (4 отводки), Pitcher (корректор высоты) |
+
+Свои пакеты: **Install from file…**, **From address…**, **Add catalog…**. Как написать пакет и опубликовать каталог ― [docs/PACKS.md](docs/PACKS.md). Пакет ― это код: ставьте только от тех, кому доверяете.
+
 ## Patcher
 
 Модульная среда как плагин: **Channel Rack → Add → Patcher** (генератор) или слот микшера **→ Patcher** (эффект).

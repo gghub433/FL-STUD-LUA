@@ -13,7 +13,7 @@ const fail = (m) => { console.error(`smoke test failed: ${m}`); child.kill(); pr
 const t0 = Date.now();
 while (!ready && Date.now() - t0 < 15000) await new Promise((r) => setTimeout(r, 100));
 if (!ready) fail('the executable did not start');
-for (const [url, needle] of [['/', '<title>FL LUA</title>'], ['/src/app.js', 'worklet'], ['/src/worklet/processor.js', 'registerProcessor'], ['/vendor/lamejs/lame.min.js', 'lamejs'], ['/build-info.json', 'FL LUA']]) {
+for (const [url, needle] of [['/', '<title>FL LUA</title>'], ['/src/app.js', 'worklet'], ['/src/worklet/processor.js', 'registerProcessor'], ['/vendor/lamejs/lame.min.js', 'lamejs'], ['/build-info.json', 'FL LUA'], ['/packs/catalog.json', 'fllua-synths'], ['/packs/synths.flpack.js', '__flluaRegisterPack']]) {
   const res = await fetch(`http://127.0.0.1:${port}${url}`);
   const body = await res.text();
   if (res.status !== 200 || !body.includes(needle)) fail(`${url}: ${res.status}`);

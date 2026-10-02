@@ -22,6 +22,7 @@ import { EFFECTS } from './core/effects/index.js';
 import { downloadBlob } from './host/export/wav.js';
 import { STEP, BEAT, SNAP } from './core/constants.js';
 import { installExtensions } from './app-extensions.js';
+import { PackManager } from './host/pack-manager.js';
 
 const PIANO = { z: 0, s: 1, x: 2, d: 3, c: 4, v: 5, g: 6, b: 7, h: 8, n: 9, j: 10, m: 11, q: 12, 2: 13, w: 14, 3: 15, e: 16, r: 17, 5: 18, t: 19, 6: 20, y: 21, 7: 22, u: 23, i: 24 };
 
@@ -130,6 +131,7 @@ app.addChannelItems = () => [
   { label: 'Layer', fn: () => cmd.addChannel(app.store, 'layer', { name: 'Layer' }) },
   { sep: true },
   { label: 'Instrument plugin', submenu: () => Object.keys(INSTRUMENTS).filter((t) => t !== 'sampler').map((t) => ({ label: INSTRUMENTS[t].meta.name, fn: () => app.addInstrument(t) })) },
+  { label: 'Get more plugins…', fn: () => app.openStore && app.openStore() },
 ];
 
 // ------------------------------------------------------------------------------ files
@@ -425,6 +427,9 @@ export async function boot() {
     status.style.color = 'var(--red)';
     alertBox('Audio engine failed to start', String(err.message || err));
   }
+  // installed plugin packs come online before any project is loaded, so projects that use them open complete
+  app.packs = new PackManager(app);
+  await app.packs.loadAll();
   host.bus.on('error', (m) => toast(`Engine error: ${m}`));
   host.bus.on('auto', (m) => { for (const [addr, v] of m.values) app.store.engineParam(addr, v); });
   host.bus.on('ended', () => app.store.bus.emit('transport'));

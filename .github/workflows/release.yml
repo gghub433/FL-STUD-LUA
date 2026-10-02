@@ -76,6 +76,8 @@ jobs:
             tar -czf out/FL-LUA-$p.tar.gz -C artifacts/exe-$p fl-lua
           done
           (cd web && npm ci && npm run build && cd dist && zip -qr ../../out/FL-LUA-web.zip .)
+          # the plugin packs are also published on their own, with the catalog the Plugin store reads (Plugin store -> Add catalog)
+          cp web/packs/*.flpack.js web/packs/catalog.json out/
           ls -la out
       - name: Create the release
         run: |

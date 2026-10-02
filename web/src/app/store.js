@@ -3,6 +3,7 @@
 // change is (a) undoable, (b) mirrored to the audio thread and (c) announced on the bus.
 import { Bus } from './bus.js';
 import { createProject, normalize, clone, currentArrangement } from '../core/project.js';
+import { takeMissing } from '../core/packs.js';
 import { parseAddr, paramDef, getParam, setParam as setProjectParam, paramLabel } from '../core/addr.js';
 import { clampParam } from '../core/schema.js';
 import { idbPut, idbGet, idbAll, idbDelete } from '../host/idb.js';
@@ -56,6 +57,8 @@ export class Store {
     this.bus.emit('replaced', p);
     this.bus.emit('project', p);
     this.bus.emit('selection', this.selected);
+    const missing = takeMissing();
+    if (missing.length) this.bus.emit('missing-plugins', missing);
   }
 
   async loadJSON(text) {

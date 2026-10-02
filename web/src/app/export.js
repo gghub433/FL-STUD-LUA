@@ -60,7 +60,7 @@ export async function exportProject(app, s, ui = { progress() {}, cancelled: () 
     opts.from = arr.loop.s; opts.to = arr.loop.e;
   }
   const samples = [...app.bank.map].map(([id, e]) => ({ id, rate: e.rate, channels: e.channels }));
-  const job = { project: JSON.parse(JSON.stringify(project)), samples, opts, stems: !!s.stems };
+  const job = { project: JSON.parse(JSON.stringify(project)), samples, opts, stems: !!s.stems, packs: app.packs ? app.packs.sources() : [] };
   const run = renderInWorker(job, { onProgress: (f) => ui.progress(f * (s.format === 'wav' ? 1 : 0.7), 'Rendering…') });
   ui.onCancel(() => run.cancel());
   const out = await run.promise;

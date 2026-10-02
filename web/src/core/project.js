@@ -7,6 +7,7 @@ import { effectSchema, hasEffect } from './effects/index.js';
 import { CHANNEL_BUILTIN, TRACK_BUILTIN } from './addr.js';
 import { defaultPads, PADS, MAX_LAYERS } from './instruments/fpc.js';
 import { defaultPatch, normalizePatch, normalizeFxExtra } from './patcher/spec.js';
+import { noteMissing } from './packs.js';
 
 export const FORMAT = 'stepwise';
 export const VERSION = 1;
@@ -176,6 +177,7 @@ function normNote(n, seq) {
 export function normalize(raw) {
   if (!raw || typeof raw !== 'object' || raw.format !== FORMAT) throw new Error('Not an FL LUA project');
   if (typeof raw.version === 'number' && raw.version > VERSION) throw new Error('Project was made with a newer version');
+  noteMissing(raw);                                   // plugins of packs that are not installed are dropped below: remember which
   const p = createProject();
   p.meta = {
     title: str(raw.meta?.title, 'Untitled'), author: str(raw.meta?.author), comment: str(raw.meta?.comment, '', 2000),

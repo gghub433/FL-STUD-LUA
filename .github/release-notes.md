@@ -10,6 +10,7 @@
 | Linux (x64) | `FL-LUA-linux-x64.tar.gz`: `tar xzf …` и `./fl-lua` |
 | macOS (Apple Silicon) | `FL-LUA-macos-arm64.tar.gz`: `tar xzf …` и `./fl-lua` |
 | любая | `FL-LUA-web.zip`: сайт целиком, раздайте любым статическим сервером (`node tools/serve.mjs dist` в репозитории) |
+| плагины | `synths.flpack.js`, `effects.flpack.js` и `catalog.json`: пакеты плагинов отдельными файлами (**Tools → Plugin store → Install from file…**). Они уже есть внутри программы |
 
 ## Как запустить
 
@@ -24,6 +25,7 @@
 * **Движок**: AudioWorklet, события планируются по номеру сэмпла; тот же код рендерит экспорт офлайн.
 * **Channel Rack** со Step Sequencer, **Piano Roll** со всеми инструментами и генераторами нот, **Playlist** до 500 треков (паттерны, аудио, автоматизация, маркеры, Performance mode, аранжировки), **Mixer** на 125 инсертов (10 слотов, маршрутизация, sidechain, PDC).
 * **Инструменты**: Sampler, FPC, Slicer, SubSynth, FM (6 операторов), Drum synth, Wavetable, Pluck, Organ. **Эффекты**: 20 штук (EQ, компрессоры, ревербы, дилеи, модуляция, дисторшены, вокодер и др.).
+* **Plugin store**: скачиваемые плагины. В комплекте **FL LUA Synths** (Acid Bass, Tri-Osc, Chip, Additive) и **FL LUA Effects** (Soft Clipper, Maximizer, Hyper Chorus, Waveshaper, Overdrive, Delay Bank, Pitcher); свои пакеты и каталоги ставятся из файла или по адресу.
 * **Patcher**: модульная среда (узлы, провода, макро-ручки) как генератор и как эффект.
 * **Аудиоредактор** в духе Edison: выделение, обработка, любые эффекты, спектрограмма, регионы, запись.
 * **Запись** звука со входа на инсерт и нот с MIDI-клавиатуры, автоматизация, LFO/Envelope-контроллеры, MIDI learn, Browser с перетаскиванием.

@@ -20,7 +20,7 @@ export function createPicker(win, app) {
           onclick: () => { selected = { id, kind }; info.textContent = mod.meta.description || mod.meta.name; render(); },
           ondblclick: () => add(id, kind),
           hint: `${mod.meta.name} — ${mod.meta.description || kind}`,
-        }, mod.meta.name, h('span.dim', { style: { float: 'right' } }, kind === 'instrument' ? (mod.meta.kind || '') : (mod.meta.category || '')));
+        }, mod.meta.name, h('span.dim', { style: { float: 'right' } }, (mod.meta.pack ? '◆ ' : '') + (kind === 'instrument' ? (mod.meta.kind || '') : (mod.meta.category || ''))));
         list.append(row);
       }
     };
@@ -33,7 +33,9 @@ export function createPicker(win, app) {
     else app.addEffectToSelected(id);
   };
 
+  const more = h('div.btn', { hint: 'Download more plugins: installable plugin packs', onclick: () => app.openStore && app.openStore() }, 'Get more…');
   const addBtn = h('div.btn.primary', { onclick: () => { if (selected) add(selected.id, selected.kind); }, hint: 'Add — adds the selected plugin' }, 'Add');
   render();
-  return { el: h('div.rack', list, info, h('div.rack-foot', h('div.grow'), addBtn)), onShow: render };
+  app.store.bus.on('plugins', render);                    // a pack was installed
+  return { el: h('div.rack', list, info, h('div.rack-foot', more, h('div.grow'), addBtn)), onShow: render };
 }

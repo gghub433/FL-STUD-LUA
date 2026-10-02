@@ -395,3 +395,17 @@ body.midi-learn .knob, body.midi-learn .btn { outline: 1px dashed rgba(127,220,9
 .pt-macros { flex: none; border-top: 1px solid var(--line); }
 .pt-macro-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 2px; padding: 6px 8px 10px; }
 .pt-macro-grid .knob-label { max-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- Plugin store ------------------------------------------------------------------------------------------- */
+.ps-card { background: var(--bg2); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; margin: 6px 0 10px; }
+.ps-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ps-name { color: #fff; font-size: 13px; }
+.ps-desc { color: #aab3b9; font-size: 11.5px; line-height: 1.45; margin: 5px 0 2px; user-select: text; }
+.ps-desc.err { color: #e87a7a; padding: 4px 2px; }
+.ps-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.ps-chip { font-size: 10.5px; padding: 2px 7px; border-radius: 10px; background: var(--bg3); color: #c9d0d5; }
+.ps-chip.gen { box-shadow: inset 0 0 0 1px #ffb02e66; }
+.ps-chip.fx { box-shadow: inset 0 0 0 1px #5aaedc88; }
+.ps-state { color: #7fdc5c; font-size: 11px; }
+.ps-state.upd { color: var(--accent); }
+.ps-banner { display: flex; align-items: center; gap: 10px; padding: 6px 10px; margin-bottom: 8px; background: rgba(255,176,46,.12); border: 1px solid var(--accent-dim); border-radius: 4px; }

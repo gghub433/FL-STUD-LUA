@@ -1,6 +1,10 @@
 // AudioWorkletProcessor hosting the Engine. All DSP and event scheduling happen here, on the
 // audio thread; the main thread only sends commands and receives meters / playhead updates.
 import { Engine } from '../core/engine.js';
+import { installPackHook } from '../core/packs.js';
+
+// plugin packs are added with audioWorklet.addModule(); each one calls this when it is evaluated (the page has validated it already)
+installPackHook(globalThis, { smoke: false });
 
 const REPORT_BLOCKS = 6; // ~16 ms at 44.1 kHz
 
