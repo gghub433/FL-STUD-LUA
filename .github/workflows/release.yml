@@ -1,0 +1,86 @@
+name: release
+
+# Builds the single-file executables on Windows, Linux and macOS and publishes them as a GitHub release.
+#   * push a tag (git tag v0.2.0 && git push origin v0.2.0)       -> release for that tag
+#   * or run this workflow by hand and give it the tag to create  -> the tag is created at the chosen commit
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag of the release to create (for example v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  exe:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: windows-latest, name: windows-x64, file: fl-lua.exe }
+          - { os: ubuntu-latest, name: linux-x64, file: fl-lua }
+          - { os: macos-latest, name: macos-arm64, file: fl-lua }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: web
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Unit tests
+        if: matrix.os == 'ubuntu-latest'
+        run: npm test
+      - name: Build the single executable
+        run: npm run exe
+      - name: Smoke test it (starts it, fetches the app and the worklet)
+        run: node tools/smoke-exe.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe-${{ matrix.name }}
+          path: web/dist-exe/${{ matrix.file }}
+          if-no-files-found: error
+
+  publish:
+    needs: exe
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect the release files
+        run: |
+          mkdir -p out
+          cp artifacts/exe-windows-x64/fl-lua.exe out/FL-LUA-windows-x64.exe
+          # artifacts lose the executable bit, so the Linux / macOS builds ship in a tar.gz that restores it
+          for p in linux-x64 macos-arm64; do
+            chmod +x artifacts/exe-$p/fl-lua
+            tar -czf out/FL-LUA-$p.tar.gz -C artifacts/exe-$p fl-lua
+          done
+          (cd web && npm ci && npm run build && cd dist && zip -qr ../../out/FL-LUA-web.zip .)
+          ls -la out
+      - name: Create the release
+        run: |
+          gh release create "$TAG" out/* \
+            --title "FL LUA $TAG" \
+            --notes-file .github/release-notes.md \
+            --target "$GITHUB_SHA" \
+            --verify-tag=false
