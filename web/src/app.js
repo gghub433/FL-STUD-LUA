@@ -314,7 +314,9 @@ app.shortcutsDialog = () => {
     ['F5 / F6 / F7 / F9', 'Playlist / Channel rack / Piano roll / Mixer'], ['F8', 'Browser'], ['Alt+F8', 'Plugin picker'],
     ['Ctrl+Z', 'Undo'], ['Ctrl+Alt+Z, Ctrl+Y', 'Redo'], ['Ctrl+S', 'Save in browser'], ['Ctrl+N / Ctrl+O', 'New / Open'],
     ['Ctrl+↑ / Ctrl+↓', 'Next / previous pattern'], ['Z S X D C V G B H N J M', 'Play the selected channel from the keyboard (C–B)'], ['Q 2 W 3 E R 5 T 6 Y 7 U I', 'Same, one octave higher'],
-    ['Ctrl+L', 'Link hovered control to a MIDI controller'],
+    ['Ctrl+L', 'Link hovered control to a MIDI controller'], ['Ctrl+R', 'Export (WAV / FLAC / MP3 / OGG / MIDI / stems)'],
+    ['Patcher: Del · Ctrl+D · Ctrl+A', 'Delete / duplicate / select all nodes; wheel zooms, middle mouse (or Space) pans'],
+    ['Audio editor: Space · Ctrl+C/X/V · Del', 'Play · copy / cut / paste · delete the selection; Ctrl+Z / Ctrl+Y undo inside the editor; wheel zooms'],
   ];
   modal({ title: 'Keyboard shortcuts', body: h('div', { style: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 18px' } }, rows.flatMap(([k, d]) => [h('b', { style: { color: 'var(--accent)' } }, k), h('span', d)])), buttons: [{ label: 'Close', primary: true }] });
 };
