@@ -1,12 +1,13 @@
 // End-to-end tests in a real Chromium: UI clicks + proof that the AudioWorklet produces sound.
 import fs from 'node:fs';
 import { loadPlaywright } from './pw.mjs';
+import path from 'node:path';
 import { createServer } from '../../tools/serve.mjs';
 
 const only = process.argv[3];
 const pw = await loadPlaywright();
 const chromium = pw.chromium || pw.default.chromium;
-const srv = createServer().listen(0);
+const srv = createServer(process.env.E2E_ROOT ? path.resolve(process.env.E2E_ROOT) : undefined).listen(0);   // E2E_ROOT=dist tests the production build
 const port = srv.address().port;
 fs.mkdirSync('tests/e2e/out', { recursive: true });
 

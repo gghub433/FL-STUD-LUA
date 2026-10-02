@@ -4,3 +4,4 @@ dist/
 web/node_modules/
 web/dist/
 web/tests/e2e/out/
+web/dist-exe/

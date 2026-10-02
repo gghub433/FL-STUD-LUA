@@ -7,7 +7,8 @@
 npm start            # dev-сервер на http://localhost:8080
 npm test             # unit-тесты движка и форматов (node:test)
 npm run test:e2e     # сквозные тесты в Chromium: UI + реальный звук из AudioWorklet
-npm run build        # dist/ (esbuild): один бандл + worklet
+npm run build        # dist/ (esbuild): те же модули, минифицированные по файлам
+npm run exe          # dist-exe/fl-lua(.exe): один исполняемый файл с приложением внутри (Node SEA)
 ```
 
 ## 1. Слои

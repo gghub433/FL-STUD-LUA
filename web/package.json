@@ -9,9 +9,12 @@
     "start": "node tools/serve.mjs",
     "test": "node --test \"tests/unit/**/*.test.js\"",
     "test:e2e": "node tests/e2e/run.mjs",
-    "build": "node tools/build.mjs"
+    "build": "node tools/build.mjs",
+    "exe": "node tools/make-exe.mjs",
+    "serve:dist": "node tools/serve.mjs dist"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.12",
+    "postject": "^1.0.0-alpha.6"
   }
 }

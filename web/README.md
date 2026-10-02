@@ -12,6 +12,17 @@ npm test                      # unit-тесты движка, эффектов �
 node tests/e2e/run.mjs        # E2E в настоящем Chromium: клики + проверка, что AudioWorklet выдаёт звук
 ```
 
+**Сборка и поставка**
+
+```bash
+npm run build                 # dist/: те же ES-модули, минифицированные esbuild (структура URL сохранена, worklet и worker работают как есть)
+node tools/serve.mjs dist     # проверить production-сборку
+npm run exe                   # dist-exe/fl-lua(.exe): ОДИН исполняемый файл (Node SEA) со всем приложением внутри
+```
+
+`fl-lua` по двойному клику поднимает локальный сервер (`http://localhost:8080`, при занятом порте берёт следующий) и открывает браузер; ключи `--port N`, `--no-open`, `--host H`.
+Исполняемый файл собирается под ту платформу, на которой запущена сборка; Windows/Linux/macOS собирает workflow `.github/workflows/web.yml` (артефакты `fl-lua-windows-latest` и др.). Файл не подписан, SmartScreen может предупредить.
+
 Горячие клавиши: `Space` — play/stop, `F5` Playlist, `F6` Channel Rack, `F7` Piano Roll, `F9` Mixer, `F8` Browser, `Alt+F8` Plugin Picker, `Alt+T` — tap tempo.
 
 ## Что внутри

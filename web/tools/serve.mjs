@@ -28,5 +28,6 @@ export function createServer(dir = root) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const port = Number(process.env.PORT) || 8080;
-  createServer().listen(port, () => console.log(`FL LUA: http://localhost:${port}/`));
+  const dir = process.argv[2] ? path.resolve(process.argv[2]) : root;      // `node tools/serve.mjs dist` serves the production build
+  createServer(dir).listen(port, () => console.log(`FL LUA: http://localhost:${port}/ (${dir})`));
 }
