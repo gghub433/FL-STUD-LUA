@@ -31,7 +31,7 @@ npm run smoke:built -- out/linux-unpacked/fl-lua-desktop   # запустить 
 
 Облегчённый вариант без Electron: `npm run exe` собирает `dist-exe/fl-lua` ― маленький запускатор, который поднимает локальный сервер и открывает **ваш браузер**.
 
-Горячие клавиши: `Space` — play/stop, `F5` Playlist, `F6` Channel Rack, `F7` Piano Roll, `F9` Mixer, `F8` Browser, `Alt+F8` Plugin Picker, `Alt+T` — tap tempo.
+Горячие клавиши: `Space` — play/stop, `F5` Playlist, `F6` Channel Rack, `F7` Piano Roll, `F9` Mixer, `F8` Browser, `Alt+F8` Plugin Picker, `Alt+T` — tap tempo, `Ctrl+S` / `Ctrl+O` — сохранить / открыть. Полный список и замена клавиш: **HELP → Keyboard shortcuts** (`F1`). Тема, размер и язык интерфейса: **OPTIONS → Interface**.
 
 ## Что внутри
 
@@ -41,22 +41,31 @@ npm run smoke:built -- out/linux-unpacked/fl-lua-desktop   # запустить 
 | Piano Roll | все инструменты (draw, paint, delete, mute, slice, select, zoom, slide, stamp, chord), панели свойств нот, шкалы, Riff machine, Arpeggiator, Strum, Quantize, Chop, Glue, Articulate, Claw machine и др. |
 | Playlist | до 500 треков, клипы паттернов / аудио / автоматизации, маркеры, лупы, Performance mode, аранжировки, time-stretch и pitch клипов, фейды |
 | Mixer | 125 инсертов + Master, 10 слотов эффектов, произвольная маршрутизация, sidechain, PDC, 3-полосный EQ, анализатор спектра |
-| Инструменты | Sampler, FPC, Slicer, SubSynth, FM (6 операторов), Drum synth, Wavetable, Pluck, Organ, **Patcher** |
-| Эффекты | 20 штук + **Patcher** (свой эффект из узлов) |
-| Автоматизация | клипы автоматизации с кривыми, LFO и Envelope-контроллеры, MIDI learn |
-| Browser | дерево, поиск, превью, drag-and-drop, пресеты, шаблоны, бэкапы |
+| Инструменты | Sampler, FPC, Slicer, **Multisampler** (зоны по нотам и силе нажатия, определение высоты), SubSynth, FM (6 операторов), Drum synth, Wavetable, Pluck, Organ, **MIDI Out**, **Patcher**, плагины **WAM 2.0** |
+| Эффекты | 20 штук + **Patcher** (свой эффект из узлов) + эффекты **WAM 2.0** |
+| Мастер | лимитер на мастере в новых проектах, окно **Loudness**: LUFS (M / S / I), диапазон, истинный пик (4×), корреляция |
+| Автоматизация | клипы автоматизации с кривыми, **запись движений ручек**, LFO и Envelope-контроллеры, MIDI learn |
+| MIDI | клавиатуры и контроллеры, **MIDI Out** с точной синхронизацией, MIDI clock, привязка транспорта (профили), **скрипты контроллеров** |
+| Browser | дерево, поиск, превью, drag-and-drop, пресеты, шаблоны, бэкапы, звуки из пакетов |
 | Запись | аудио со входа на выбранный инсерт (с компенсацией задержки), ноты с MIDI-клавиатуры и экранного пианино |
-| Аудиоредактор | выделение, cut/copy/paste, нормализация, фейды, реверс, time-stretch / pitch, ресемплинг, любые эффекты микшера на выделении, регионы, спектрограмма, запись, отправка в проект |
-| Экспорт | WAV 16/24/32f, FLAC, OGG (Opus), MP3, MIDI, стемы, дизеринг, хвост; проект `.fllua` и ZIP со сэмплами, автосохранение, история отмен |
+| Аудиоредактор | выделение, cut/copy/paste, нормализация, фейды, реверс, time-stretch / pitch, ресемплинг, любые эффекты микшера на выделении, регионы, спектрограмма, **определение темпа**, запись, отправка в проект |
+| Файлы | **Открыть / Сохранить на диск** (`.fllua`, ZIP со сэмплами), недавние, ассоциация файлов в настольной версии, **импорт MIDI**, автосохранение, история отмен |
+| Экспорт | WAV 16/24/32f, FLAC, OGG (Opus), MP3, MIDI, стемы, дизеринг, хвост, **громкость по LUFS** с лимитом по истинному пику |
+| Звук | устройство вывода, частота 44.1–96 кГц, размер буфера (задержка) |
+| Интерфейс | чёткая графика на HiDPI, размер 80–200 %, **светлая тема**, **русский язык**, свои горячие клавиши (F1), обучающий тур |
 
 ## Plugin store: скачиваемые плагины
 
-**Tools → Plugin store…** (также ADD → Get more plugins…, кнопка **Get more…** в Plugin picker). В комплекте два пакета, ставятся в один клик и работают везде, как встроенные плагины:
+**Tools → Plugin store…** (также ADD → Get more plugins…, кнопка **Get more…** в Plugin picker). В комплекте шесть пакетов, ставятся в один клик и работают везде, как встроенные плагины:
 
 | Пакет | Что внутри |
 |---|---|
 | **FL LUA Synths** | Acid Bass (лестничный фильтр, accent, slide), Tri-Osc (3 осциллятора, sync, кольцевая модуляция, FM), Chip (пульс / треугольник / шум, арпеджио), Additive (до 64 парциалов, форманта, морфинг спектров) |
 | **FL LUA Effects** | Soft Clipper, Maximizer (3 полосы + look-ahead), Hyper Chorus, Waveshaper (8 кривых), Overdrive, Delay Bank (4 отводки), Pitcher (корректор высоты) |
+| **FL LUA Drum Machines** | DM-8 и DM-9: аналоговые драм-машины на нотах General MIDI |
+| **FL LUA Keys** | E-Piano, Strings, Piano, Choir |
+| **FL LUA Sounds** | 52 сэмпла, которые делает код: драм-машины, басы, стэбы, пэды, гласные, FX, лупы (в Browser → Packs) |
+| **FL LUA Controller Scripts** | ручки на выбранный канал, фейдеры на микшер, пэды на барабаны (TOOLS → MIDI settings) |
 
 Свои пакеты: **Install from file…**, **From address…**, **Add catalog…**. Как написать пакет и опубликовать каталог ― [docs/PACKS.md](docs/PACKS.md). Пакет ― это код: ставьте только от тех, кому доверяете.
 

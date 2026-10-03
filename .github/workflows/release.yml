@@ -68,20 +68,23 @@ jobs:
             windows-latest) node smoke.mjs "out/win-unpacked/FL LUA.exe" ;;
             macos-latest) node smoke.mjs "$(ls -d out/mac*/*.app | head -1)/Contents/MacOS/FL LUA" ;;
           esac
-      - name: Test the installers (Windows setup into the user's programs, the .deb with apt)
-        if: matrix.os != 'macos-latest'
+      - name: Test the Windows installer (silent per-user install, then start the installed app)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
         working-directory: web/desktop
         run: |
-          case "${{ matrix.os }}" in
-            windows-latest)
-              powershell -Command "Start-Process -FilePath 'out\FL-LUA-windows-x64-setup.exe' -ArgumentList '/S' -Wait"
-              exe="$(ls "$LOCALAPPDATA"/Programs/*/"FL LUA.exe" | head -1)"
-              echo "installed: $exe"
-              node smoke.mjs "$exe" ;;
-            ubuntu-latest)
-              sudo apt-get install -y -qq ./out/FL-LUA-linux-x64.deb
-              xvfb-run -a -s "-screen 0 1600x1000x24" node smoke.mjs /opt/FL\ LUA/fl-lua-desktop ;;
-          esac
+          Start-Process -FilePath "out\FL-LUA-windows-x64-setup.exe" -ArgumentList "/S" -Wait
+          $exe = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter "FL LUA.exe" | Select-Object -First 1
+          if (-not $exe) { Write-Error "the installer did not install FL LUA.exe"; exit 1 }
+          Write-Output "installed: $($exe.FullName)"
+          node smoke.mjs "$($exe.FullName)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test the .deb (install with apt, then start the installed app)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: web/desktop
+        run: |
+          sudo apt-get install -y -qq ./out/FL-LUA-linux-x64.deb
+          xvfb-run -a -s "-screen 0 1600x1000x24" node smoke.mjs "/opt/FL LUA/fl-lua-desktop"
       - uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.name }}
