@@ -1,5 +1,5 @@
 // Main toolbar: draggable sections (order persisted).
-import { h, drag, clamp } from './h.js';
+import { h, drag, clamp, hiDPI } from './h.js';
 import { icon } from './icons.js';
 import { Knob } from './knob.js';
 import { showPopup } from './menu.js';
@@ -160,7 +160,7 @@ export class Toolbar {
   }
 
   patternSection() {
-    this.patEl = h('div.lcd.input', { style: { cursor: 'pointer', minWidth: '150px', height: '26px', justifyContent: 'flex-start', gap: '6px', color: 'var(--text)', fontFamily: 'inherit' },
+    this.patEl = h('div.lcd.input', { style: { cursor: 'pointer', minWidth: '118px', height: '26px', justifyContent: 'flex-start', gap: '6px', color: 'var(--text)', fontFamily: 'inherit' },
       hint: 'Pattern selector — click for the list, wheel changes pattern, Ctrl+↑↓ steps through them',
       onclick: (e) => this.patternMenu(e),
       onwheel: (e) => { e.preventDefault(); this.app.selectPatternRel(e.deltaY < 0 ? 1 : -1); } });
@@ -217,8 +217,8 @@ export class Toolbar {
     this.lufs = h('span.tb-lufs', { hint: 'Short-term loudness of the master (LUFS) — click for the loudness meter', onclick: () => this.app.toggleWindow('loudness') }, '−∞ LUFS');
     this.time = new Float32Array(2048);
     this.freq = new Uint8Array(1024);
-    this.sctx = this.scope.getContext('2d');
     this.scope.style.width = '112px'; this.scope.style.height = '34px';
+    this.sctx = hiDPI(this.scope, 112, 34).g;
     return h('div.tb-row', this.scope, h('div.tb-col', this.cpu, this.cpuTxt, this.lufs));
   }
 
@@ -269,12 +269,12 @@ export class Toolbar {
   drawScope() {
     const a = this.app.host.analyser, c = this.sctx;
     if (!a || !c) return;
-    const W = this.scope.width, H = this.scope.height;
+    const W = this.scope.lw, H = this.scope.lh;
     c.fillStyle = '#0e1012'; c.fillRect(0, 0, W, H);
     c.strokeStyle = '#1d2226'; c.lineWidth = 1; c.beginPath(); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke();
     if (this.scopeMode === 'scope') {
       a.getFloatTimeDomainData(this.time);
-      c.strokeStyle = '#ffb02e'; c.lineWidth = 1.6; c.beginPath();
+      c.strokeStyle = '#ffb02e'; c.lineWidth = 1.1; c.beginPath();
       // trigger on a rising zero crossing so the picture holds still
       let s = 0;
       for (let i = 1; i < 1024; i++) if (this.time[i - 1] < 0 && this.time[i] >= 0) { s = i; break; }

@@ -1,7 +1,8 @@
 // Audio editor (in the spirit of Edison): waveform with selection and regions, zoom/scroll, cut/copy/paste,
 // processing and effects on the selection, spectrogram, recording, and "send to" the project.
 // The sample is edited in a private copy with its own undo history; nothing reaches the project until Send.
-import { h, clear, drag, clamp } from './h.js';
+import { h, clear, drag, clamp, hiDPI } from './h.js';
+import { t as tr } from './i18n.js';
 import { showPopup, contextMenu } from './menu.js';
 import { formDialog } from './forms.js';
 import { promptText } from './dialog.js';
@@ -170,11 +171,11 @@ class AudioEditor {
     const W = Math.max(200, Math.floor(r.width)), H = Math.max(80, Math.floor(r.height));
     if (W !== this.W || H !== this.H) {
       const keep = this.view.spp >= this.maxSpp() - 1e-9;
-      this.W = W; this.H = H; this.canvas.width = W; this.canvas.height = H;
+      this.W = W; this.H = H; hiDPI(this.canvas, W, H);
       if (keep) this.view.spp = this.maxSpp(); else this.view.spp = clamp(this.view.spp, this.minSpp(), this.maxSpp());
       this.clampView(); this.dirty = true; this.specDirty = true; this.updateScroll();
     }
-    if (this.showSpec) { const w = Math.max(200, Math.floor(this.specWrap.getBoundingClientRect().width)); if (this.spec.width !== w) { this.spec.width = w; this.specDirty = true; } }
+    if (this.showSpec) { const w = Math.max(200, Math.floor(this.specWrap.getBoundingClientRect().width)); if (this.specW !== w) { this.specW = w; this.specDirty = true; } }
   }
 
   updateScroll() {
@@ -575,7 +576,7 @@ class AudioEditor {
   }
 
   paint() {
-    const c = this.canvas.getContext('2d'), W = this.canvas.width, H = this.canvas.height;
+    const c = hiDPI(this.canvas, this.W, this.H).g, W = this.W, H = this.H;
     c.fillStyle = '#0e1012'; c.fillRect(0, 0, W, H);
     c.fillStyle = '#1a1e21'; c.fillRect(0, 0, W, RULER);
     c.font = '10px sans-serif';
@@ -589,7 +590,7 @@ class AudioEditor {
       c.fillText(fmtTime(t).replace(/\.000$/, ''), x + 3, 12);
     }
     const lanes = this.buf.channels.length, laneH = (H - RULER) / lanes;
-    if (!this.frames) { c.fillStyle = '#5b666e'; c.font = '12px sans-serif'; c.fillText('Empty — record (●), paste (Ctrl+V) or send a sample here', 20, RULER + 40); return; }
+    if (!this.frames) { c.fillStyle = '#5b666e'; c.font = '12px sans-serif'; c.fillText(tr('Empty — record (●), paste (Ctrl+V) or send a sample here'), 20, RULER + 40); return; }
     // regions
     this.regions.forEach((r, i) => {
       const xa = this.xOf(r.a), xb = this.xOf(r.b);
@@ -632,7 +633,7 @@ class AudioEditor {
   paintSpec() {
     if (!this.showSpec || !this.frames) return;
     this.specDirty = false;
-    const cv = this.spec, c = cv.getContext('2d'), W = cv.width, H = cv.height;
+    const cv = this.spec, { g: c, W, H } = hiDPI(cv, this.specW || cv.lw || cv.width, 150);
     const a = Math.max(0, Math.floor(this.view.start)), b = Math.min(this.frames, Math.ceil(this.visibleEnd()));
     if (b - a < 64) { c.fillStyle = '#000'; c.fillRect(0, 0, W, H); return; }
     const cols = Math.min(W, 600), sp = E.spectrogram(this.buf, a, b, { size: 1024, columns: cols });

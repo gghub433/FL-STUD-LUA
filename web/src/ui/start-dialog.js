@@ -26,7 +26,7 @@ export async function openStartDialog(app) {
       h('div.mx-title', { style: { margin: '10px 0 6px' } }, 'Recent projects'), h('div.start-grid', ...rec),
       h('div.row', { style: { marginTop: '12px', gap: '8px' } }, h('div.btn', { onclick: () => { close(); app.openFile(); } }, 'Open file…'), h('div.btn', { onclick: () => { close(); app.openDemo(); } }, 'Open the demo'), h('div.grow'),
         h('label.row', { style: { gap: '6px' } }, hide, 'Do not show this at startup'))),
-    buttons: [{ label: 'Close', primary: true }],
+    buttons: [{ label: 'Take the tour', fn: () => { setTimeout(() => app.startTour && app.startTour(), 50); } }, { label: 'Close', primary: true }],
   });
   return m;
 }

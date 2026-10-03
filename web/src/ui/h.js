@@ -82,3 +82,20 @@ export function raf(fn) {
     requestAnimationFrame(() => { pending = false; fn(...a); });
   };
 }
+
+// Sharp canvases on high-density screens: the backing store gets devicePixelRatio times the pixels and the context
+// draws in CSS pixels. w/h = the size in CSS pixels (defaults: the size given last, else the width/height attributes).
+// A canvas without a CSS size gets one, so the bigger backing store does not make it grow. Logical size: cv.lw × cv.lh.
+export function hiDPI(cv, w, h) {
+  const dpr = Math.max(1, Math.min(4, ((typeof window !== 'undefined' && window.devicePixelRatio) || 1) * (globalThis.__uiZoom || 1)));   // CSS zoom (browser) needs the extra pixels too
+  if (cv.lw === undefined) { cv.lw = cv.width; cv.lh = cv.height; }
+  const W = Math.max(1, Math.round(w || cv.lw)), H = Math.max(1, Math.round(h || cv.lh));
+  cv.lw = W; cv.lh = H;
+  if (!cv.style.width && !cv.className) cv.style.width = `${W}px`;
+  if (!cv.style.height && !cv.className) cv.style.height = `${H}px`;
+  const pw = Math.round(W * dpr), ph = Math.round(H * dpr);
+  if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { g, W, H, dpr };
+}

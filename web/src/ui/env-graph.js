@@ -1,7 +1,8 @@
 // Small envelope previews (DAHDSR for the sampler, ADSR for synths).
+import { hiDPI } from './h.js';
 export function drawEnv(canvas, stages, { color = '#ffb02e', sustainHold = 0.25 } = {}) {
   // stages: [{ t: seconds, to: level 0..1 }, ...]  (starting at level 0)
-  const c = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+  const { g: c, W, H } = hiDPI(canvas, canvas.clientWidth, canvas.clientHeight);
   c.fillStyle = '#0e1012'; c.fillRect(0, 0, W, H);
   c.strokeStyle = '#1f2529'; c.lineWidth = 1;
   for (let i = 1; i < 4; i++) { c.beginPath(); c.moveTo(0, (i / 4) * H); c.lineTo(W, (i / 4) * H); c.stroke(); }

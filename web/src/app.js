@@ -26,6 +26,11 @@ import { installExtensions } from './app-extensions.js';
 import { PackManager } from './host/pack-manager.js';
 import { installFiles } from './app/files.js';
 import { installAutomationRecording } from './app/auto-rec.js';
+import { Keymap } from './app/keymap.js';
+import { openShortcuts } from './ui/shortcuts.js';
+import { startTour } from './ui/tour.js';
+import { installPrefs, SCALES } from './ui/prefs.js';
+import { setLang, LANGS } from './ui/i18n.js';
 
 const PIANO = { z: 0, s: 1, x: 2, d: 3, c: 4, v: 5, g: 6, b: 7, h: 8, n: 9, j: 10, m: 11, q: 12, 2: 13, w: 14, 3: 15, e: 16, r: 17, 5: 18, t: 19, 6: 20, y: 21, 7: 22, u: 23, i: 24 };
 
@@ -281,6 +286,14 @@ function buildMenus() {
       { label: 'Project settings…', fn: () => app.projectSettings() },
       ...(app.optionsMenuExtra ? app.optionsMenuExtra() : []),
       { label: 'Audio settings…', fn: () => app.audioSettings() },
+      { label: 'Interface', submenu: () => [
+        { title: 'Theme' },
+        ...[['dark', 'Dark'], ['light', 'Light'], ['system', 'Same as the system']].map(([v, l]) => ({ label: l, checked: app.prefs.theme === v, fn: () => app.setPref('theme', v) })),
+        { title: 'Size' },
+        ...SCALES.map((v) => ({ label: `${Math.round(v * 100)} %`, checked: app.prefs.scale === v, fn: () => app.setPref('scale', v) })),
+        { title: 'Language' },
+        ...LANGS.map(([v, l]) => ({ label: l, checked: app.prefs.lang === v, fn: () => app.setPref('lang', v) })),
+      ] },
     ] },
     { label: 'TOOLS', items: () => [
       { label: 'Tap tempo', key: 'Alt+T', fn: () => t.tapTempo() },
@@ -288,7 +301,8 @@ function buildMenus() {
       ...(app.toolsMenuExtra ? app.toolsMenuExtra() : []),
     ] },
     { label: 'HELP', items: () => [
-      { label: 'Keyboard shortcuts', fn: () => app.shortcutsDialog() },
+      { label: 'Keyboard shortcuts', key: 'F1', fn: () => app.shortcutsDialog() },
+      { label: 'Take the tour', fn: () => app.startTour() },
       { label: 'About FL LUA', fn: () => app.about() },
     ] },
   ];
@@ -317,20 +331,14 @@ app.projectSettings = () => {
 
 app.audioSettings = () => openAudioSettings(app);
 
-app.about = () => alertBox('FL LUA', 'A browser DAW with a pattern-based workflow (Channel rack → Playlist).\nAudio engine in an AudioWorklet; the same engine renders exports offline.\nOpen source (MIT). Not affiliated with any other DAW vendor.');
-
-app.shortcutsDialog = () => {
-  const rows = [
-    ['Space', 'Play / Stop'], ['Ctrl+Space', 'Pause'], ['L', 'Toggle PAT / SONG'], ['Alt+T', 'Tap tempo'],
-    ['F5 / F6 / F7 / F9', 'Playlist / Channel rack / Piano roll / Mixer'], ['F8', 'Browser'], ['Alt+F8', 'Plugin picker'],
-    ['Ctrl+Z', 'Undo'], ['Ctrl+Alt+Z, Ctrl+Y', 'Redo'], ['Ctrl+S / Ctrl+Shift+S', 'Save to the project file / Save as'], ['Ctrl+N / Ctrl+O', 'New / Open (projects, MIDI files)'],
-    ['Ctrl+↑ / Ctrl+↓', 'Next / previous pattern'], ['Z S X D C V G B H N J M', 'Play the selected channel from the keyboard (C–B)'], ['Q 2 W 3 E R 5 T 6 Y 7 U I', 'Same, one octave higher'],
-    ['Ctrl+L', 'Link hovered control to a MIDI controller'], ['Ctrl+R', 'Export (WAV / FLAC / MP3 / OGG / MIDI / stems)'],
-    ['Patcher: Del · Ctrl+D · Ctrl+A', 'Delete / duplicate / select all nodes; wheel zooms, middle mouse (or Space) pans'],
-    ['Audio editor: Space · Ctrl+C/X/V · Del', 'Play · copy / cut / paste · delete the selection; Ctrl+Z / Ctrl+Y undo inside the editor; wheel zooms'],
-  ];
-  modal({ title: 'Keyboard shortcuts', body: h('div', { style: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 18px' } }, rows.flatMap(([k, d]) => [h('b', { style: { color: 'var(--accent)' } }, k), h('span', d)])), buttons: [{ label: 'Close', primary: true }] });
+app.about = async () => {
+  const desk = window.flluaDesktop, info = desk && desk.info ? await desk.info().catch(() => null) : null;
+  return alertBox('FL LUA', `${info ? `Version ${info.version} (desktop, ${info.platform} ${info.arch})\n\n` : ''}A browser DAW with a pattern-based workflow (Channel rack → Playlist).\nAudio engine in an AudioWorklet; the same engine renders exports offline.\nOpen source (MIT). Not affiliated with any other DAW vendor.`);
 };
+
+app.shortcutsDialog = () => openShortcuts(app);
+app.startTour = () => startTour(app);
+app.zoomStep = (d) => { const i = SCALES.indexOf(app.prefs.scale); app.setPref('scale', SCALES[Math.max(0, Math.min(SCALES.length - 1, (i < 0 ? SCALES.indexOf(1) : i) + d))]); };
 
 // ------------------------------------------------------------------------------ keyboard
 function isTyping(e) {
@@ -339,33 +347,14 @@ function isTyping(e) {
 }
 
 function onKeyDown(e) {
-  if (isTyping(e) || document.querySelector('.modal-back')) return;
+  if (isTyping(e) || document.querySelector('.modal-back') || app.tourActive) return;
   const ctrl = e.ctrlKey || e.metaKey, key = e.key;
   const lower = key.length === 1 ? key.toLowerCase() : key;
   // the focused editor window (piano roll, playlist…) gets the first chance at the key
   for (const hook of app.keyHooks) if (hook(e)) { e.preventDefault(); return; }
-  if (ctrl) {
-    if (lower === 'z' && !e.shiftKey && !e.altKey) { e.preventDefault(); app.store.undo(); return; }
-    if ((lower === 'z' && (e.altKey || e.shiftKey)) || lower === 'y') { e.preventDefault(); app.store.redo(); return; }
-    if (lower === 's') { e.preventDefault(); if (e.shiftKey) app.files.saveAs(); else app.files.save(); return; }
-    if (lower === 'o') { e.preventDefault(); app.files.open(); return; }
-    if (lower === 'n') { e.preventDefault(); app.newProject(); return; }
-    if (key === ' ') { e.preventDefault(); app.transport.togglePause(); return; }
-    if (key === 'ArrowUp') { e.preventDefault(); app.selectPatternRel(1); return; }
-    if (key === 'ArrowDown') { e.preventDefault(); app.selectPatternRel(-1); return; }
-    if (lower === 'l' && app.linkHovered) { e.preventDefault(); app.linkHovered(); return; }
-    return;
-  }
-  if (e.altKey) {
-    if (lower === 't') { e.preventDefault(); app.transport.tapTempo(); return; }
-    if (key === 'F8') { e.preventDefault(); app.toggleWindow('picker'); return; }
-    return;
-  }
-  const fmap = { F5: 'playlist', F6: 'rack', F7: 'pianoroll', F8: 'browser', F9: 'mixer' };
-  if (fmap[key]) { e.preventDefault(); app.toggleWindow(fmap[key]); return; }
-  if (key === ' ') { e.preventDefault(); app.transport.toggle(); return; }
-  if (lower === 'l' && !e.repeat) { app.transport.toggleMode(); return; }
+  if (app.keymap.handle(e)) return;                       // app commands: HELP > Keyboard shortcuts
   if (key === 'Escape') { closePopups(); return; }
+  if (ctrl || e.altKey) return;
   // typing-to-piano on the selected channel
   if (app.typingPiano && !e.repeat && PIANO[lower] !== undefined && !e.shiftKey) {
     const ch = app.store.selected;
@@ -457,6 +446,8 @@ export async function boot() {
   app.wm.register('picker', { title: 'Plugin picker', create: createPicker, rect: { x: 300, y: 120, w: 300, h: 380 }, minW: 220, minH: 160 });
   installExtensions(app);
   installFiles(app);
+  app.keymap = new Keymap(app);
+  installPrefs(app, { setLang });
   installAutomationRecording(app);
   // audio clips that follow the tempo are stretched again shortly after the tempo changes
   let followTimer = 0;
@@ -481,6 +472,7 @@ export async function boot() {
   }
   app.store.bus.emit('project', app.store.project);
   window.app = app;
+  if (app.prefs.lang !== 'en') await setLang(app.prefs.lang);
   window.__ready = true;
   // the project picker is for people, not for automated runs (?nopicker) and can be switched off
   if (!params.has('nopicker') && !params.has('empty')) { const { startDialogWanted } = await import('./ui/start-dialog.js'); if (startDialogWanted()) app.openStartDialog(); }

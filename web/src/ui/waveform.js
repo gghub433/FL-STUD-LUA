@@ -1,4 +1,5 @@
 // Waveform drawing with a per-width peak cache.
+import { hiDPI } from './h.js';
 export function peaksFor(entry, width) {
   const key = `_pk${width}`;
   if (entry[key]) return entry[key];
@@ -16,10 +17,10 @@ export function peaksFor(entry, width) {
 }
 
 export function drawWave(canvas, entry, { color = '#ffb02e', bg = '#0e1012', dim = null, label = '' } = {}) {
-  const c = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+  const { g: c, W, H } = hiDPI(canvas, canvas.clientWidth, canvas.clientHeight);
   c.fillStyle = bg; c.fillRect(0, 0, W, H);
   c.fillStyle = '#1b2024'; c.fillRect(0, H / 2, W, 1);
-  if (!entry) { c.fillStyle = '#5b666e'; c.font = '11px sans-serif'; c.fillText(label || 'No sample. Use Load or drop a file here', 12, H / 2 - 6); return; }
+  if (!entry) { c.fillStyle = '#5b666e'; c.font = '11px sans-serif'; c.fillText(label || 'No sample. Use Load or drop a file here', 12, H / 2 - 6); return { g: c, W, H }; }
   const pk = peaksFor(entry, W);
   c.fillStyle = color;
   for (let x = 0; x < W; x++) {
@@ -27,4 +28,5 @@ export function drawWave(canvas, entry, { color = '#ffb02e', bg = '#0e1012', dim
     const mn = pk[x * 2], mx = pk[x * 2 + 1];
     c.fillRect(x, H / 2 - mx * (H / 2 - 2), 1, Math.max(1, (mx - mn) * (H / 2 - 2)));
   }
+  return { g: c, W, H };
 }

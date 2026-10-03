@@ -1,5 +1,6 @@
 // Playlist: arrange pattern, audio and automation clips on up to 500 tracks.
 import { h, drag, clamp, clear } from './h.js';
+import { t as loc } from './i18n.js';
 import { contextMenu, showPopup } from './menu.js';
 import { promptText, pickColor } from './dialog.js';
 import { formDialog } from './forms.js';
@@ -404,7 +405,7 @@ export class Playlist {
   drawAudioBody(ctx, c, b) {
     const ch = this.store.channel(c.ref);
     const e = ch && ch.sample ? this.store.bank.get(c.use || ch.sample.id) : null;
-    if (!e) { ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillText('no sample', b.x + 6, b.y + b.h / 2); return; }
+    if (!e) { ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillText(loc('no sample'), b.x + 6, b.y + b.h / 2); return; }
     const sec = 60 / this.project.tempo / PPQ;
     const rate = e.rate * (c.pitch && !c.use ? Math.pow(2, c.pitch / 12) : 1);
     const x0 = Math.max(0, Math.floor(b.x)), x1 = Math.min(this.W, Math.ceil(b.x + b.w));
@@ -425,7 +426,7 @@ export class Playlist {
 
   drawAutomationBody(ctx, c, b) {
     const ch = this.store.channel(c.ref);
-    if (!ch || !ch.points.length) { ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillText('empty', b.x + 6, b.y + b.h / 2); return; }
+    if (!ch || !ch.points.length) { ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillText(loc('empty'), b.x + 6, b.y + b.h / 2); return; }
     const len = ch.len || this.barT;
     const n = Math.max(2, Math.min(240, Math.floor(b.w / 2)));
     const vals = renderCurve(ch.points, len, 96);
@@ -451,7 +452,7 @@ export class Playlist {
       ctx.fillStyle = t % 2 ? '#383d42' : '#353a3f'; ctx.fillRect(0, y, NAMES_W - 1, v.rowH - 1);
       ctx.fillStyle = ov.color || '#555d65'; ctx.fillRect(0, y, 4, v.rowH - 1);
       ctx.fillStyle = ov.mute ? '#6c747b' : '#d5dce0';
-      ctx.fillText(ov.name || `Track ${t}`, 10, y + Math.min(14, v.rowH / 2));
+      ctx.fillText(ov.name || loc(`Track ${t}`), 10, y + Math.min(14, v.rowH / 2));
       // mute / solo
       const by = y + v.rowH - 17;
       ctx.fillStyle = ov.mute ? '#ff7468' : '#1a1d20'; ctx.fillRect(NAMES_W - 44, by, 18, 14);

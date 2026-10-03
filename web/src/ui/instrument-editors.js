@@ -1,5 +1,6 @@
 // Dedicated editor windows for the built-in instruments.
-import { h, drag, clamp, clear } from './h.js';
+import { h, drag, clamp, clear, hiDPI } from './h.js';
+import { t as tr } from './i18n.js';
 import { Knob } from './knob.js';
 import { paramControl } from './param-controls.js';
 import { showPopup, contextMenu } from './menu.js';
@@ -117,16 +118,13 @@ export function samplerEditor(win, app, chId) {
   const entry = () => { const c = ch(); return c && c.sample ? store.bank.get(c.sample.use || c.sample.id) : null; };
 
   const draw = () => {
-    const w = wave.parentNode ? Math.max(200, Math.floor(wave.clientWidth || 640)) : 640;
-    if (wave.width !== w) wave.width = w;
     const e = entry();
-    drawWave(wave, e, { dim: [P('start'), P('end')] });
-    const c = wave.getContext('2d'), W = wave.width, H = wave.height;
+    const { g: c, W, H } = drawWave(wave, e, { dim: [P('start'), P('end')] });
     const mark = (v, color, label) => { c.fillStyle = color; c.fillRect(Math.round(v * W) - 1, 0, 2, H); c.font = '10px sans-serif'; c.fillText(label, Math.min(W - 36, v * W + 4), 12); };
     if (e) {
       mark(P('start'), '#ffb02e', 'start'); mark(P('end'), '#ffb02e', 'end');
       if (P('loop')) { mark(P('loopStart'), '#4aaedc', 'loop'); mark(P('loopEnd'), '#4aaedc', 'loop'); }
-      c.fillStyle = '#8e989f'; c.fillText(`${(e.length / e.rate).toFixed(2)} s  ·  ${e.channels.length === 2 ? 'stereo' : 'mono'}  ·  ${e.rate} Hz`, 8, H - 6);
+      c.fillStyle = '#8e989f'; c.fillText(`${(e.length / e.rate).toFixed(2)} s  ·  ${tr(e.channels.length === 2 ? 'stereo' : 'mono')}  ·  ${e.rate} Hz`, 8, H - 6);
     }
   };
   const markers = () => [['start', P('start')], ['end', P('end')]].concat(P('loop') ? [['loopStart', P('loopStart')], ['loopEnd', P('loopEnd')]] : []);
@@ -161,7 +159,7 @@ export function samplerEditor(win, app, chId) {
         ? [{ t: 0.01, to: 1 }, { t: 0.3, to: 1, hold: 1 }, { t: P('volRel'), to: 0, curve: 'exp' }]
         : [{ t: g('Del'), to: 0 }, { t: g('Att'), to: 1 }, { t: g('Hold'), to: 1 }, { t: g('Dec'), to: sus, curve: 'exp' }, { t: 0.4, to: sus, hold: 1 }, { t: g('Rel'), to: 0, curve: 'exp' }];
       drawEnv(cv, stages, { color: on ? '#ffb02e' : '#5d4a1f' });
-      const c = lfo.getContext('2d'), W = lfo.width, H = lfo.height;
+      const { g: c, W, H } = hiDPI(lfo, 190, 40);
       c.fillStyle = '#0e1012'; c.fillRect(0, 0, W, H); c.strokeStyle = g('LfoAmt') !== 0 ? '#4aaedc' : '#25414f'; c.lineWidth = 1.5; c.beginPath();
       const shape = g('LfoShape');
       for (let x = 0; x < W; x++) {
@@ -319,10 +317,8 @@ export function slicerEditor(win, app, chId) {
     h('div.btn.primary', { hint: 'Write the slices into the current pattern in their original order (starts snapped to the grid)', onclick: () => { const n = cmd.sliceToPattern(store, chId, app.snapTicks({ cell: 24 })); app.toast(n ? `Wrote ${n} notes to the current pattern` : 'Load a loop and cut it first'); } }, 'Generate MIDI'),
     info);
   const draw = () => {
-    const w = Math.max(200, Math.floor(wave.clientWidth || 700)); if (wave.width !== w) wave.width = w;
     const e = entry();
-    drawWave(wave, e, {});
-    const c = wave.getContext('2d'), W = wave.width, H = wave.height;
+    const { g: c, W, H } = drawWave(wave, e, {});
     if (!e) return;
     const sl = ch().slices;
     sl.forEach((s, i) => {
@@ -385,7 +381,6 @@ export function drumsEditor(win, app, chId) {
   const schema = instrumentSchema('drums');
   const preview = h('canvas', { width: 520, height: 90, style: { width: '100%', height: '90px', display: 'block', background: '#0e1012' }, hint: 'Rendered preview of the current settings' });
   const draw = () => {
-    const w = Math.max(200, Math.floor(preview.clientWidth || 520)); if (preview.width !== w) preview.width = w;
     const params = { ...ch().params };
     const data = renderOneShot(app.host.sampleRate, params, 1.4, 60);
     drawWave(preview, { channels: [data], length: data.length, rate: app.host.sampleRate }, { color: '#ffb02e' });
@@ -456,7 +451,7 @@ export function fmEditor(win, app, chId) {
     }
   };
   const drawDiagram = () => {
-    const c = diagram.getContext('2d'), W = diagram.width, H = diagram.height;
+    const { g: c, W, H } = hiDPI(diagram);
     c.fillStyle = '#0e1012'; c.fillRect(0, 0, W, H);
     const { m, out } = current();
     // level of each operator = longest chain of modulators above it
@@ -476,7 +471,7 @@ export function fmEditor(win, app, chId) {
       if (m[i][i] > 0 || P(`fb${i + 1}`) > 0) { c.strokeStyle = '#7fdc5c'; c.beginPath(); c.arc(x + 15, y - 8, 5, 0, 6.28); c.stroke(); }
       if (car) { c.strokeStyle = '#ffb02e'; c.beginPath(); c.moveTo(x, y + 10); c.lineTo(x, y + 20); c.stroke(); }
     }
-    c.fillStyle = '#8e989f'; c.font = '9px sans-serif'; c.fillText('orange = carriers (heard), blue lines = modulation', 6, H - 4);
+    c.fillStyle = '#8e989f'; c.font = '9px sans-serif'; c.fillText(tr('orange = carriers (heard), blue lines = modulation'), 6, H - 4);
   };
   const buildMatrix = () => {
     clear(matrixEl);
@@ -589,8 +584,7 @@ export function wavetableEditor(win, app, chId) {
   const cv = h('canvas', { width: 520, height: 150, style: { width: '100%', height: '150px', display: 'block', background: '#0e1012', cursor: 'ew-resize' }, hint: 'Wavetable — drag horizontally to scan through the frames (Position)' });
   const draw = () => {
     const c = ch(); if (!c) return;
-    const W = Math.max(200, Math.floor(cv.clientWidth || 520)); if (cv.width !== W) cv.width = W;
-    const H = cv.height, g = cv.getContext('2d');
+    const { g, W, H } = hiDPI(cv, Math.max(200, Math.floor(cv.clientWidth || 520)), 150);
     g.fillStyle = '#0e1012'; g.fillRect(0, 0, W, H);
     const table = c.params.table, pos = c.params.pos;
     const N = 2048, buf = new Float32Array(N);
@@ -609,7 +603,7 @@ export function wavetableEditor(win, app, chId) {
     g.strokeStyle = '#ffc04a'; g.lineWidth = 2; g.beginPath();
     for (let x = 0; x <= 256; x++) { const v = buf[Math.min(N - 1, Math.floor((x / 256) * N))]; const px = ox + (x / 256) * plotW, py = oy + plotH / 2 - v * plotH * 0.42; if (x === 0) g.moveTo(px, py); else g.lineTo(px, py); }
     g.stroke();
-    g.fillStyle = '#8e989f'; g.font = '10px sans-serif'; g.fillText(`${TABLE_NAMES[table]}  ·  position ${(pos * 100).toFixed(0)}%`, 8, H - 6);
+    g.fillStyle = '#8e989f'; g.font = '10px sans-serif'; g.fillText(tr(`${TABLE_NAMES[table]}  ·  position ${(pos * 100).toFixed(0)}%`), 8, H - 6);
   };
   cv.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
@@ -641,14 +635,14 @@ export function controllerEditor(win, app, chId) {
   const cv = h('canvas', { width: 520, height: 110, style: { width: '100%', height: '110px', display: 'block', background: '#0e1012' } });
   const draw = () => {
     const c = ch(); if (!c) return;
-    const W = Math.max(200, Math.floor(cv.clientWidth || 520)); if (cv.width !== W) cv.width = W;
+    const W = Math.max(200, Math.floor(cv.clientWidth || 520));
     const p = c.params;
     if (p.mode === 1) {
       const st = [{ t: p.delay, to: 0 }, { t: p.attack, to: 1 }, { t: p.hold, to: 1 }, { t: p.decay, to: p.sustain, curve: 'exp' }, { t: 0.4, to: p.sustain, hold: 1 }, { t: p.release, to: 0, curve: 'exp' }];
       drawEnv(cv, st.map((x) => ({ ...x, to: x.to * p.amount })), { color: '#b968d6' });
       return;
     }
-    const g = cv.getContext('2d'), H = cv.height;
+    const { g, H } = hiDPI(cv, W, 110);
     g.fillStyle = '#0e1012'; g.fillRect(0, 0, W, H);
     g.fillStyle = '#1f2529'; g.fillRect(0, H / 2, W, 1);
     g.strokeStyle = '#b968d6'; g.lineWidth = 2; g.beginPath();
@@ -660,7 +654,7 @@ export function controllerEditor(win, app, chId) {
       if (x === 0) g.moveTo(x, y); else g.lineTo(x, y);
     }
     g.stroke();
-    g.fillStyle = '#8e989f'; g.font = '10px sans-serif'; g.fillText(`${LFO_SHAPES[p.shape]}  ·  ${p.sync ? 'synced' : p.rate.toFixed(2) + ' Hz'}`, 8, H - 6);
+    g.fillStyle = '#8e989f'; g.font = '10px sans-serif'; g.fillText(`${tr(LFO_SHAPES[p.shape])}  ·  ${p.sync ? tr('synced') : p.rate.toFixed(2) + ' Hz'}`, 8, H - 6);
   };
   const body = h('div.scroll', { style: { flex: 1, minHeight: 0 } });
   const render = () => {
@@ -786,7 +780,7 @@ export function multiEditor(win, app, chId) {
   const kbWrap = h('div', { style: { overflowX: 'auto', background: '#0e1012', flex: 'none' } }, kb);
   const COLORS = ['#ffb02e', '#5aaedc', '#7fdc5c', '#d96bd1', '#e6c84b', '#4bd6c3', '#e65a4b', '#9b8cff'];
   const draw = () => {
-    const g = kb.getContext('2d'), W = kb.width, H = kb.height, keyH = 34;
+    const { g, W, H } = hiDPI(kb, (HI - LO + 1) * KW, 120), keyH = 34;
     g.fillStyle = '#0e1012'; g.fillRect(0, 0, W, H);
     zones().forEach((z, i) => {
       const x0 = (Math.max(LO, z.lo) - LO) * KW, x1 = (Math.min(HI, z.hi) - LO + 1) * KW;
@@ -802,7 +796,7 @@ export function multiEditor(win, app, chId) {
     }
   };
   kb.addEventListener('pointerdown', (e) => {
-    const r = kb.getBoundingClientRect(), k = LO + Math.floor((e.clientX - r.left) * (kb.width / r.width) / KW), y = e.clientY - r.top;
+    const r = kb.getBoundingClientRect(), k = LO + Math.floor((e.clientX - r.left) / KW), y = e.clientY - r.top;
     if (y > r.height - 34) { app.host.resume(); app.host.send({ t: 'noteOn', ch: chId, key: k, vel: 0.8 }); const up = () => { app.host.send({ t: 'noteOff', ch: chId, key: k }); window.removeEventListener('pointerup', up); }; window.addEventListener('pointerup', up); return; }
     const i = zones().findIndex((z) => k >= z.lo && k <= z.hi);
     if (i >= 0) { sel = i; render(); }
@@ -812,7 +806,7 @@ export function multiEditor(win, app, chId) {
     const raw = e.dataTransfer.getData('application/x-stepwise-sample');
     if (!raw) return;
     e.preventDefault(); e.stopPropagation();
-    const s = JSON.parse(raw), r = kb.getBoundingClientRect(), k = LO + Math.floor((e.clientX - r.left) * (kb.width / r.width) / KW);
+    const s = JSON.parse(raw), r = kb.getBoundingClientRect(), k = LO + Math.floor((e.clientX - r.left) / KW);
     await app.bank.ensure(s.id);
     const { defaultZone } = await import('../core/instruments/multisampler.js');
     setZones([...zones(), defaultZone(s, { lo: k, hi: k, root: k })], 'Add zone');

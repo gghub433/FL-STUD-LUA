@@ -2,6 +2,7 @@
 // Alt-drag a segment to bend it, right-click for the segment type (single curve, hold, stairs, smooth
 // stairs, pulse, wave, half sine, smooth), LFO tool, flip, quantize. Shared by every clip of the channel.
 import { h, drag, clamp, clear } from './h.js';
+import { t as tr } from './i18n.js';
 import { contextMenu, showPopup } from './menu.js';
 import { formDialog } from './forms.js';
 import { pickParam } from './param-picker.js';
@@ -135,7 +136,7 @@ function automationEditor(win, app, chId) {
         g.fillStyle = i === sel ? '#fff' : '#ffb02e'; g.fill();
         g.strokeStyle = '#1b1d20'; g.lineWidth = 1.5; g.stroke();
       });
-    } else { g.fillStyle = '#6b757d'; g.textAlign = 'center'; g.fillText('Click to add the first point', (W + LEFT) / 2, H / 2); g.textAlign = 'left'; }
+    } else { g.fillStyle = '#6b757d'; g.textAlign = 'center'; g.fillText(tr('Click to add the first point'), (W + LEFT) / 2, H / 2); g.textAlign = 'left'; }
     // playhead (inside the clip being played)
     const st = app.host.st;
     if (st.playing) {

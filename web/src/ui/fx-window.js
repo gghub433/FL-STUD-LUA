@@ -1,7 +1,8 @@
 // Effect editor windows: header (bypass, mix, presets) + custom visual panel per effect type
 // (EQ with draggable bands and spectrum, dynamics meters, convolver IR picker, 36-slot curve editor)
 // + a schema-generated parameter area for everything else.
-import { h, drag, clamp, clear } from './h.js';
+import { h, drag, clamp, clear, hiDPI } from './h.js';
+import { t as tr } from './i18n.js';
 import { Knob } from './knob.js';
 import { paramControl } from './param-controls.js';
 import { showPopup } from './menu.js';
@@ -196,7 +197,7 @@ function eqPanel(app, track, slotIdx, host, state) {
 
   const freqs = new Float32Array(W / 2);
   for (let i = 0; i < freqs.length; i++) freqs[i] = fromX(i * 2);
-  const ctx = canvas.getContext('2d');
+  const ctx = hiDPI(canvas).g;
   return () => {
     ctx.fillStyle = '#0e1012'; ctx.fillRect(0, 0, W, H);
     ctx.lineWidth = 1; ctx.strokeStyle = '#1f2529'; ctx.fillStyle = '#5b666e'; ctx.font = '10px sans-serif';
@@ -227,7 +228,7 @@ function meterPanel(type, host, state) {
   const W = 640, H = 90;
   const canvas = h('canvas', { width: W, height: H, style: { width: '100%', maxWidth: `${W}px`, height: 'auto', aspectRatio: `${W}/${H}`, background: '#0e1012', display: 'block', borderBottom: '1px solid #000' } });
   host.append(canvas);
-  const ctx = canvas.getContext('2d');
+  const ctx = hiDPI(canvas).g;
   const hist = [];
   return () => {
     ctx.fillStyle = '#0e1012'; ctx.fillRect(0, 0, W, H);
@@ -241,8 +242,8 @@ function meterPanel(type, host, state) {
     hist.forEach((v, i) => ctx.lineTo((i / 300) * (W - 50), 6 + clamp(-v / 24, 0, 1) * (H - 14)));
     ctx.lineTo(((hist.length - 1) / 300) * (W - 50), 6); ctx.closePath(); ctx.fillStyle = 'rgba(230,90,75,.55)'; ctx.fill();
     ctx.fillStyle = '#d5dce0'; ctx.font = '11px sans-serif';
-    if (type === 'multiband') ctx.fillText(`low ${(m[0] || 0).toFixed(1)}  mid ${(m[1] || 0).toFixed(1)}  high ${(m[2] || 0).toFixed(1)}  limiter ${(m[3] || 0).toFixed(1)} dB`, 8, H - 6);
-    else ctx.fillText(`gain reduction ${gr.toFixed(1)} dB`, 8, H - 6);
+    if (type === 'multiband') ctx.fillText(tr(`low ${(m[0] || 0).toFixed(1)}  mid ${(m[1] || 0).toFixed(1)}  high ${(m[2] || 0).toFixed(1)}  limiter ${(m[3] || 0).toFixed(1)} dB`), 8, H - 6);
+    else ctx.fillText(tr(`gain reduction ${gr.toFixed(1)} dB`), 8, H - 6);
   };
 }
 
@@ -276,7 +277,7 @@ function convolverPanel(app, track, slotIdx, host, state) {
   } }, 'Load file…');
   host.append(h('div.row', { style: { padding: '6px 8px', gap: '8px' } }, h('span.dim', 'Impulse response'), sel, load, status), canvas);
   fill();
-  const ctx = canvas.getContext('2d');
+  const ctx = hiDPI(canvas).g;
   let lastId = '';
   return () => {
     const id = irId();
@@ -284,7 +285,7 @@ function convolverPanel(app, track, slotIdx, host, state) {
     status.textContent = state.status ? `· ${state.status}` : '';
     ctx.fillStyle = '#0e1012'; ctx.fillRect(0, 0, 640, 110);
     const e = id ? app.bank.get(id) : null;
-    if (!e) { ctx.fillStyle = '#5b666e'; ctx.fillText('No impulse response selected', 12, 55); return; }
+    if (!e) { ctx.fillStyle = '#5b666e'; ctx.fillText(tr('No impulse response selected'), 12, 55); return; }
     const d = e.channels[0], n = d.length;
     ctx.fillStyle = '#ffb02e';
     for (let x = 0; x < 640; x++) {
@@ -330,7 +331,7 @@ function grossPanel(app, track, slotIdx, host, state) {
 
   // curve editing on a canvas
   const wire = (canvas, key) => {
-    const W = canvas.width, H = canvas.height;
+    const W = canvas.lw || canvas.width, H = canvas.lh || canvas.height;
     const pos = (e) => { const r = canvas.getBoundingClientRect(); return [clamp((e.clientX - r.left) / r.width, 0, 1), clamp(1 - (e.clientY - r.top) / r.height, 0, 1)]; };
     const nearest = (pts, x, y) => { let bi = -1, bd = 0.045; pts.forEach((p, i) => { const d = Math.hypot((p[0] - x) * 2.5, p[1] - y); if (d < bd) { bd = d; bi = i; } }); return bi; };
     canvas.addEventListener('contextmenu', (e) => {
@@ -363,7 +364,7 @@ function grossPanel(app, track, slotIdx, host, state) {
   wire(timeC, 'time'); wire(volC, 'vol');
 
   const draw = (canvas, pts, color, diag) => {
-    const c = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+    const { g: c, W, H } = hiDPI(canvas);
     c.fillStyle = '#0e1012'; c.fillRect(0, 0, W, H);
     c.strokeStyle = '#1f2529'; c.lineWidth = 1;
     for (let i = 1; i < 4; i++) { c.beginPath(); c.moveTo((i / 4) * W, 0); c.lineTo((i / 4) * W, H); c.stroke(); c.beginPath(); c.moveTo(0, (i / 4) * H); c.lineTo(W, (i / 4) * H); c.stroke(); }
@@ -386,6 +387,6 @@ function grossPanel(app, track, slotIdx, host, state) {
     draw(volC, s[editing].vol, '#7fdc5c', false);
     // moving playhead across both curves
     const ph = state.meters && state.meters[0];
-    if (ph !== undefined) for (const cv of [timeC, volC]) { const c = cv.getContext('2d'); c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(ph * cv.width, 0, 2, cv.height); }
+    if (ph !== undefined) for (const cv of [timeC, volC]) { const { g: c, W, H } = hiDPI(cv); c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(ph * W, 0, 2, H); }
   };
 }

@@ -1,5 +1,6 @@
 // Hint bar: hovering any element with data-hint shows "Name — description" bottom-left.
 import { h } from './h.js';
+import { t as tr } from './i18n.js';
 
 export class Hint {
   constructor(el) {
@@ -14,7 +15,7 @@ export class Hint {
   }
 
   render(t) {
-    const text = t ? t.dataset.hint : '';
+    const text = t ? tr(t.dataset.hint) : '';
     this.el.textContent = '';
     if (!text) return;
     const i = text.indexOf(' — ');

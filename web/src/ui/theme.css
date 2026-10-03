@@ -42,7 +42,7 @@ canvas { display: block; }
 
 /* ------------------------------------------------------------ toolbar */
 #toolbar { display: flex; flex-wrap: wrap; align-items: stretch; padding: 2px 3px; background: linear-gradient(#383d42, #2c3034); border-bottom: 1px solid var(--line); min-height: 50px; }
-.tb-section { display: flex; align-items: center; gap: 5px; margin: 2px 2px; padding: 3px 7px 3px 3px; background: linear-gradient(#33383d, #2a2e32); border: 1px solid #141618; border-radius: 3px; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); position: relative; }
+.tb-section { display: flex; align-items: center; gap: 4px; margin: 2px 1px; padding: 3px 5px 3px 3px; background: linear-gradient(#33383d, #2a2e32); border: 1px solid #141618; border-radius: 3px; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); position: relative; }
 .tb-section.drop-before::before, .tb-section.drop-after::after { content: ''; position: absolute; top: -1px; bottom: -1px; width: 3px; background: var(--accent); }
 .tb-section.drop-before::before { left: -4px; } .tb-section.drop-after::after { right: -4px; }
 .tb-grip { width: 7px; align-self: stretch; cursor: grab; border-radius: 2px; background: repeating-linear-gradient(0deg, var(--bg4) 0 1px, transparent 1px 4px); opacity: .6; margin-right: 1px; }
@@ -67,8 +67,8 @@ canvas { display: block; }
 .led.yellow.on { background: radial-gradient(circle at 35% 30%, #fff6b8, var(--yellow) 55%, #9a8610); box-shadow: 0 0 6px rgba(243,216,74,.8); }
 
 .lcd { font-family: var(--mono); background: #101214; color: var(--accent); border: 1px solid #000; border-radius: 3px; padding: 2px 7px; box-shadow: inset 0 1px 3px rgba(0,0,0,.8); display: flex; align-items: center; justify-content: center; cursor: ns-resize; }
-.lcd.time { font-size: 20px; letter-spacing: 1px; min-width: 128px; height: 30px; cursor: pointer; }
-.lcd.time small { font-size: 10px; color: var(--dim); margin-left: 6px; }
+.lcd.time { font-size: 18px; letter-spacing: .5px; min-width: 118px; height: 30px; cursor: pointer; }
+.lcd.time small { font-size: 9.5px; color: var(--dim); margin-left: 5px; }
 .lcd.bpm { font-size: 17px; min-width: 66px; height: 30px; }
 .lcd.small { font-size: 12px; height: 20px; min-width: 38px; }
 .lcd.input { cursor: text; }
@@ -437,3 +437,29 @@ body.midi-learn .knob, body.midi-learn .btn { outline: 1px dashed rgba(127,220,9
 .ms-row { gap: 8px; margin: 3px 0; align-items: center; }
 .ms-zone { border-radius: 3px; }
 .ms-zone.on { background: var(--bg3); }
+
+/* ------------------------------------------------------------ light theme: the dark palette turned over (hues kept) */
+html[data-theme="light"] { filter: invert(1) hue-rotate(180deg); background: #fff; }
+html[data-theme="light"] img, html[data-theme="light"] .no-invert { filter: invert(1) hue-rotate(180deg); }
+html[data-theme="light"] .win, html[data-theme="light"] .popup, html[data-theme="light"] .modal, html[data-theme="light"] .toast { box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+html[data-theme="light"] .btn.on, html[data-theme="light"] .btn.primary { box-shadow: none; }
+
+/* keyboard shortcuts */
+.ks { max-height: 64vh; overflow: auto; }
+.ks-row { display: flex; align-items: center; gap: 8px; padding: 3px 2px; border-bottom: 1px solid var(--line); }
+.ks-label { flex: 1; }
+.ks-keys { display: flex; gap: 4px; min-width: 170px; flex-wrap: wrap; }
+.ks-key { font-family: var(--mono); font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--bg3); border: 1px solid #000; color: var(--accent); }
+.ks-wait { color: var(--accent); }
+.ks-sub { margin: 10px 0 4px; color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+
+/* tour */
+.tour-shade { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 3000; }
+.tour-ring { position: fixed; z-index: 3001; border: 2px solid var(--accent); border-radius: 6px; box-shadow: 0 0 0 9999px rgba(0,0,0,.5), 0 0 18px rgba(255,176,46,.6); pointer-events: none; transition: all .2s ease; }
+.tour-bubble { position: fixed; z-index: 3002; width: 340px; background: var(--bg1); border: 1px solid var(--accent-dim); border-radius: 6px; padding: 12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+.tour-title { font-weight: 700; color: var(--accent); margin-bottom: 6px; font-size: 13px; }
+.tour-text { line-height: 1.45; }
+
+/* HELP > Check for updates */
+.upd-bar { height: 6px; margin: 4px 0 8px; background: var(--bg0); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+.upd-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }

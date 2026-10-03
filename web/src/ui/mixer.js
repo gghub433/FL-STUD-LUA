@@ -1,6 +1,6 @@
 // Mixer window: Master + 125 insert strips (scrolling), and a detail panel for the selected track
 // with the 10 effect slots, 3-band EQ + spectrum analyser, routing and track options.
-import { h, drag, clamp, clear } from './h.js';
+import { h, drag, clamp, clear, hiDPI } from './h.js';
 import { Knob } from './knob.js';
 import { contextMenu, showPopup } from './menu.js';
 import { promptText, pickColor } from './dialog.js';
@@ -306,7 +306,7 @@ export class MixerView {
     }
     this.spCanvas = h('canvas.mx-spectrum', { width: 480, height: 150, hint: 'Spectrum of this track output with the track EQ curve' });
     this.detail.append(h('div.mx-title', 'EQ'), this.spCanvas, eqKnobs);
-    this.sctx = this.spCanvas.getContext('2d');
+    this.sctx = hiDPI(this.spCanvas, 480, 150).g;
 
     // routing
     const routes = h('div.mx-routes');
@@ -421,7 +421,7 @@ export class MixerView {
   drawSpectrum() {
     const c = this.sctx;
     if (!c || !this.spCanvas.isConnected) return;
-    const W = this.spCanvas.width, H = this.spCanvas.height;
+    const W = this.spCanvas.lw, H = this.spCanvas.lh;
     c.fillStyle = '#0e1012'; c.fillRect(0, 0, W, H);
     const fx = (f) => (Math.log(f / 20) / Math.log(1000)) * W;
     c.strokeStyle = '#1e2327'; c.lineWidth = 1; c.fillStyle = '#5b666e'; c.font = '9px sans-serif';

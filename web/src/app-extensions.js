@@ -98,7 +98,6 @@ export function installExtensions(app) {
   ];
   app.openExportDialog = () => openExportDialog(app);
   app.openStartDialog = () => openStartDialog(app);
-  app.keyHooks.add((e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r' && !e.altKey) { openExportDialog(app); return true; } return false; });
 
   // ---- playlist
   app.wm.register('playlist', { title: 'Playlist', create: createPlaylist, rect: { x: 90, y: 50, w: 1060, h: 540 }, minW: 560, minH: 280 });
