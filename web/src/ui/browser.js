@@ -10,6 +10,7 @@ import { INSTRUMENTS } from '../core/instruments/index.js';
 import { EFFECTS } from '../core/effects/index.js';
 import { INSTRUMENT_PRESETS, EFFECT_PRESETS } from '../core/presets.js';
 import { TEMPLATES } from '../core/templates.js';
+import { loadedPacks, packSounds } from '../core/packs.js';
 import { userPresets, saveUserPresets } from './presets-ui.js';
 import { createProject, createChannel, createNote, createClip, currentArrangement, normalize, barTicks } from '../core/project.js';
 import { renderOffline } from '../core/offline.js';
@@ -55,6 +56,7 @@ export class Browser {
     bus.on('library', refresh); bus.on('presets', refresh); bus.on('saved', refresh); bus.on('autosaved', () => { this.cache.delete('backup'); });
     bus.on('samples', () => { this.cache.delete('current'); });
     bus.on('project', refresh);
+    bus.on('plugins', refresh);                                           // a pack with sounds was installed or removed
     bus.on('change', ({ paths }) => { if (this.visible() && this.open.has('current') && paths.some((p) => ['channels', 'patterns', 'playlist'].includes(p[0]))) { this.cache.delete('current'); this.renderSoon(); } });
   }
 
@@ -95,7 +97,13 @@ export class Browser {
     const cats = {};
     for (const f of FACTORY) (cats[f.cat] = cats[f.cat] || []).push(f);
     const packs = { id: 'packs', label: 'Packs', folder: true, children: () => [{ id: 'packs:fl', label: 'FL LUA Drums', folder: true, children: () => Object.entries(cats).map(([c, list]) => ({ id: `packs:fl:${c}`, label: c, folder: true, children: () => list.map((f) => ({ id: `s:${f.id}`, label: f.name, sample: { id: factoryId(f.id), name: f.name } })) })) },
-      { id: 'packs:ir', label: 'Impulse responses', folder: true, children: () => IRS.map((f) => ({ id: `ir:${f.id}`, label: f.name, sample: { id: `factory:${f.id}`, name: f.name } })) }] };
+      { id: 'packs:ir', label: 'Impulse responses', folder: true, children: () => IRS.map((f) => ({ id: `ir:${f.id}`, label: f.name, sample: { id: `factory:${f.id}`, name: f.name } })) },
+      // sound packs from the Plugin store: their samples are made by the pack's code when first used
+      ...loadedPacks().filter((pk) => pk.sounds > 0).map((pk) => ({ id: `packs:p:${pk.id}`, label: pk.name, folder: true, children: () => {
+        const byCat = {};
+        for (const [id, s] of packSounds) if (s.pack === pk.id) (byCat[s.cat] = byCat[s.cat] || []).push({ id: `ps:${id}`, label: s.name, sample: { id, name: s.name } });
+        return Object.entries(byCat).map(([c, list]) => ({ id: `packs:p:${pk.id}:${c}`, label: c, folder: true, children: () => list }));
+      } }))] };
 
     const instNodes = () => {
       const types = new Set([...Object.keys(INSTRUMENT_PRESETS)]);

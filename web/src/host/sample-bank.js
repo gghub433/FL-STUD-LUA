@@ -4,6 +4,7 @@ import { renderFactorySample, isFactoryId, factoryName } from '../core/factory.j
 import { projectPatchSampleIds } from '../core/patcher/spec.js';
 import { idbGet, idbPut } from './idb.js';
 import { stretchAudio } from '../core/stretch.js';
+import { isPackSoundId, renderPackSound, packSounds } from '../core/packs.js';
 
 // cyrb53 string/array hash, used to give identical audio the same id
 function hashPCM(ch, rate) {
@@ -78,6 +79,10 @@ export class SampleBank {
         if (!data) return null;
         return this.addPCM(factoryName(id), this.host.sampleRate, Array.isArray(data) ? data : [data], id, false);
       }
+      if (isPackSoundId(id) && packSounds.has(id)) {                    // a sound from an installed pack: made by its code
+        const data = renderPackSound(id, this.host.sampleRate);
+        return data ? this.addPCM(packSounds.get(id).name, this.host.sampleRate, data, id, false) : null;
+      }
       const st = /^stretch:(.+):([\d.]+):(-?[\d.]+)$/.exec(id);
       if (st) {                              // derived time-stretched copy: rebuild it from its source
         const src = await this.ensure(st[1]);
@@ -100,6 +105,7 @@ export class SampleBank {
       if (ch.sample && ch.sample.id) ids.add(ch.sample.id);
       if (ch.sample && ch.sample.use) ids.add(ch.sample.use);
       if (ch.pads) for (const pad of ch.pads) for (const l of pad.layers || []) if (l.sample) ids.add(l.sample.id);
+      if (ch.zones) for (const z of ch.zones) if (z.sample) ids.add(z.sample.id);
     }
     for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) ids.add(f.extra.irId);
     for (const a of project.playlist.arrangements) for (const c of a.clips) if (c.use) ids.add(c.use);

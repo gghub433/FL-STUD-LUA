@@ -11,8 +11,9 @@ import * as wavetable from './wavetable.js';
 import * as controller from './controller.js';
 import * as patcher from './patcher.js';
 import * as midiout from './midiout.js';
+import * as multi from './multisampler.js';
 
-export const INSTRUMENTS = { sampler, fpc, slicer, subsynth, fm, drums, wavetable, pluck, organ, controller, patcher, midiout };
+export const INSTRUMENTS = { sampler, fpc, slicer, subsynth, fm, drums, wavetable, pluck, organ, controller, patcher, midiout, multi };
 
 export function registerInstrument(type, mod) { INSTRUMENTS[type] = mod; }
 export const hasInstrument = (type) => Object.prototype.hasOwnProperty.call(INSTRUMENTS, type);

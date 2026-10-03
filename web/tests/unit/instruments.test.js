@@ -187,7 +187,7 @@ const hz = (key) => 440 * Math.pow(2, (key - 69) / 12);
 test('every registered instrument has schema + meta and renders finite, bounded audio for notes across the range', () => {
   for (const [type, mod] of Object.entries(INSTRUMENTS)) {
     assert.ok(mod.schema.length && mod.meta.name, type);
-    if (['sampler', 'fpc', 'slicer', 'controller', 'midiout'].includes(type)) continue;          // need samples / make no sound; covered elsewhere
+    if (['sampler', 'fpc', 'slicer', 'controller', 'midiout', 'multi'].includes(type)) continue;          // need samples / make no sound; covered elsewhere
     const inst = mkInst(type);
     for (const k of [24, 60, 96, 120]) {
       const { L, R } = render(inst, 8192, [{ at: 0, fn: () => inst.noteOn(ev(k)) }, { at: 5000, fn: () => inst.noteOff(k) }]);

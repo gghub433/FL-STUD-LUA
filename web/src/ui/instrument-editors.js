@@ -739,3 +739,109 @@ export function midiOutEditor(win, app, chId) {
   return { el, destroy() { for (const s of subs) s(); } };
 }
 midiOutEditor.rect = { w: 560, h: 420 };
+
+// Multisampler: zones on a keyboard (click a zone to select it, click a key to hear it), the zone list, and the shared
+// amp / filter / play controls. Add samples from files (auto-mapped by pitch or file name) or drop them from the Browser.
+export function multiEditor(win, app, chId) {
+  const store = app.store, cmd = app.cmd;
+  const ch = () => store.channel(chId);
+  const schema = instrumentSchema('multi');
+  win.setTitle(ch().name, 'Multisampler');
+  let sel = 0;
+  const zones = () => (ch() ? ch().zones : []);
+  const setZones = (list, label = 'Edit zones') => cmd.setChannelField(store, chId, 'zones', list, label);
+  const addFiles = () => {
+    const inp = h('input', { type: 'file', accept: 'audio/*,.wav,.mp3,.ogg,.flac,.aif,.aiff', multiple: true, style: { display: 'none' } });
+    inp.addEventListener('change', async () => {
+      const files = [...inp.files]; inp.remove();
+      if (!files.length) return;
+      app.toast(`Mapping ${files.length} sample${files.length === 1 ? '' : 's'}…`);
+      const { detectPitch, keyFromName } = await import('../core/pitch-detect.js');
+      const { defaultZone, autoRanges } = await import('../core/instruments/multisampler.js');
+      const made = [];
+      let next = 60;
+      for (const f of files) {
+        try {
+          const e = await app.bank.decode(f.name, await f.arrayBuffer());
+          const named = keyFromName(f.name), pit = detectPitch(e.channels, e.rate);
+          const root = named ?? (pit && pit.confidence > 0.6 ? Math.round(pit.key) : next++);
+          made.push(defaultZone({ id: e.id, name: e.name }, { root }));
+        } catch (err) { app.toast(`Could not load ${f.name}`); }
+      }
+      if (!made.length) return;
+      const all = [...zones().map((z) => ({ ...z })), ...made];
+      setZones(made.length > 1 || zones().length ? autoRanges(all) : all, 'Add samples');
+      app.toast(`Added ${made.length} zone${made.length === 1 ? '' : 's'}`);
+    });
+    document.body.append(inp); inp.click();
+  };
+  const head = h('div.rack-head', h('span.dim', 'Name'), (() => { const i = h('input.field', { type: 'text', value: ch().name, style: { width: '130px' } }); i.addEventListener('keydown', (e) => e.stopPropagation()); i.addEventListener('change', () => cmd.renameChannel(store, chId, i.value || ch().name)); return i; })(),
+    h('div.btn', { hint: 'Add audio files as zones: each is placed at its pitch (or the note in its file name)', onclick: addFiles }, '＋ Samples…'),
+    h('div.btn', { hint: 'Spread the zones so each reaches halfway to its neighbours', onclick: async () => { const { autoRanges } = await import('../core/instruments/multisampler.js'); setZones(autoRanges(zones().map((z) => ({ ...z }))), 'Auto-map zones'); } }, 'Auto-map'),
+    h('div.grow'),
+    h('div.btn', { hint: 'Presets', onclick: (e) => { const r = e.currentTarget.getBoundingClientRect(); showPopup(instrumentPresetItems(app, chId), r.left, r.bottom, r); } }, 'Presets ▾'),
+    h('div.btn', { hint: 'Play middle C', onclick: () => app.preview(chId) }, '▶ Preview'));
+  const KW = 9, LO = 12, HI = 120;
+  const kb = h('canvas', { width: (HI - LO + 1) * KW, height: 120, style: { display: 'block', cursor: 'pointer' } });
+  const kbWrap = h('div', { style: { overflowX: 'auto', background: '#0e1012', flex: 'none' } }, kb);
+  const COLORS = ['#ffb02e', '#5aaedc', '#7fdc5c', '#d96bd1', '#e6c84b', '#4bd6c3', '#e65a4b', '#9b8cff'];
+  const draw = () => {
+    const g = kb.getContext('2d'), W = kb.width, H = kb.height, keyH = 34;
+    g.fillStyle = '#0e1012'; g.fillRect(0, 0, W, H);
+    zones().forEach((z, i) => {
+      const x0 = (Math.max(LO, z.lo) - LO) * KW, x1 = (Math.min(HI, z.hi) - LO + 1) * KW;
+      const y0 = 4 + (1 - (z.vhi || 127) / 127) * (H - keyH - 10), y1 = 4 + (1 - ((z.vlo || 1) - 1) / 127) * (H - keyH - 10);
+      g.fillStyle = COLORS[i % COLORS.length] + (i === sel ? 'cc' : '55');
+      g.fillRect(x0 + 1, y0, Math.max(2, x1 - x0 - 2), Math.max(3, y1 - y0));
+      if (z.root >= LO && z.root <= HI) { g.fillStyle = '#fff'; g.fillRect((z.root - LO) * KW + KW / 2 - 1, y0, 2, Math.max(3, y1 - y0)); }
+    });
+    for (let k = LO; k <= HI; k++) {
+      const x = (k - LO) * KW, black = [1, 3, 6, 8, 10].includes(k % 12);
+      g.fillStyle = black ? '#22272b' : '#d8dcdf'; g.fillRect(x, H - keyH, KW - 1, keyH);
+      if (k % 12 === 0) { g.fillStyle = '#5b636b'; g.font = '9px sans-serif'; g.fillText(keyName(k), x + 1, H - keyH - 2); }
+    }
+  };
+  kb.addEventListener('pointerdown', (e) => {
+    const r = kb.getBoundingClientRect(), k = LO + Math.floor((e.clientX - r.left) * (kb.width / r.width) / KW), y = e.clientY - r.top;
+    if (y > r.height - 34) { app.host.resume(); app.host.send({ t: 'noteOn', ch: chId, key: k, vel: 0.8 }); const up = () => { app.host.send({ t: 'noteOff', ch: chId, key: k }); window.removeEventListener('pointerup', up); }; window.addEventListener('pointerup', up); return; }
+    const i = zones().findIndex((z) => k >= z.lo && k <= z.hi);
+    if (i >= 0) { sel = i; render(); }
+  });
+  kb.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('application/x-stepwise-sample')) { e.preventDefault(); e.stopPropagation(); } });
+  kb.addEventListener('drop', async (e) => {
+    const raw = e.dataTransfer.getData('application/x-stepwise-sample');
+    if (!raw) return;
+    e.preventDefault(); e.stopPropagation();
+    const s = JSON.parse(raw), r = kb.getBoundingClientRect(), k = LO + Math.floor((e.clientX - r.left) * (kb.width / r.width) / KW);
+    await app.bank.ensure(s.id);
+    const { defaultZone } = await import('../core/instruments/multisampler.js');
+    setZones([...zones(), defaultZone(s, { lo: k, hi: k, root: k })], 'Add zone');
+    sel = zones().length - 1;
+  });
+  const list = h('div', { style: { padding: '4px 8px' } });
+  const num = (z, i, key, min, max, w = 54, step = 1) => { const inp = h('input.field', { type: 'number', min, max, step, value: z[key], style: { width: `${w}px` } }); inp.addEventListener('keydown', (e) => e.stopPropagation()); inp.addEventListener('change', () => { const all = zones().map((x) => ({ ...x })); all[i][key] = Math.max(min, Math.min(max, +inp.value)); setZones(all); }); return inp; };
+  const renderList = () => {
+    clear(list);
+    if (!zones().length) { list.append(h('div.dim', { style: { padding: '8px 2px' } }, 'No zones yet. Add samples from files, or drag sounds from the Browser onto the keyboard.')); return; }
+    list.append(h('div.row.dim', { style: { gap: '6px', fontSize: '10px', padding: '2px 0' } }, h('span', { style: { width: '150px' } }, 'Sample'), ...['Low', 'High', 'Root', 'Vel lo', 'Vel hi', 'Gain', 'Tune'].map((t, k) => h('span', { style: { width: k === 6 ? '60px' : '54px' } }, t)), h('span', 'Loop')));
+    zones().forEach((z, i) => {
+      const loop = h('input', { type: 'checkbox', checked: !!z.loop, onchange: () => { const all = zones().map((x) => ({ ...x })); all[i].loop = loop.checked ? 1 : 0; setZones(all); } });
+      list.append(h('div.row' + (i === sel ? '.ms-zone.on' : '.ms-zone'), { style: { gap: '6px', padding: '2px 0' }, onclick: () => { if (sel !== i) { sel = i; draw(); list.querySelectorAll('.ms-zone').forEach((el, j) => el.classList.toggle('on', j === i)); } } },
+        h('span', { style: { width: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLORS[i % COLORS.length] }, hint: z.sample.name }, z.sample.name),
+        num(z, i, 'lo', 0, 127), num(z, i, 'hi', 0, 127), num(z, i, 'root', 0, 127), num(z, i, 'vlo', 1, 127), num(z, i, 'vhi', 1, 127), num(z, i, 'gain', -48, 24, 54, 0.5), num(z, i, 'tune', -1200, 1200, 60, 1), loop,
+        h('div.btn.sm', { hint: 'Remove this zone', onclick: (e) => { e.stopPropagation(); setZones(zones().filter((_, j) => j !== i), 'Remove zone'); sel = Math.max(0, sel - 1); } }, '✕')));
+    });
+  };
+  const knobs = h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '10px 14px', padding: '8px 10px' } }, schema.map((d) => paramControl(app, addrOf(chId)(d.id), d)));
+  const body = h('div.scroll', { style: { flex: 1, minHeight: 0 } }, h('div.mx-title', 'Zones'), list, h('div.mx-title', 'Sound'), knobs);
+  const render = () => { draw(); renderList(); };
+  const el = h('div.rack', head, kbWrap, body);
+  const subs = [
+    store.bus.on('change', ({ paths }) => { if (paths.some((p) => p[0] === 'channels')) { if (!ch()) { win.close(); return; } if (!list.contains(document.activeElement)) render(); win.setTitle(ch().name, 'Multisampler'); } }),
+    store.bus.on('project', () => { if (!ch()) win.close(); else render(); }),
+  ];
+  render();
+  requestAnimationFrame(() => { kbWrap.scrollLeft = (48 - LO) * KW - 40; });
+  return { el, destroy() { for (const s of subs) s(); } };
+}
+multiEditor.rect = { w: 760, h: 560 };

@@ -135,6 +135,9 @@ export function renderFactorySample(id, sr) {
 
 export const factoryName = (id) => (FACTORY_BY_ID.get(id) || IR_BY_ID.get(id) || {}).name || id;
 
+// pack sounds are rendered by core/packs.js, which registers itself here (no import cycle)
+export const extraSounds = { render: null };
+
 // Map id -> { rate, channels } for every factory sample a project references (used by offline render / tests).
 export function collectFactorySamples(project, sr) {
   const map = new Map();
@@ -142,11 +145,14 @@ export function collectFactorySamples(project, sr) {
   for (const ch of project.channels) {
     if (ch.sample && ch.sample.id) need.add(ch.sample.id);
     if (ch.pads) for (const pad of ch.pads) for (const l of pad.layers || []) if (l.sample) need.add(l.sample.id);
+    if (ch.zones) for (const z of ch.zones) if (z.sample) need.add(z.sample.id);
   }
   for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) need.add(f.extra.irId);
   projectPatchSampleIds(project, need);
   for (const id of need) {
-    if (!isFactoryId(id) || map.has(id)) continue;
+    if (map.has(id)) continue;
+    if (id.startsWith('pack:') && extraSounds.render) { const d = extraSounds.render(id, sr); if (d) map.set(id, { rate: sr, channels: d }); continue; }
+    if (!isFactoryId(id)) continue;
     const data = renderFactorySample(id, sr);
     if (data) map.set(id, { rate: sr, channels: Array.isArray(data) ? data : [data] });
   }

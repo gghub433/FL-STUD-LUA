@@ -21,6 +21,7 @@ import { BLOCK, PPQ } from './constants.js';
 import { INSTRUMENTS, registerInstrument, hasInstrument } from './instruments/index.js';
 import { EFFECTS, registerEffect, hasEffect } from './effects/index.js';
 import { INSTRUMENT_PRESETS, EFFECT_PRESETS } from './presets.js';
+import { extraSounds } from './factory.js';
 
 export const PACK_API_VERSION = 1;
 export const ID_RE = /^[a-z0-9][a-z0-9-]{1,30}$/;
@@ -43,6 +44,16 @@ export let lastPack = null;              // info of the pack registered last (re
 export const loadedPacks = () => [...packs.values()];
 // MIDI controller scripts from packs: id -> { name, description, ports: [substring of the device name], create(api) }
 export const controllerScripts = new Map();
+// Sounds from packs (samples made by code when first used): 'pack:<pack id>:<sound>' -> { name, cat, pack, gen(sr) }
+export const packSounds = new Map();
+export const isPackSoundId = (id) => typeof id === 'string' && id.startsWith('pack:');
+extraSounds.render = (id, sr) => renderPackSound(id, sr);
+export function renderPackSound(id, sr) {
+  const s = packSounds.get(id);
+  if (!s) return null;
+  const out = s.gen(sr);
+  return Array.isArray(out) ? out.slice(0, 2) : [out];
+}
 export const resetLastPack = () => { lastPack = null; };
 export const packOfType = (type) => { const i = String(type).indexOf('.'); return i > 0 ? String(type).slice(0, i) : null; };
 
@@ -137,9 +148,9 @@ export function validatePack(desc, { smoke = true } = {}) {
   if (typeof desc.name !== 'string' || !desc.name || desc.name.length > 60) fail('pack', 'the name is missing or longer than 60 characters');
   if (typeof desc.version !== 'string' || !/^\d+\.\d+\.\d+/.test(desc.version)) fail('pack', 'the version must look like 1.0.0');
   if ((desc.api || 1) > PACK_API_VERSION) fail('pack', `this pack needs plugin API ${desc.api} (this FL LUA has ${PACK_API_VERSION}): update FL LUA`);
-  if (typeof desc.plugins !== 'function') fail('pack', 'plugins must be a function that receives the API');
-  let made;
-  try { made = desc.plugins(packApi()); } catch (e) { fail('pack', `plugins() threw: ${e.message || e}`); }
+  if (typeof desc.plugins !== 'function' && typeof desc.sounds !== 'function') fail('pack', 'plugins must be a function that receives the API');
+  let made = {};
+  if (typeof desc.plugins === 'function') { try { made = desc.plugins(packApi()); } catch (e) { fail('pack', `plugins() threw: ${e.message || e}`); } }
   const plugins = [];
   const take = (kind, group) => {
     for (const [name, mod] of Object.entries(group || {})) {
@@ -164,14 +175,39 @@ export function validatePack(desc, { smoke = true } = {}) {
     if (mod.ports !== undefined && !(Array.isArray(mod.ports) && mod.ports.every((x) => typeof x === 'string'))) fail(where, 'ports must be a list of device names');
     plugins.push({ kind: 'controller', type: where, name, mod, desc: String(mod.meta.description || ''), title: mod.meta.name });
   }
-  if (!plugins.length) fail('pack', 'the pack contains no plugins');
+  // sounds: { category: { id: { name, gen(sr) -> Float32Array | [L, R] } } }
+  const sounds = [];
+  const sdesc = typeof desc.sounds === 'function' ? (() => { try { return desc.sounds(packApi()); } catch (e) { return fail('pack', `sounds() threw: ${e.message || e}`); } })() : null;
+  for (const [cat, list] of Object.entries(sdesc || {})) {
+    if (typeof cat !== 'string' || !cat || cat.length > 40) fail('pack', 'sound categories are names up to 40 characters');
+    for (const [name, snd] of Object.entries(list || {})) {
+      const where = `${desc.id}.${name}`;
+      if (!ID_RE.test(name)) fail(where, 'sound ids are 2 to 31 characters of a-z, 0-9 and "-"');
+      if (!snd || typeof snd.gen !== 'function' || typeof snd.name !== 'string' || !snd.name) fail(where, 'a sound needs a name and gen(sampleRate)');
+      if (sounds.some((x) => x.id === name)) fail(where, 'duplicate sound id');
+      sounds.push({ id: name, name: snd.name.slice(0, 60), cat, gen: snd.gen });
+    }
+  }
+  if (sounds.length > 500) fail('pack', 'more than 500 sounds in one pack');
+  if (!plugins.length && !sounds.length) fail('pack', 'the pack contains no plugins');
   if (plugins.length > 40) fail('pack', 'more than 40 plugins in one pack');
   for (const p of smoke ? plugins : []) {
     const t0 = now();
     try { (p.kind === 'instrument' ? smokeInstrument : p.kind === 'effect' ? smokeEffect : smokeScript)(p.type, p.mod, t0); }
     catch (e) { if (/^[\w.-]+: /.test(e.message)) throw e; fail(p.type, `crashed during the self-test: ${e.message || e}`); }
   }
-  return { id: desc.id, name: desc.name, version: desc.version, author: String(desc.author || ''), license: String(desc.license || ''), description: String(desc.description || ''), plugins };
+  if (smoke && sounds.length) {
+    const t0 = now();
+    for (const s of sounds) {
+      let out;
+      try { out = s.gen(11025); } catch (e) { fail(`${desc.id}.${s.id}`, `could not render: ${e.message || e}`); }
+      const chs = Array.isArray(out) ? out : [out];
+      if (!chs.length || !chs.every((c) => c instanceof Float32Array && c.length > 0 && c.length <= 11025 * 60)) fail(`${desc.id}.${s.id}`, 'a sound must be one or two Float32Arrays, up to 60 seconds');
+      if (!chs.every((c) => bounded(c, 4))) fail(`${desc.id}.${s.id}`, 'the sound contains NaN or runaway levels');
+    }
+    if (now() - t0 > 20000) fail('pack', 'the sounds take far too long to make');
+  }
+  return { id: desc.id, name: desc.name, version: desc.version, author: String(desc.author || ''), license: String(desc.license || ''), description: String(desc.description || ''), plugins, sounds };
 }
 
 // Validates and registers a pack. Registering a pack id again replaces it (an update).
@@ -184,7 +220,9 @@ export function registerPack(desc, opts) {
     else if (p.kind === 'effect') { registerEffect(p.type, mod); if (p.mod.presets) EFFECT_PRESETS[p.type] = { ...p.mod.presets }; }
     else controllerScripts.set(p.type, { name: p.title, description: p.desc, ports: p.mod.ports || [], create: p.mod.create, pack: v.id });
   }
-  const info = { id: v.id, name: v.name, version: v.version, author: v.author, license: v.license, description: v.description, plugins: v.plugins.map((p) => ({ kind: p.kind, type: p.type, name: p.title, description: p.desc })) };
+  for (const k of [...packSounds.keys()]) if (packSounds.get(k).pack === v.id) packSounds.delete(k);
+  for (const s of v.sounds) packSounds.set(`pack:${v.id}:${s.id}`, { name: s.name, cat: s.cat, pack: v.id, gen: s.gen });
+  const info = { id: v.id, name: v.name, version: v.version, author: v.author, license: v.license, description: v.description, plugins: v.plugins.map((p) => ({ kind: p.kind, type: p.type, name: p.title, description: p.desc })), sounds: v.sounds.length };
   packs.set(v.id, info);
   lastPack = info;
   return info;
@@ -199,6 +237,7 @@ export function unregisterPack(id) {
     else if (p.kind === 'effect') { delete EFFECTS[p.type]; delete EFFECT_PRESETS[p.type]; }
     else controllerScripts.delete(p.type);
   }
+  for (const k of [...packSounds.keys()]) if (packSounds.get(k).pack === id) packSounds.delete(k);
   packs.delete(id);
   return true;
 }
@@ -240,6 +279,12 @@ export function noteMissing(raw) {
     if (!dropped.has(pack)) dropped.set(pack, new Set());
     for (const t of types) dropped.get(pack).add(t);
   }
+}
+// a 'pack:<id>:<sound>' sample that neither the pack nor the saved project could provide
+export function noteMissingSound(id) {
+  const pack = String(id).split(':')[1] || 'unknown';
+  if (!dropped.has(pack)) dropped.set(pack, new Set());
+  dropped.get(pack).add('sounds');
 }
 export function takeMissing() {
   const out = [...dropped].map(([pack, types]) => ({ pack, types: [...types] }));

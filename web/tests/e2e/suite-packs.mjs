@@ -29,7 +29,7 @@ export async function run() {
     await page.locator('.menu-top', { hasText: 'TOOLS' }).click();
     await page.locator('.popup .item', { hasText: 'Plugin store' }).click();
     await page.waitForSelector(`${store} .ps-card`);
-    ok((await page.locator(`${store} .ps-card`).count()) === 3, 'three packs');
+    ok((await page.locator(`${store} .ps-card`).count()) === 6, 'six packs');
     const text = await page.locator(store).innerText();
     for (const n of ['FL LUA Synths', 'FL LUA Effects', 'Acid Bass', 'Tri-Osc', 'Chip', 'Additive', 'Soft Clipper', 'Maximizer', 'Hyper Chorus', 'Waveshaper', 'Overdrive', 'Delay Bank', 'Pitcher']) ok(text.includes(n), `lists ${n}`);
     ok((await page.locator(`${store} .ps-state`).count()) === 0, 'nothing installed');
@@ -178,5 +178,81 @@ export async function run() {
     ok(!(await ev(() => app.packs.has('e2e-pack'))) && (await ev(() => app.packs.has('fllua-synths'))), 'the removed pack is gone, the others remain');
     ok(!(await ev(async () => (await import('/src/core/effects/index.js')).hasEffect('e2e-pack.amp'))), 'its effect is unregistered');
     await clearPacks();
+  });
+
+  await test('sound, drum machine and keys packs: sounds in the Browser, drums on GM notes, keys play', async () => {
+    await clearPacks();
+    await open('/');
+    await openStore();
+    for (const name of ['FL LUA Sounds', 'FL LUA Drum Machines', 'FL LUA Keys']) {
+      await card(name).locator('.btn', { hasText: 'Install' }).click();
+      await page.waitForSelector(`${store} .ps-card:has-text("${name}") .ps-state`, { timeout: 20000 });
+    }
+    ok((await card('FL LUA Sounds').innerText()).includes('52 sounds'), 'the store shows the sound count');
+    await ev(() => app.wm.get('store').close());
+    // the Browser lists the pack's sounds by category; double-click adds a Sampler with the sound
+    await ev(() => { app.showBrowser(true); app.browser.open = new Set(['packs']); app.browser.cache.clear(); app.browser.render(); });
+    await sleep(300);
+    const row = (label) => page.locator('#browser-pane .br-row', { hasText: label }).first();
+    await row('FL LUA Sounds').click(); await sleep(200);
+    await row('Claps').click(); await sleep(200);
+    ok((await page.locator('#browser-pane .br-row.leaf', { hasText: 'Clap 707' }).count()) === 1, 'Clap 707 listed');
+    await ev(async () => { const { emptyProject } = await import('/src/core/demo.js'); await app.store.replaceProject(emptyProject()); });
+    await page.locator('#browser-pane .br-row.leaf', { hasText: 'Clap 707' }).dblclick(); await sleep(500);
+    const smp = await ev(() => { const c = app.store.project.channels.at(-1); return c && c.sample && { id: c.sample.id, has: app.bank.has(c.sample.id) }; });
+    ok(smp && smp.id === 'pack:fllua-sounds:clap-707' && smp.has, `sampler with the pack sound: ${JSON.stringify(smp)}`);
+    await page.screenshot({ path: 'tests/e2e/out/sounds-browser.png' });
+    // DM-9 plays a beat written on General MIDI notes
+    const id = await ev(() => {
+      const ch = app.addInstrument('fllua-drum-machines.dm-9');
+      app.cmd.setMixerTarget(app.store, ch.id, 6);
+      for (const [s, k] of [[0, 36], [4, 38], [2, 42], [6, 46]]) app.cmd.setStep(app.store, ch.id, s, true, { key: k });
+      return ch.id;
+    });
+    await play();
+    const pk = await maxPeak(6, 1500);
+    await stop();
+    ok(pk > 0.05, `DM-9 is heard: ${pk}`);
+    await ev((id) => app.wm.get(`plugin:${id}`) && app.wm.get(`plugin:${id}`).close(), id);
+    // the Piano from the Keys pack
+    const kid = await ev(() => { const ch = app.addInstrument('fllua-keys.piano'); app.cmd.setMixerTarget(app.store, ch.id, 7); app.cmd.setStep(app.store, ch.id, 0, true, { key: 60 }); return ch.id; });
+    await play();
+    const pk2 = await maxPeak(7, 1200);
+    await stop();
+    ok(pk2 > 0.02, `Piano is heard: ${pk2}`);
+    await ev((id) => app.wm.get(`plugin:${id}`) && app.wm.get(`plugin:${id}`).close(), kid);
+    await clearPacks();
+  });
+
+  await test('Multisampler: the editor maps zones on a keyboard; a dropped Browser sound becomes a zone that plays', async () => {
+    const id = await ev(async () => {
+      const { emptyProject } = await import('/src/core/demo.js');
+      await app.store.replaceProject(emptyProject());
+      const ch = app.addInstrument('multi');
+      app.cmd.setMixerTarget(app.store, ch.id, 4);
+      return ch.id;
+    });
+    await page.waitForSelector(`.win[data-id="plugin:${id}"]`);
+    const win = page.locator(`.win[data-id="plugin:${id}"]`);
+    ok((await win.innerText()).includes('No zones yet'), 'empty editor explains what to do');
+    // drop the factory 808 sub on the keyboard at C3
+    await ev((id) => {
+      const cv = document.querySelector(`.win[data-id="plugin:${id}"] canvas`);
+      const r = cv.getBoundingClientRect(), KW = 9, LO = 12, key = 48;
+      const x = r.left + ((key - LO) * KW + 4) * (r.width / cv.width);
+      const dt = new DataTransfer();
+      dt.setData('application/x-stepwise-sample', JSON.stringify({ id: 'factory:sub-808', name: 'Sub 808' }));
+      cv.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, clientX: x, clientY: r.top + 20, bubbles: true, cancelable: true }));
+    }, id);
+    await sleep(500);
+    const z = await ev((id) => app.store.channel(id).zones, id);
+    ok(z.length === 1 && z[0].root === 48 && z[0].lo === 48 && z[0].sample.id === 'factory:sub-808', `zone ${JSON.stringify(z)}`);
+    // widen it and play
+    await ev(async (id) => { const { autoRanges } = await import('/src/core/instruments/multisampler.js'); app.cmd.setChannelField(app.store, id, 'zones', autoRanges(app.store.channel(id).zones.map((x) => ({ ...x })))); app.cmd.setStep(app.store, id, 0, true, { key: 48 }); }, id);
+    await play();
+    const pk = await maxPeak(4, 1200);
+    await stop();
+    ok(pk > 0.05, `the zone plays: ${pk}`);
+    await page.screenshot({ path: 'tests/e2e/out/multisampler.png' });
   });
 }

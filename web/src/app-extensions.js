@@ -19,11 +19,11 @@ import { openAudioEditor } from './ui/audio-editor.js';
 import { createStore } from './ui/plugin-store.js';
 import { openMidiSettings } from './ui/midi-settings.js';
 import { confirmBox } from './ui/dialog.js';
-import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor, midiOutEditor } from './ui/instrument-editors.js';
+import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor, midiOutEditor, multiEditor } from './ui/instrument-editors.js';
 
 export function installExtensions(app) {
   // ---- dedicated instrument editors (types without an entry fall back to the generic parameter editor)
-  app.editors = Object.assign(app.editors || {}, { sampler: samplerEditor, fpc: fpcEditor, slicer: slicerEditor, drums: drumsEditor, subsynth: synthEditor, fm: fmEditor, organ: organEditor, wavetable: wavetableEditor, controller: controllerEditor, patcher: patcherEditor, midiout: midiOutEditor });
+  app.editors = Object.assign(app.editors || {}, { sampler: samplerEditor, fpc: fpcEditor, slicer: slicerEditor, drums: drumsEditor, subsynth: synthEditor, fm: fmEditor, organ: organEditor, wavetable: wavetableEditor, controller: controllerEditor, patcher: patcherEditor, midiout: midiOutEditor, multi: multiEditor });
   app.store.bus.on('replaced', () => app.wm.closeDynamic());
 
   // ---- automation, controllers, MIDI

@@ -12,6 +12,7 @@ export function userSampleIds(project) {
   for (const c of project.channels) {
     if (c.sample) { ids.add(c.sample.id); if (c.sample.use) ids.add(c.sample.use); }
     if (c.pads) for (const pd of c.pads) for (const l of pd.layers || []) ids.add(l.sample.id);
+    if (c.zones) for (const z of c.zones) if (z.sample) ids.add(z.sample.id);
   }
   for (const t of project.mixer.tracks) for (const f of t.fx) if (f && f.extra && f.extra.irId) ids.add(f.extra.irId);
   for (const a of project.playlist.arrangements) for (const c of a.clips) if (c.use) ids.add(c.use);

@@ -31,6 +31,29 @@
       ]
     },
     {
+      "id": "fllua-drum-machines",
+      "name": "FL LUA Drum Machines",
+      "version": "1.0.0",
+      "author": "FL LUA",
+      "license": "MIT",
+      "description": "DM-8 and DM-9: analog-style drum machines synthesised in real time, on General MIDI notes, with level, tune and decay for every drum.",
+      "file": "drum-machines.flpack.js",
+      "size": 12279,
+      "sha256": "53a6879446a235b6202ba10a192a7f2cf2ca692b66996cf460962dac6e4eecec",
+      "plugins": [
+        {
+          "kind": "instrument",
+          "name": "DM-8",
+          "description": "Analog-style drum machine with a long booming kick, congas, cowbell and claves (General MIDI notes)"
+        },
+        {
+          "kind": "instrument",
+          "name": "DM-9",
+          "description": "Punchy analog-style drum machine with a clicky driven kick, bright snare, crash and ride (General MIDI notes)"
+        }
+      ]
+    },
+    {
       "id": "fllua-effects",
       "name": "FL LUA Effects",
       "version": "1.0.0",
@@ -77,6 +100,52 @@
           "description": "Monophonic pitch corrector: snaps a voice or lead to a scale (reports its latency)"
         }
       ]
+    },
+    {
+      "id": "fllua-keys",
+      "name": "FL LUA Keys",
+      "version": "1.0.0",
+      "author": "FL LUA",
+      "license": "MIT",
+      "description": "E-Piano, Strings, Piano and Choir: playable keyboard instruments synthesised in real time.",
+      "file": "keys.flpack.js",
+      "size": 16725,
+      "sha256": "3c4bd770e03f84dce594eed6c6b388c7a9e1b3c002aae4abd255f903e0d79f86",
+      "plugins": [
+        {
+          "kind": "instrument",
+          "name": "E-Piano",
+          "description": "Tine electric piano: FM with velocity bark, bell and stereo tremolo"
+        },
+        {
+          "kind": "instrument",
+          "name": "Strings",
+          "description": "String ensemble: detuned saws, gentle filter, stereo ensemble chorus"
+        },
+        {
+          "kind": "instrument",
+          "name": "Piano",
+          "description": "Soft piano: additive strings with inharmonicity, two strings per note and a hammer"
+        },
+        {
+          "kind": "instrument",
+          "name": "Choir",
+          "description": "Formant choir: several singers per note, vowels a–e–i–o–u, vibrato and breath"
+        }
+      ]
+    },
+    {
+      "id": "fllua-sounds",
+      "name": "FL LUA Sounds",
+      "version": "1.0.0",
+      "author": "FL LUA",
+      "license": "MIT",
+      "description": "Fifty samples made by code: drum-machine kicks, snares, claps, hats, percussion, basses, synth stabs and pads, vocal vowels, FX and 120 BPM loops.",
+      "file": "sounds.flpack.js",
+      "size": 19037,
+      "sha256": "e8753740838b71e939a9707236410fbe3db1c049dd5d5cc6352f229f2fffef54",
+      "plugins": [],
+      "sounds": 52
     },
     {
       "id": "fllua-synths",

@@ -25,6 +25,7 @@ export async function buildCatalog(dir = PACKS_DIR) {
       id: info.id, name: info.name, version: info.version, author: info.author, license: info.license, description: info.description,
       file, size: Buffer.byteLength(text), sha256: crypto.createHash('sha256').update(text).digest('hex'),
       plugins: info.plugins.map((p) => ({ kind: p.kind, name: p.name, description: p.description })),
+      ...(info.sounds ? { sounds: info.sounds } : {}),
     });
   }
   return { catalog: 1, name: 'FL LUA plugin packs', packs };

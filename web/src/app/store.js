@@ -3,7 +3,7 @@
 // change is (a) undoable, (b) mirrored to the audio thread and (c) announced on the bus.
 import { Bus } from './bus.js';
 import { createProject, normalize, clone, currentArrangement } from '../core/project.js';
-import { takeMissing } from '../core/packs.js';
+import { takeMissing, noteMissingSound } from '../core/packs.js';
 import { parseAddr, paramDef, getParam, setParam as setProjectParam, paramLabel } from '../core/addr.js';
 import { clampParam } from '../core/schema.js';
 import { idbPut, idbGet, idbAll, idbDelete } from '../host/idb.js';
@@ -50,7 +50,7 @@ export class Store {
     if (!keepHistory) { this.history = []; this.future = []; }
     this.lastKey = null;
     this.selected = p.channels.length ? p.channels[0].id : null;
-    await this.bank.ensureProject(p);
+    for (const id of await this.bank.ensureProject(p)) if (id.startsWith('pack:')) noteMissingSound(id);
     this.host.send({ t: 'stop' });
     this.host.send({ t: 'init', project: p });
     this.dirty = false;

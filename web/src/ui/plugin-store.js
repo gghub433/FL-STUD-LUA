@@ -90,7 +90,8 @@ export function createStore(win, app) {
 
   const card = (info, actions, extra) => h('div.ps-card',
     h('div.ps-head', h('b.ps-name', info.name), h('span.dim', ` v${info.version}${info.author ? ' · ' + info.author : ''}${info.license ? ' · ' + info.license : ''}`), h('div.grow'), ...actions),
-    info.description ? h('div.ps-desc', info.description) : null, chips(info.plugins || []), extra || null);
+    info.description ? h('div.ps-desc', info.description) : null, chips(info.plugins || []),
+    info.sounds ? h('div.ps-chips', h('span.ps-chip.snd', { hint: 'Samples made by the pack: they appear in the Browser under Packs' }, h('b', `${info.sounds} sounds`), ' in the Browser')) : null, extra || null);
 
   const render = () => {
     clear(body);

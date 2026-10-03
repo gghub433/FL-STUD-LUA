@@ -107,6 +107,7 @@ export function createChannel(p, type, opts = {}) {
   if (type === 'patcher') ch.patch = opts.patch ? clone(opts.patch) : defaultPatch('instrument');
   if (type === 'fpc') { ch.pads = opts.pads || defaultPads(); ch.padBank = 0; }
   if (type === 'midiout') ch.port = opts.port || '';
+  if (type === 'multi') ch.zones = opts.zones ? clone(opts.zones) : [];
   if (type === 'slicer') { ch.sample = opts.sample || null; ch.slices = opts.slices || []; ch.loopBpm = opts.loopBpm || 0; }
   if (type === 'automation') { ch.target = opts.target || null; ch.points = opts.points || []; ch.len = opts.len || barTicks(p.timeSig); ch.mixer = 0; }
   return ch;
@@ -229,6 +230,14 @@ export function normalize(raw) {
       ch.loopBpm = num(c.loopBpm, 0, 999, 0);
     }
     if (type === 'midiout') ch.port = str(c.port, '', 120);
+    if (type === 'multi') {
+      ch.zones = [];
+      for (const z of Array.isArray(c.zones) ? c.zones.slice(0, 256) : []) {
+        if (!z || !z.sample || typeof z.sample.id !== 'string') continue;
+        ch.zones.push({ sample: { id: str(z.sample.id, '', 200), name: str(z.sample.name, '', 80) }, lo: int(z.lo, 0, 127, 0), hi: int(z.hi, 0, 127, 127), root: int(z.root, 0, 127, 60),
+          vlo: int(z.vlo, 1, 127, 1), vhi: int(z.vhi, 1, 127, 127), gain: num(z.gain, -48, 24, 0), tune: num(z.tune, -1200, 1200, 0), pan: num(z.pan, -1, 1, 0), loop: bit(z.loop), ls: num(z.ls, 0, 1, 0), le: num(z.le, 0, 1, 1) });
+      }
+    }
     if (type === 'fpc') {
       ch.padBank = int(c.padBank, 0, 3, 0);
       ch.pads = defaultPads();

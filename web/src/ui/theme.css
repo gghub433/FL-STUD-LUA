@@ -407,6 +407,7 @@ body.midi-learn .knob, body.midi-learn .btn { outline: 1px dashed rgba(127,220,9
 .ps-chip.gen { box-shadow: inset 0 0 0 1px #ffb02e66; }
 .ps-chip.fx { box-shadow: inset 0 0 0 1px #5aaedc88; }
 .ps-chip.ctl { box-shadow: inset 0 0 0 1px #7fdc5c88; }
+.ps-chip.snd { box-shadow: inset 0 0 0 1px #d96bd188; }
 .ps-state { color: #7fdc5c; font-size: 11px; }
 .ps-state.upd { color: var(--accent); }
 .ps-banner { display: flex; align-items: center; gap: 10px; padding: 6px 10px; margin-bottom: 8px; background: rgba(255,176,46,.12); border: 1px solid var(--accent-dim); border-radius: 4px; }
@@ -434,3 +435,5 @@ body.midi-learn .knob, body.midi-learn .btn { outline: 1px dashed rgba(127,220,9
 .ms-sec { margin-bottom: 12px; }
 .ms-title { font-weight: 600; color: var(--accent); margin: 4px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
 .ms-row { gap: 8px; margin: 3px 0; align-items: center; }
+.ms-zone { border-radius: 3px; }
+.ms-zone.on { background: var(--bg3); }
