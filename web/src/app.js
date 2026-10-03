@@ -31,6 +31,7 @@ import { openShortcuts } from './ui/shortcuts.js';
 import { startTour } from './ui/tour.js';
 import { installPrefs, SCALES } from './ui/prefs.js';
 import { setLang, LANGS } from './ui/i18n.js';
+import { installUpdates } from './app/updates.js';
 
 const PIANO = { z: 0, s: 1, x: 2, d: 3, c: 4, v: 5, g: 6, b: 7, h: 8, n: 9, j: 10, m: 11, q: 12, 2: 13, w: 14, 3: 15, e: 16, r: 17, 5: 18, t: 19, 6: 20, y: 21, 7: 22, u: 23, i: 24 };
 
@@ -303,6 +304,7 @@ function buildMenus() {
     { label: 'HELP', items: () => [
       { label: 'Keyboard shortcuts', key: 'F1', fn: () => app.shortcutsDialog() },
       { label: 'Take the tour', fn: () => app.startTour() },
+      ...(app.updates && app.updates.available ? [{ label: 'Check for updates…', fn: () => app.updates.open() }] : []),
       { label: 'About FL LUA', fn: () => app.about() },
     ] },
   ];
@@ -448,6 +450,7 @@ export async function boot() {
   installFiles(app);
   app.keymap = new Keymap(app);
   installPrefs(app, { setLang });
+  installUpdates(app);
   installAutomationRecording(app);
   // audio clips that follow the tempo are stretched again shortly after the tempo changes
   let followTimer = 0;

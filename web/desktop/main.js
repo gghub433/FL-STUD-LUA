@@ -6,6 +6,7 @@ const { app, BrowserWindow, protocol, session, Menu, shell, ipcMain, dialog } = 
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
+const { installUpdater } = require('./updater');
 
 const SMOKE = process.argv.includes('--smoke');
 const DEV = process.argv.includes('--dev');
@@ -18,6 +19,7 @@ const MIME = {
 protocol.registerSchemesAsPrivileged([{ scheme: 'fllua', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');      // the audio engine starts with the first click anyway; never block it
 if (SMOKE) app.setPath('userData', path.join(os.tmpdir(), `fllua-smoke-${process.pid}`));          // a test run must not touch the real data
+if (SMOKE && !process.env.FLLUA_UPDATE_MODE) process.env.FLLUA_UPDATE_MODE = 'page';                  // the smoke test asks a local fake release server
 if (process.platform === 'win32') app.setAppUserModelId('app.fllua.desktop');
 
 const lock = SMOKE ? true : app.requestSingleInstanceLock();
@@ -92,6 +94,12 @@ function createWindow() {
 // --smoke: starts the app, waits until it is ready, plays the demo and checks that audio comes out, then exits
 async function smoke(w) {
   const out = { ok: false };
+  // a fake release server for the update check: it offers version 99.0.0 with a file for every platform
+  const http = require('node:http');
+  const assets = ['FL-LUA-windows-x64.exe', 'FL-LUA-windows-x64-setup.exe', 'FL-LUA-linux-x64.AppImage', 'FL-LUA-linux-x64.deb', 'FL-LUA-macos-arm64.zip', 'FL-LUA-macos-x64.zip'];
+  const server = http.createServer((_q, res) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ tag_name: 'v99.0.0', body: 'Smoke test release', html_url: 'https://example.invalid/release', assets: assets.map((name) => ({ name, browser_download_url: `https://example.invalid/${name}` })) })); });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  process.env.FLLUA_UPDATE_API = `http://127.0.0.1:${server.address().port}/latest`;
   const smokeFile = allow(path.join(app.getPath('userData'), 'smoke.fllua'));
   try {
     await w.webContents.executeJavaScript(`new Promise((resolve, reject) => { const t = setInterval(() => { if (window.__ready) { clearInterval(t); resolve(); } }, 100); setTimeout(() => reject(new Error('the app did not become ready')), 45000); })`);
@@ -116,13 +124,17 @@ async function smoke(w) {
           o.fileRoundTrip = app.store.project.tempo === tempo && document.title === 'smoke - FL LUA';
         }
         o.store = (await fetch('/packs/catalog.json').then((r) => r.json())).packs.length;
+        const u = await window.flluaDesktop.update.check();
+        o.update = { mode: u.mode, current: u.current, latest: u.latest, available: u.available, file: (u.url || '').split('/').pop(), error: u.error };
       }
       return o;
     })()`);
     Object.assign(out, r);
-    out.ok = r.title === 'FL LUA' && r.channels > 0 && r.menus >= 8 && r.origin === 'fllua://app' && (!r.audio || r.state !== 'running' || r.peak > 0.02) && r.bridge && (!r.audio || r.fileRoundTrip);
+    out.ok = r.title === 'FL LUA' && r.channels > 0 && r.menus >= 8 && r.origin === 'fllua://app' && (!r.audio || r.state !== 'running' || r.peak > 0.02) && r.bridge && (!r.audio || r.fileRoundTrip)
+      && (!r.update || (r.update.available && r.update.latest === '99.0.0' && /^FL-LUA-/.test(r.update.file)));
     if (process.env.FLLUA_SHOT) { const img = await w.webContents.capturePage(); fs.writeFileSync(process.env.FLLUA_SHOT, img.toPNG()); }
   } catch (err) { out.error = String(err && err.message || err); }
+  server.close();
   const line = `SMOKE_RESULT ${JSON.stringify(out)}`;
   console.log(line);
   if (process.env.FLLUA_SMOKE_OUT) { try { fs.writeFileSync(process.env.FLLUA_SMOKE_OUT, JSON.stringify(out)); } catch (_) { /* the exit code still tells */ } }     // Windows GUI programs have no console to print to
@@ -170,6 +182,7 @@ ipcMain.handle('open:pending', () => { const p = pendingOpen; pendingOpen = null
 ipcMain.on('doc:state', (_e, s) => { if (s && typeof s === 'object') docState = { dirty: !!s.dirty, name: String(s.name || 'Untitled').slice(0, 120), path: s.path || null }; if (process.platform === 'darwin' && win && !win.isDestroyed()) win.setDocumentEdited(!!docState.dirty); });
 ipcMain.on('window:close-now', () => { closing = true; if (win && !win.isDestroyed()) win.close(); });
 ipcMain.on('window:zoom', (_e, f) => { const z = Number(f); if (win && !win.isDestroyed() && z >= 0.5 && z <= 2.5) win.webContents.setZoomFactor(z); });
+installUpdater({ getWin: () => win, beforeInstall: () => { closing = true; } });
 app.on('window-all-closed', () => app.quit());
 
 app.whenReady().then(() => {

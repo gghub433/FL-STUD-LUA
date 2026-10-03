@@ -4,7 +4,10 @@
   "version": "0.2.0",
   "private": true,
   "description": "FL LUA as a desktop application: the same app in its own window, no browser needed",
-  "author": "FL LUA",
+  "author": {
+    "name": "FL LUA",
+    "email": "gghub433@users.noreply.github.com"
+  },
   "license": "MIT",
   "main": "main.js",
   "scripts": {
@@ -24,6 +27,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "updater.js",
       "app/**"
     ],
     "asar": true,
@@ -39,28 +43,56 @@
     "compression": "normal",
     "win": {
       "target": [
+        "nsis",
         "portable"
       ],
       "icon": "build/icon.png",
       "artifactName": "FL-LUA-windows-x64.${ext}"
+    },
+    "nsis": {
+      "artifactName": "FL-LUA-windows-x64-setup.${ext}",
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "FL LUA",
+      "uninstallDisplayName": "FL LUA",
+      "deleteAppDataOnUninstall": false
     },
     "portable": {
       "artifactName": "FL-LUA-windows-x64.exe"
     },
     "linux": {
       "target": [
-        "AppImage"
+        "AppImage",
+        "deb"
       ],
       "icon": "build/icon.png",
       "category": "AudioVideo",
-      "artifactName": "FL-LUA-linux-x64.AppImage",
+      "artifactName": "FL-LUA-linux-x64.${ext}",
       "desktop": {
         "entry": {
           "Name": "FL LUA",
           "Comment": "Digital audio workstation",
           "StartupWMClass": "FL LUA"
         }
-      }
+      },
+      "maintainer": "FL LUA <gghub433@users.noreply.github.com>",
+      "synopsis": "Digital audio workstation"
+    },
+    "deb": {
+      "artifactName": "FL-LUA-linux-x64.${ext}",
+      "packageName": "fl-lua",
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libasound2 | libasound2t64"
+      ]
     },
     "mac": {
       "target": [
@@ -87,5 +119,9 @@
     "type": "git",
     "url": "https://github.com/gghub433/FL-STUD-LUA.git"
   },
-  "desktopName": "fl-lua.desktop"
+  "desktopName": "fl-lua.desktop",
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "homepage": "https://github.com/gghub433/FL-STUD-LUA"
 }

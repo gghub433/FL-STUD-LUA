@@ -20,12 +20,14 @@ node tools/serve.mjs dist     # проверить production-сборку в б
 
 cd desktop && npm ci          # настольное приложение: тот же сайт в собственном окне (Electron), браузер не нужен
 npm start                     # запустить его из исходников
-npm run dist                  # установочный файл для вашей системы в desktop/out (Windows: один portable .exe, Linux: AppImage, macOS: zip)
+npm run dist                  # файлы для вашей системы в desktop/out (Windows: установщик и portable .exe, Linux: AppImage и .deb, macOS: zip)
 npm run smoke:built -- out/linux-unpacked/fl-lua-desktop   # запустить собранное приложение и проверить, что звук идёт
 ```
 
 Окно приложения отдаёт файлы из частной схемы `fllua://app/`, поэтому у приложения один постоянный адрес: проекты, сэмплы и плагины сохраняются между запусками. Разрешения на микрофон и MIDI выдаются сами, меню Electron скрыто (у программы своё меню), положение и размер окна запоминаются. Исходный код оболочки ― `desktop/main.js`.
-Готовые файлы для всех систем собирает и **проверяет запуском** workflow `.github/workflows/release.yml` (в релизе: `FL-LUA-windows-x64.exe`, AppImage, zip для macOS). Файлы не подписаны: Windows SmartScreen покажет предупреждение, на macOS нужен правый клик → «Открыть».
+Готовые файлы для всех систем собирает и **проверяет запуском** workflow `.github/workflows/release.yml` (в релизе: установщик `FL-LUA-windows-x64-setup.exe` и portable `FL-LUA-windows-x64.exe`, AppImage и `.deb`, zip для macOS; установщик и `.deb` тоже проверяются установкой и запуском). Файлы не подписаны: Windows SmartScreen покажет предупреждение, на macOS нужен правый клик → «Открыть».
+
+**Обновления** (`desktop/updater.js`, без подписи кода): установщик Windows и AppImage обновляются через electron-updater: скачивают новую версию из GitHub Releases, сверяют sha512 из `latest.yml` / `latest-linux.yml` и ставят её при перезапуске. Portable `.exe`, `.deb` и macOS (неподписанное приложение не может заменить себя) узнают о новой версии через GitHub API и открывают её загрузку. Проверка идёт раз в день (Help → Check for updates…); ничего не скачивается без согласия.
 
 Облегчённый вариант без Electron: `npm run exe` собирает `dist-exe/fl-lua` ― маленький запускатор, который поднимает локальный сервер и открывает **ваш браузер**.
 

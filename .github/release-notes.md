@@ -6,15 +6,20 @@
 
 | Система | Файл |
 |---|---|
-| **Windows** | **`FL-LUA-windows-x64.exe`**: один файл, двойной клик |
-| Linux (x64) | `FL-LUA-linux-x64.AppImage`: `chmod +x FL-LUA-linux-x64.AppImage` и запуск (если нет FUSE: `--appimage-extract-and-run`) |
+| **Windows** | **`FL-LUA-windows-x64-setup.exe`**: установщик (без прав администратора, ярлык в меню «Пуск», ассоциация `.fllua`); **обновляется сам** |
+| Windows без установки | `FL-LUA-windows-x64.exe`: один файл, двойной клик; о новой версии сообщает и открывает её загрузку |
+| Ubuntu / Debian | `FL-LUA-linux-x64.deb`: `sudo apt install ./FL-LUA-linux-x64.deb` (рекомендуется для Ubuntu 24.04+) |
+| Linux (x64), любой | `FL-LUA-linux-x64.AppImage`: `chmod +x` и запуск; **обновляется сам**. На Ubuntu 24.04+ запускайте с `--no-sandbox` или ставьте `.deb` |
 | macOS (Apple Silicon) | `FL-LUA-macos-arm64.zip`: распаковать и открыть `FL LUA.app` |
-| плагины | `synths.flpack.js`, `effects.flpack.js` и `catalog.json`: пакеты плагинов отдельными файлами (**Tools → Plugin store → Install from file…**). Они уже есть внутри программы |
+| плагины | `*.flpack.js` и `catalog.json`: пакеты плагинов и звуков отдельными файлами (**Tools → Plugin store → Install from file…**). Они уже есть внутри программы |
 | веб-версия | `FL-LUA-web.zip`: тот же сайт для любого статического сервера (нужен современный Chrome, Edge или Firefox) |
+| служебные | `latest.yml`, `latest-linux.yml`, `*.blockmap`: по ним установленные копии находят и проверяют обновление (sha512) |
 
 Проекты, сэмплы, пресеты, установленные плагины и автосохранения хранятся в профиле приложения (Windows: `%APPDATA%\FL LUA`), **File → Save as…** сохраняет проект файлом `.fllua` или ZIP со сэмплами. Приложение помнит размер и положение окна.
 
 > Файлы **не подписаны**. Windows SmartScreen: «Подробнее» → «Выполнить в любом случае». macOS: правый клик по приложению → «Открыть» (или `xattr -dr com.apple.quarantine "FL LUA.app"`).
+>
+> **Обновления**: раз в день программа проверяет, вышла ли новая версия (выключается в **Help → Check for updates…**). Установщик Windows и AppImage скачивают её сами и ставят при перезапуске; portable `.exe`, `.deb` и macOS открывают загрузку нового файла. Без вашего согласия ничего не скачивается.
 
 ## Что внутри
 
