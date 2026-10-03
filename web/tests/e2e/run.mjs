@@ -19,9 +19,12 @@ import { run as files } from './suite-files.mjs';
 import { run as midi } from './suite-midi.mjs';
 import { run as ui } from './suite-ui.mjs';
 import { run as wam } from './suite-wam.mjs';
+import { run as probe } from './suite-probe.mjs';
 
+const extra = { probe };                     // only when named
 const suites = { basic, mixer, instruments, roll, playlist, plugins, automation, browser, export: exporting, record, patcher, audioedit, packs, master, files, midi, ui, wam };
 const pick = process.argv[2];
-if (pick && !suites[pick]) { console.error(`unknown suite "${pick}" (${Object.keys(suites).join(', ')})`); process.exit(2); }
+if (pick && !suites[pick] && !extra[pick]) { console.error(`unknown suite "${pick}" (${Object.keys(suites).join(', ')})`); process.exit(2); }
+if (extra[pick]) await extra[pick]();
 for (const [name, run] of Object.entries(suites)) if (!pick || pick === name) await run();
 await finish();

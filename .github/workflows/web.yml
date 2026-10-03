@@ -6,6 +6,11 @@ on:
   pull_request:
     paths: ['web/**', '.github/workflows/web.yml']
   workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Only this browser test suite (empty: all)'
+        required: false
+        default: ''
 
 jobs:
   test:
@@ -31,7 +36,7 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: End-to-end tests (real Chromium, real AudioWorklet)
-        run: node tests/e2e/run.mjs
+        run: node tests/e2e/run.mjs ${{ github.event.inputs.suite }}
         env:
           E2E_TRACE: '1'
 
