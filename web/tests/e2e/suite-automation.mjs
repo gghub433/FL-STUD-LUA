@@ -189,4 +189,55 @@ export async function run() {
     ok((await ev(() => app.midi.learn.addr)) === `ch:${id}:vol`, 'on the right parameter');
     await ev(() => app.midi.cancelLearn());
   });
+
+  await test('recording in SONG mode turns knob moves into an automation clip that plays back', async () => {
+    const id = await fresh();
+    await ev(async () => {
+      const { demoProject } = await import('/src/core/demo.js');
+      await app.store.replaceProject(demoProject());
+      app.transport.setMode('song');
+      app.store.project.mixer.tracks[3].vol = 0.8;
+    });
+    // drag the real knob of the Hats insert's volume while recording
+    await ev(() => app.transport.record());
+    await sleep(700);
+    const knob = page.locator('.ch-row').nth(2).locator('.knob').nth(1);         // Hat Closed: volume knob
+    const b = await knob.boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 25; i++) { await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2 + i * 4); await sleep(40); }
+    await page.mouse.up();
+    await sleep(300);
+    await ev(() => app.transport.stop());
+    await sleep(300);
+    const r = await ev(() => {
+      const p = app.store.project, hat = p.channels.find((c) => c.name === 'Hat Closed');
+      const auto = p.channels.find((c) => c.type === 'automation' && c.target === `ch:${hat.id}:vol`);
+      const clip = auto && app.store.arrangement.clips.find((c) => c.type === 'automation' && c.ref === auto.id);
+      return { auto: !!auto, points: auto ? auto.points.length : 0, clip: clip ? { s: clip.s, l: clip.l } : null, undo: app.store.history.at(-1).label, vol: hat.vol };
+    });
+    ok(r.auto && r.clip && r.clip.s === 0, `clip ${JSON.stringify(r)}`);
+    ok(r.points >= 3 && r.points < 40, `thinned points ${r.points}`);
+    ok(r.undo === 'Record automation', `one undo step: ${r.undo}`);
+    // playback: the recorded curve moves the knob again
+    const seen = await ev(async () => {
+      const hat = app.store.project.channels.find((c) => c.name === 'Hat Closed');
+      await app.store.setParam(`ch:${hat.id}:vol`, 0.8, { noUndo: true });
+      const vals = new Set();
+      const off = app.store.bus.on('param', (a, v) => { if (a === `ch:${hat.id}:vol`) vals.add(Math.round(v * 100)); });
+      app.transport.play();
+      await new Promise((res) => setTimeout(res, 2500));
+      app.transport.stop(); off();
+      return vals.size;
+    });
+    ok(seen >= 3, `playback moves the knob through ${seen} values`);
+    // pattern mode: a hint instead of silently dropping the moves
+    await ev(() => { app.transport.setMode('pat'); app.transport.record(); });
+    await sleep(500);
+    const toastsBefore = await page.locator('.toast').count();
+    await ev(() => { const hat = app.store.project.channels.find((c) => c.name === 'Hat Closed'); app.store.setParam(`ch:${hat.id}:vol`, 0.4); });
+    await sleep(200);
+    ok(await page.locator('.toast', { hasText: 'SONG mode' }).count() >= 1 || (await page.locator('.toast').count()) > toastsBefore, 'pattern mode explains where automation is recorded');
+    await ev(() => app.transport.stop());
+  });
 }

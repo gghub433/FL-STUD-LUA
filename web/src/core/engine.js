@@ -76,6 +76,7 @@ export class Engine {
     this.frame = 0;
     this.peakBuf = new Float32Array((MAX_INSERT + 1) * 2);
     this.meter = null;         // LoudnessMeter on the master output (live engine and export set one)
+    this.touched = new Set();  // parameters held by the hand while automation is recorded: their automation pauses
   }
 
   // ------------------------------------------------------------------ project sync
@@ -233,6 +234,7 @@ export class Engine {
     const tr = this.tr;
     const wasPlaying = tr.playing || tr.paused;
     tr.playing = false; tr.paused = false; tr.recording = false; tr.countIn = 0;
+    this.touched.clear();
     this.allNotesOff(true);
     tr.tick = wasPlaying ? tr.startTick : tr.tick;
     this.lastAuto.clear();
@@ -410,6 +412,7 @@ export class Engine {
   _applyAutomation(tick) {
     if (!this.seq.autos.size) return;
     for (const [target, list] of this.seq.autos) {
+      if (this.touched.size && this.touched.has(target)) continue;
       // last clip starting at or before `tick`
       let lo = -1, hi = list.length;
       while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (list[mid].s <= tick) lo = mid; else hi = mid; }
@@ -651,6 +654,8 @@ export class Engine {
       if (c.env < 0.001) { c.on = false; break; }
     }
   }
+
+  touch(addr, on) { if (on) this.touched.add(addr); else this.touched.delete(addr); }
 
   // UI asks for a spectrum (and effect meters) of one effect slot, or of a track output (slot -1)
   watch(track, slot) { this.mixer.setTap(track == null ? null : { track, slot }); }

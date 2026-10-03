@@ -33,6 +33,7 @@ export class Transport {
 
   stop() {
     this.finishRecording();
+    if (this.app.autoRec) this.app.autoRec.finish();
     if (this.app.audioRec && this.app.audioRec.recording) this.app.audioRec.end();
     this.host.send({ t: 'stop' });
     this.store.bus.emit('transport');
@@ -54,8 +55,8 @@ export class Transport {
   record() {
     this.host.resume();
     // an armed mixer track also records the audio input; the take lands in the playlist where recording started
-    if (this.app.audioRec) { const from = this.startTick(); this.app.audioRec.begin(this.mode === 'song' ? (from ?? 0) : 0); }
     const s = this.store.project.settings;
+    if (this.app.audioRec && s.recAudio !== 0) { const from = this.startTick(); this.app.audioRec.begin(this.mode === 'song' ? (from ?? 0) : 0); }
     this.clearedChannels.clear();
     this.pending.clear();
     this.host.send({ t: 'record', mode: this.mode, from: undefined, countIn: s.countIn ? 1 : 0 });
@@ -119,6 +120,7 @@ export class Transport {
   // ----- recording of live notes into the current pattern
   onRec(m) {
     const store = this.store, p = store.project;
+    if (p.settings.recNotes === 0) return;
     const key = `${m.ch}:${m.key}`;
     if (m.on) { this.pending.set(key, { tick: m.tick, vel: m.vel }); return; }
     const st = this.pending.get(key);

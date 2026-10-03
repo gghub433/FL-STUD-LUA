@@ -162,12 +162,14 @@ export class Store {
     const def = paramDef(this.project, addr);
     if (!def) return undefined;
     const v = clampParam(def, value);
-    if (getParam(this.project, addr) === v && !opts.force) return v;
+    const prev = getParam(this.project, addr);
+    if (prev === v && !opts.force) return v;
     if (!opts.noUndo) this._push(`Change ${paramLabel(this.project, addr)}`, opts.coalesce || `param:${addr}`);
     setProjectParam(this.project, addr, v);
     this.host.send({ t: 'param', addr, value: v });
     this.markDirty();
     this.bus.emit('param', addr, v);
+    this.bus.emit('user-param', addr, v, prev);                      // a person changed it (automation recording listens)
     return v;
   }
 

@@ -57,7 +57,7 @@ export function createProject() {
     seq: 1,
     tempo: 130, swing: 0, masterPitch: 0,
     timeSig: { num: 4, den: 4 },
-    settings: { snap: 'cell', metronome: 0, countIn: 0, overdub: 0, blend: 0, loopRec: 0, stepKey: MIDDLE_C },
+    settings: { snap: 'cell', metronome: 0, countIn: 0, overdub: 0, blend: 0, loopRec: 0, stepKey: MIDDLE_C, recNotes: 1, recAuto: 1, recAudio: 1 },
     channels: [],
     patterns: {},
     currentPattern: 1,
@@ -192,6 +192,7 @@ export function normalize(raw) {
   p.settings = {
     snap: str(st.snap, 'cell', 20), metronome: bit(st.metronome), countIn: bit(st.countIn), overdub: bit(st.overdub),
     blend: bit(st.blend), loopRec: bit(st.loopRec), stepKey: int(st.stepKey, 0, KEY_MAX, MIDDLE_C),
+    recNotes: st.recNotes === 0 ? 0 : 1, recAuto: st.recAuto === 0 ? 0 : 1, recAudio: st.recAudio === 0 ? 0 : 1,      // recording filter
   };
   p.groups = Array.isArray(raw.groups) ? raw.groups.filter((g) => typeof g === 'string').slice(0, 32) : ['All'];
   if (!p.groups.includes('All')) p.groups.unshift('All');

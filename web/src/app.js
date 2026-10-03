@@ -25,6 +25,7 @@ import { STEP, BEAT, SNAP } from './core/constants.js';
 import { installExtensions } from './app-extensions.js';
 import { PackManager } from './host/pack-manager.js';
 import { installFiles } from './app/files.js';
+import { installAutomationRecording } from './app/auto-rec.js';
 
 const PIANO = { z: 0, s: 1, x: 2, d: 3, c: 4, v: 5, g: 6, b: 7, h: 8, n: 9, j: 10, m: 11, q: 12, 2: 13, w: 14, 3: 15, e: 16, r: 17, 5: 18, t: 19, 6: 20, y: 21, 7: 22, u: 23, i: 24 };
 
@@ -271,6 +272,11 @@ function buildMenus() {
       { label: 'Count-in before recording', checked: !!st.project.settings.countIn, fn: () => t.toggleSetting('countIn') },
       { label: 'Overdub', checked: !!st.project.settings.overdub, fn: () => t.toggleSetting('overdub') },
       { label: 'Blend recorded notes', checked: !!st.project.settings.blend, fn: () => t.toggleSetting('blend') },
+      { label: 'Recording filter', submenu: () => [
+        { label: 'Notes', checked: st.project.settings.recNotes !== 0, fn: () => t.toggleSetting('recNotes') },
+        { label: 'Automation (knob moves, in SONG mode)', checked: st.project.settings.recAuto !== 0, fn: () => t.toggleSetting('recAuto') },
+        { label: 'Audio (armed mixer tracks)', checked: st.project.settings.recAudio !== 0, fn: () => t.toggleSetting('recAudio') },
+      ] },
       { sep: true },
       { label: 'Project settings…', fn: () => app.projectSettings() },
       ...(app.optionsMenuExtra ? app.optionsMenuExtra() : []),
@@ -451,6 +457,7 @@ export async function boot() {
   app.wm.register('picker', { title: 'Plugin picker', create: createPicker, rect: { x: 300, y: 120, w: 300, h: 380 }, minW: 220, minH: 160 });
   installExtensions(app);
   installFiles(app);
+  installAutomationRecording(app);
 
   const p = params.has('empty') ? emptyProject() : demoProject();
   await app.store.replaceProject(p);
