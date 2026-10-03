@@ -12,15 +12,28 @@ const port = srv.address().port;
 fs.mkdirSync('tests/e2e/out', { recursive: true });
 
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+console.log(`Chromium ${browser.version()}`);
+let finishing = false;
+browser.on('disconnected', () => { if (!finishing) console.log('  !! the browser disconnected'); });
 const ctx = await browser.newContext({ viewport: { width: 1500, height: 860 }, acceptDownloads: true, permissions: ['microphone'] });
-const page = await ctx.newPage();
 const errors = [];
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+const trace = !!process.env.E2E_TRACE;
+let lastConsole = [];
+// a crashed or closed page is reported and replaced at the next open(), so one crash does not end the whole run
+let page = null, pageLost = false;
+function watch(p) {
+  p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); lastConsole.push(`${m.type()}: ${m.text()}`.slice(0, 300)); if (lastConsole.length > 20) lastConsole.shift(); });
+  p.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  p.on('crash', () => { pageLost = true; errors.push('the page crashed'); console.log(`  !! the page crashed (renderer). Last console lines:\n     ${lastConsole.join('\n     ')}`); });
+  p.on('close', () => { pageLost = true; if (trace) console.log('  !! the page was closed'); });
+}
+page = await ctx.newPage();
+watch(page);
 
 let passed = 0, failed = 0;
 async function test(name, fn) {
   if (only && !name.includes(only)) return;
+  if (trace) console.log(`  ..   ${name}`);
   try { await fn(); passed++; console.log(`  ok   ${name}`); }
   catch (e) { failed++; console.log(`  FAIL ${name}\n       ${e.message}`); await page.screenshot({ path: `tests/e2e/out/fail-${name.replace(/\W+/g, '_')}.png` }).catch(() => {}); }
 }
@@ -29,6 +42,7 @@ const sleep = (ms) => page.waitForTimeout(ms);
 const ev = (fn, arg) => page.evaluate(fn, arg);
 
 async function open(url = '/') {
+  if (pageLost || page.isClosed()) { page = await ctx.newPage(); watch(page); pageLost = false; console.log('  !! continuing in a new page'); }
   const u = url.includes('nopicker') ? url : url + (url.includes('?') ? '&' : '?') + 'nopicker';
   await page.goto(`http://localhost:${port}${u}`);
   await page.waitForFunction(() => window.__ready, null, { timeout: 15000 });
@@ -55,6 +69,7 @@ export async function finish() {
   await sleep(200);
   await page.screenshot({ path: 'tests/e2e/out/final.png' });
   console.log(`\n${passed} passed, ${failed} failed${errors.length ? `, ${errors.length} console errors:\n  ${errors.slice(0, 5).join('\n  ')}` : ''}`);
+  finishing = true;
   await browser.close(); srv.close();
   process.exit(failed || errors.length ? 1 : 0);
 }

@@ -32,6 +32,8 @@ jobs:
 
       - name: End-to-end tests (real Chromium, real AudioWorklet)
         run: node tests/e2e/run.mjs
+        env:
+          E2E_TRACE: '1'
 
       - name: Production build + smoke test of the minified app
         run: |
@@ -42,3 +44,11 @@ jobs:
         with:
           name: fl-lua-web
           path: web/dist/
+
+      - name: Screenshots of the browser tests (failures included)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: web/tests/e2e/out/
+          if-no-files-found: ignore

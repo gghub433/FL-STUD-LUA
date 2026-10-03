@@ -9,18 +9,23 @@ const mockPickers = () => ev(async () => {
   window.showOpenFilePicker = async () => { window.__picks.open++; return [await dir.getFileHandle(window.__openName)]; };
 });
 const readOpfs = (name) => ev(async (name) => { const dir = await navigator.storage.getDirectory(); const f = await (await dir.getFileHandle(name)).getFile(); return Array.from(new Uint8Array(await f.arrayBuffer())); }, name);
+const step = (m) => { if (process.env.E2E_TRACE) console.log(`       · ${m}`); };
 const fresh = () => ev(async () => { const { demoProject } = await import('/src/core/demo.js'); await app.store.replaceProject(demoProject()); });
 
 export async function run() {
   console.log('files: save / open / recent / MIDI import');
   await open('/');
+  step('page open');
   await mockPickers();
+  step('file pickers replaced by the origin-private file system');
 
   await test('Save as writes a .fllua file, the title shows its name; edits mark it; Ctrl+S saves in place', async () => {
     await fresh();
+    step('demo project loaded');
     ok((await page.title()) === 'FL LUA', `fresh title ${await page.title()}`);
     await ev(() => { window.__saveName = 'My song.fllua'; });
     await page.keyboard.press('Control+Shift+s'); await sleep(400);
+    step('saved as');
     ok((await page.title()) === 'My song - FL LUA', `title ${await page.title()}`);
     let bytes = await readOpfs('My song.fllua');
     let saved = JSON.parse(new TextDecoder().decode(Uint8Array.from(bytes)));
