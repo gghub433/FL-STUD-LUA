@@ -863,6 +863,8 @@ export class Playlist {
         { label: 'Gain…', fn: async () => { const v = await formDialog('Clip gain', [{ id: 'gain', label: 'Gain', type: 'range', min: -24, max: 12, step: 0.5, value: clip.gain || 0, unit: ' dB' }]); if (v) upd((c) => { if (v.gain) c.gain = v.gain; else delete c.gain; }, 'Clip gain'); } },
         { label: 'Pitch (resample)…', fn: async () => { const v = await formDialog('Clip pitch', [{ id: 'pitch', label: 'Pitch', type: 'range', min: -24, max: 24, step: 1, value: clip.pitch || 0, unit: ' st' }]); if (v) upd((c) => { if (v.pitch) c.pitch = v.pitch; else delete c.pitch; }, 'Clip pitch'); } },
         { label: 'Time-stretch…', fn: () => this.stretchDialog(clip) },
+        { label: 'Detect tempo, fit to the project…', disabled: ids.length !== 1, fn: () => this.tempoDialog(clip) },
+        { label: 'Follow project tempo', checked: all((c) => c.bpm), disabled: !all((c) => c.bpm) && ids.length !== 1, fn: () => { if (all((c) => c.bpm)) upd((c) => { delete c.bpm; }, 'Stop following tempo'); else this.tempoDialog(clip); } },
         { label: 'Reset time-stretch', disabled: !all((c) => c.use), fn: () => this.resetStretch(ids) },
         { label: 'Edit sample in the audio editor', disabled: ids.length !== 1 || !this.app.openAudioEditor, fn: () => { const ch = store.channel(clip.ref); if (ch && ch.sample) this.app.openAudioEditor({ sampleId: clip.use || ch.sample.id, chId: ch.id, name: ch.sample.name }); } },
         { sep: true });
@@ -899,6 +901,37 @@ export class Playlist {
     await new Promise((r) => setTimeout(r, 20));
     const ok = await this.app.cmd.stretchClip(this.store, clip.id, clamp(ratio, 0.1, 10), v.semi);
     this.app.toast(ok ? 'Stretched' : 'Could not stretch this clip');
+  }
+
+  // detect the clip's tempo, then fit it to the project (or the project to it)
+  async tempoDialog(clip) {
+    const ch = this.store.channel(clip.ref);
+    const entry = ch && ch.sample ? await this.app.bank.ensure(ch.sample.id) : null;
+    if (!entry) { this.app.toast('The clip has no sample'); return; }
+    const { detectTempo, nearestOctave } = await import('../core/tempo-detect.js');
+    const det = detectTempo(entry.channels, entry.rate);
+    const T = this.project.tempo;
+    const guess = det.bpm ? nearestOctave(det.bpm, T) : (clip.bpm || T);
+    const r2 = (x) => Math.round(x * 100) / 100;
+    const opts = det.bpm ? [...new Set([guess, det.bpm, det.bpm / 2, det.bpm * 2].map(r2))].filter((b) => b >= 30 && b <= 400) : [r2(guess)];
+    const v = await formDialog('Clip tempo', [
+      { id: 'bpm', label: 'Tempo of the audio', type: 'select', value: r2(guess), options: opts.map((b) => [b, `${b} BPM${b === r2(det.bpm) ? ` (detected${det.beats ? `, ${det.beats} beats` : ''})` : ''}`]) },
+      { id: 'manual', label: 'Or type it', type: 'number', min: 0, max: 400, step: 0.01, value: 0, hint: '0 = use the choice above' },
+      { id: 'what', label: 'Then', type: 'select', value: 'fit', options: [['fit', `Stretch the clip to ${T} BPM`], ['project', 'Set the project tempo to the clip']] },
+      { id: 'follow', label: 'Keep following tempo changes', type: 'check', value: true },
+    ], { ok: 'Apply', width: 420 });
+    if (!v) return;
+    const bpm = v.manual > 0 ? v.manual : v.bpm;
+    if (v.what === 'project') {
+      this.store.setParam('transport:tempo', bpm);
+      if (v.follow) this.app.cmd.updateClips(this.store, [clip.id], (c) => { c.bpm = bpm; }, 'Follow tempo');
+      this.app.toast(`Project tempo: ${bpm} BPM`);
+      return;
+    }
+    this.app.toast('Stretching…');
+    await new Promise((r) => setTimeout(r, 20));
+    const ok = await this.app.cmd.fitClipToTempo(this.store, clip.id, bpm, { follow: v.follow });
+    this.app.toast(ok ? `Fitted ${bpm} BPM to ${T} BPM${v.follow ? ', following tempo changes' : ''}` : 'Could not fit this clip');
   }
 
   resetStretch(ids) {

@@ -458,6 +458,11 @@ export async function boot() {
   installExtensions(app);
   installFiles(app);
   installAutomationRecording(app);
+  // audio clips that follow the tempo are stretched again shortly after the tempo changes
+  let followTimer = 0;
+  const follow = () => { clearTimeout(followTimer); followTimer = setTimeout(async () => { const n = await cmd.followTempo(app.store); if (n) toast(`${n} audio clip${n === 1 ? '' : 's'} fitted to ${app.store.project.tempo} BPM`); }, 500); };
+  app.store.bus.on('param', (a) => { if (a === 'transport:tempo') follow(); });
+  app.store.bus.on('change', ({ paths }) => { if (paths.some((p) => p[0] === 'tempo')) follow(); });
 
   const p = params.has('empty') ? emptyProject() : demoProject();
   await app.store.replaceProject(p);

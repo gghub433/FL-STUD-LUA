@@ -362,6 +362,7 @@ export function normalize(raw) {
       if (c.gain !== undefined && c.gain !== 0) clip.gain = num(c.gain, -60, 24, 0);
       if (c.pitch) clip.pitch = num(c.pitch, -48, 48, 0);
       if (c.stretch) clip.stretch = num(c.stretch, 0.1, 10, 1);
+      if (c.bpm) clip.bpm = num(c.bpm, 20, 999, 120);                   // the audio's own tempo: the clip follows the project tempo
       if (c.norm) clip.norm = 1;
       if (typeof c.use === 'string' && c.use) clip.use = c.use.slice(0, 200);
       arr.clips.push(clip);

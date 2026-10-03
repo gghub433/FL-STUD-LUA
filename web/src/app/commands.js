@@ -657,6 +657,49 @@ export async function stretchClip(store, clipId, ratio, semitones) {
   return true;
 }
 
+// Fit an audio clip recorded at `bpm` to the project tempo (time-stretch, pitch kept). follow: keep it fitted
+// whenever the project tempo changes (see followTempo).
+export async function fitClipToTempo(store, clipId, bpm, { follow = true } = {}) {
+  const ratio = bpm / store.project.tempo;
+  if (!(ratio > 0.1 && ratio < 10)) return false;
+  const same = Math.abs(ratio - 1) < 1e-4;
+  if (!same && !(await stretchClip(store, clipId, ratio, 0))) return false;
+  updateClips(store, [clipId], (c) => {
+    if (follow) c.bpm = Math.round(bpm * 100) / 100; else delete c.bpm;
+    if (same && c.stretch) { const r = c.stretch; c.l = Math.max(1, Math.round(c.l / r)); c.o = Math.round(c.o / r); delete c.use; delete c.stretch; }
+  }, 'Fit clip to tempo');
+  return true;
+}
+
+// After a tempo change: re-stretch every clip that follows the tempo. The clips keep their place and length in
+// the song (ticks); only the audio behind them is rendered again. Returns how many clips changed.
+export async function followTempo(store) {
+  const p = store.project, changed = [];
+  for (const arr of p.playlist.arrangements) {
+    for (const clip of arr.clips) {
+      if (clip.type !== 'audio' || !clip.bpm) continue;
+      const ratio = clip.bpm / p.tempo;
+      if (Math.abs((clip.stretch || 1) - ratio) < 1e-4 || ratio <= 0.1 || ratio >= 10) continue;
+      const ch = store.channel(clip.ref);
+      const src = ch && ch.sample ? await store.bank.ensure(ch.sample.id) : null;
+      if (!src) continue;
+      const id = Math.abs(ratio - 1) < 1e-4 ? null : `stretch:${ch.sample.id}:${ratio.toFixed(4)}:0.00`;
+      if (id && !store.bank.has(id)) store.bank.addPCM(`${src.name} (stretched)`, src.rate, stretchAudio(src.channels, { ratio, semitones: 0, rate: src.rate }), id);
+      changed.push([arr.id, clip.id, id, ratio]);
+    }
+  }
+  if (!changed.length) return 0;
+  store.edit('Follow tempo', (pr) => {
+    for (const [aid, cid, id, ratio] of changed) {
+      const c = pr.playlist.arrangements.find((a) => a.id === aid).clips.find((x) => x.id === cid);
+      if (!c) continue;
+      if (id) { c.use = id; c.stretch = ratio; } else { delete c.use; delete c.stretch; }
+      delete c.pitch;
+    }
+  }, [['playlist']], { noUndo: true });
+  return changed.length;
+}
+
 // Load a preset: the instrument returns to its defaults first, then the preset's values are applied (one undo step)
 export function loadInstrumentPreset(store, chId, params, label = 'Load preset') {
   store.edit(label, () => {

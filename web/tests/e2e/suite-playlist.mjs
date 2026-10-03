@@ -260,4 +260,54 @@ export async function run() {
     await sleep(300);
     await page.screenshot({ path: 'tests/e2e/out/playlist-visual.png' });
   });
+
+  await test('clip tempo: detect a 100 BPM loop, fit it to 124 BPM, follow a tempo change; audio editor tools', async () => {
+    const r = await ev(async () => {
+      const { emptyProject } = await import('/src/core/demo.js');
+      await app.store.replaceProject(emptyProject());
+      app.store.setParam('transport:tempo', 124, { noUndo: true });
+      // a 4-bar drum loop at 100 BPM
+      const SR = 44100, bpm = 100, beat = 60 / bpm, beats = 16, n = Math.round(beats * beat * SR), x = new Float32Array(n);
+      let q = 7; const rnd = () => { q = (q * 16807) % 2147483647; return q / 2147483647 - 0.5; };
+      for (let b = 0; b < beats; b++) {
+        const s0 = Math.round(b * beat * SR);
+        for (let i = 0; i < 0.3 * SR && s0 + i < n; i++) { const t = i / SR; x[s0 + i] += Math.sin(2 * Math.PI * (50 + 80 * Math.exp(-t * 30)) * t) * Math.exp(-t * 9) * 0.8; }
+        if (b % 2) for (let i = 0; i < 0.15 * SR && s0 + i < n; i++) x[s0 + i] += rnd() * Math.exp(-i / SR * 18) * 0.6;
+        for (const h2 of [0, 0.5]) { const s1 = Math.round((b + h2) * beat * SR); for (let i = 0; i < 0.04 * SR && s1 + i < n; i++) x[s1 + i] += rnd() * Math.exp(-i / SR * 60) * 0.25; }
+      }
+      const e = app.bank.addPCM('Loop 100', SR, [x]);
+      const ch = app.cmd.addAudioChannel(app.store, { id: e.id, name: e.name });
+      const natural = Math.round(beats * beat * 124 * 96 / 60);      // ticks at 124 BPM before fitting
+      const [clip] = app.cmd.addClips(app.store, [{ type: 'audio', track: 1, s: 0, l: natural, ref: ch.id }]);
+      return { id: clip.id, natural };
+    });
+    // the dialog from the clip menu
+    await ev(() => app.openWindow('playlist')); await sleep(300);
+    await ev((id) => { const pl = app.playlist; const clip = pl.arr.clips.find((c) => c.id === id); pl.tempoDialog(clip); }, r.id);
+    await sleep(500);
+    const first = await page.locator('.modal select').first().inputValue();
+    ok(Math.abs(+first - 100) < 0.2, `detected ${first}`);
+    await page.locator('.modal .btn', { hasText: 'Apply' }).click();
+    await page.waitForFunction((id) => { const c = app.store.arrangement.clips.find((x) => x.id === id); return c && c.bpm; }, r.id, { timeout: 10000 });
+    const fitted = await ev((id) => { const c = app.store.arrangement.clips.find((x) => x.id === id); return { l: c.l, stretch: c.stretch, bpm: c.bpm, use: !!c.use }; }, r.id);
+    ok(Math.abs(fitted.l - 16 * 96) <= 2 && Math.abs(fitted.stretch - 100 / 124) < 0.01 && fitted.use, `fitted to 4 bars: ${JSON.stringify(fitted)}`);
+    // change the project tempo: the clip follows, its length in bars stays
+    await ev(() => app.store.setParam('transport:tempo', 140));
+    await page.waitForFunction((id) => { const c = app.store.arrangement.clips.find((x) => x.id === id); return Math.abs(c.stretch - 100 / 140) < 0.001; }, r.id, { timeout: 10000 });
+    const after = await ev((id) => { const c = app.store.arrangement.clips.find((x) => x.id === id); return { l: c.l, use: c.use }; }, r.id);
+    ok(after.l === fitted.l && /:0\.7143:/.test(after.use), `follows: ${JSON.stringify(after)}`);
+    // the stretched audio really lasts 4 bars at 140 BPM
+    const len = await ev((use) => { const e = app.bank.get(use); return e.length / e.rate; }, after.use);
+    ok(Math.abs(len - 16 * 60 / 140) < 0.05, `stretched length ${len} s`);
+    // audio editor: detect tempo
+    const t = await ev(async (id) => {
+      const c = app.store.arrangement.clips.find((x) => x.id === id), ch = app.store.channel(c.ref);
+      const ed = app.openAudioEditor({ sampleId: ch.sample.id, chId: ch.id, name: ch.sample.name });
+      await new Promise((res) => setTimeout(res, 300));
+      const ed2 = ed && ed.detectTempo ? ed : Object.values(app.audioEditors).at(-1);
+      const res = await ed2.detectTempo();
+      return res.bpm;
+    }, r.id);
+    ok(Math.abs(t - 100) < 0.2, `audio editor detects ${t}`);
+  });
 }

@@ -350,6 +350,8 @@ class AudioEditor {
       { label: 'Insert silence…', fn: () => this.withForm('Insert silence', [{ id: 'ms', label: 'Length', type: 'number', min: 1, max: 600000, step: 1, value: 500, unit: ' ms' }], (v) => { const at = this.sel ? this.sel.a : this.cursor; this.commit(E.insertSilence(this.buf, at, (v.ms / 1000) * this.buf.rate), 'Insert silence', null); this.dirty = true; this.updateInfo(); }) },
       { sep: true },
       { label: 'Time-stretch / pitch-shift…', fn: () => this.stretchDialog() },
+      { label: 'Detect tempo', fn: () => this.detectTempo() },
+      { label: 'Stretch to the project tempo…', fn: () => this.fitTempoDialog() },
       { label: 'Resample…', fn: () => this.withForm('Change the sample rate', [{ id: 'rate', label: 'New rate', type: 'select', value: this.buf.rate, options: [8000, 11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000].map((r) => [r, `${r} Hz`]) }], (v) => { if (v.rate === this.buf.rate) return; this.commit(E.resample(this.buf, v.rate), 'Resample', null, []); this.cursor = 0; this.fitAll(); this.updateInfo(); }) },
       { label: 'Seamless loop (cross-fade)…', disabled: !this.sel, fn: () => this.withForm('Loop cross-fade', [{ id: 'ms', label: 'Cross-fade', type: 'range', min: 5, max: 1000, step: 5, value: 80, unit: ' ms' }], (v) => this.op('Loop cross-fade', (b, x, y) => E.loopCrossfade(b, x, y, (v.ms / 1000) * b.rate))) },
       { sep: true },
@@ -357,6 +359,36 @@ class AudioEditor {
       { label: 'Make stereo', disabled: this.buf.channels.length === 2, fn: () => { this.commit(E.toStereo(this.buf), 'Make stereo'); this.updateInfo(); } },
       { label: 'Swap left and right', disabled: this.buf.channels.length === 1, fn: () => { this.commit(E.swapChannels(this.buf), 'Swap channels'); } },
     ];
+  }
+
+  async detectTempo() {
+    if (!this.frames) return null;
+    const { detectTempo } = await import('../core/tempo-detect.js');
+    const [a, b] = this.target();
+    const r = detectTempo(this.buf.channels.map((c) => c.subarray(a, b)), this.buf.rate);
+    this.tempo = r.bpm || null;
+    this.app.toast(r.bpm ? `Tempo: ${r.bpm} BPM${r.beats ? ` (${r.beats} beats)` : ''}${r.confidence < 0.3 ? ', not sure' : ''}. Half/double: ${Math.round(r.bpm * 50) / 100} / ${Math.round(r.bpm * 200) / 100}` : 'No steady beat found');
+    this.updateInfo();
+    return r;
+  }
+
+  async fitTempoDialog() {
+    if (!this.frames) return;
+    const { detectTempo, nearestOctave } = await import('../core/tempo-detect.js');
+    const T = this.app.store.project.tempo;
+    const [a, b] = this.target();
+    const r = detectTempo(this.buf.channels.map((c) => c.subarray(a, b)), this.buf.rate);
+    const guess = r.bpm ? Math.round(nearestOctave(r.bpm, T) * 100) / 100 : T;
+    this.withForm('Stretch to the project tempo', [
+      { id: 'bpm', label: 'Tempo of the audio', type: 'number', min: 20, max: 400, step: 0.01, value: guess, hint: r.bpm ? `Detected ${r.bpm} BPM` : 'No steady beat found: type the tempo' },
+    ], (v) => {
+      const ratio = v.bpm / T;
+      if (Math.abs(ratio - 1) < 1e-4) return;
+      const out = E.stretchRange(this.buf, a, b, { ratio, semitones: 0 });
+      this.commit(out, `Stretch ${v.bpm} → ${T} BPM`, this.sel ? { a, b: Math.min(E.frames(out), a + Math.round((b - a) * ratio)) } : null, []);
+      if (!this.sel) this.fitAll();
+      this.updateInfo();
+    }, { ok: `Stretch to ${T} BPM` });
   }
 
   stretchDialog() {
@@ -524,7 +556,7 @@ class AudioEditor {
       ? `Sel ${fmtTime(this.sel.a / b.rate)} → ${fmtTime(this.sel.b / b.rate)}  ·  ${fmtTime((this.sel.b - this.sel.a) / b.rate)}`
       : `Cursor ${fmtTime(this.cursor / b.rate)}  ·  Length ${fmtTime(n / b.rate)}`;
     this.status.textContent = n
-      ? `${b.rate} Hz · ${b.channels.length === 2 ? 'stereo' : 'mono'} · ${n} frames · ${this.sel ? 'selection' : 'whole'}: peak ${fmtDb(st.peakDb)} · RMS ${fmtDb(st.rmsDb)} · DC ${st.dc.toFixed(4)} · ${this.regions.length} regions · undo steps ${this.pos}`
+      ? `${b.rate} Hz · ${b.channels.length === 2 ? 'stereo' : 'mono'} · ${n} frames · ${this.sel ? 'selection' : 'whole'}: peak ${fmtDb(st.peakDb)} · RMS ${fmtDb(st.rmsDb)} · DC ${st.dc.toFixed(4)}${this.tempo ? ` · ${this.tempo} BPM` : ''} · ${this.regions.length} regions · undo steps ${this.pos}`
       : 'Empty. Record with ●, paste from the clipboard, or send a sample here from the Browser, the Sampler or the Playlist';
     this.dirty = true;
   }
