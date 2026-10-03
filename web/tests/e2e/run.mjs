@@ -15,8 +15,9 @@ import { run as patcher } from './suite-patcher.mjs';
 import { run as audioedit } from './suite-audioedit.mjs';
 import { run as packs } from './suite-packs.mjs';
 import { run as master } from './suite-master.mjs';
+import { run as files } from './suite-files.mjs';
 
-const suites = { basic, mixer, instruments, roll, playlist, plugins, automation, browser, export: exporting, record, patcher, audioedit, packs, master };
+const suites = { basic, mixer, instruments, roll, playlist, plugins, automation, browser, export: exporting, record, patcher, audioedit, packs, master, files };
 const pick = process.argv[2];
 if (pick && !suites[pick]) { console.error(`unknown suite "${pick}" (${Object.keys(suites).join(', ')})`); process.exit(2); }
 for (const [name, run] of Object.entries(suites)) if (!pick || pick === name) await run();

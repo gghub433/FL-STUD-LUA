@@ -24,6 +24,7 @@ import { downloadBlob } from './host/export/wav.js';
 import { STEP, BEAT, SNAP } from './core/constants.js';
 import { installExtensions } from './app-extensions.js';
 import { PackManager } from './host/pack-manager.js';
+import { installFiles } from './app/files.js';
 
 const PIANO = { z: 0, s: 1, x: 2, d: 3, c: 4, v: 5, g: 6, b: 7, h: 8, n: 9, j: 10, m: 11, q: 12, 2: 13, w: 14, 3: 15, e: 16, r: 17, 5: 18, t: 19, 6: 20, y: 21, 7: 22, u: 23, i: 24 };
 
@@ -148,7 +149,7 @@ app.openFile = () => {
   inp.addEventListener('change', async () => {
     const f = inp.files[0];
     if (!f) return;
-    try { await app.loadProjectFile(f); } catch (err) { alertBox('Could not open project', String(err.message || err)); }
+    try { await (app.files ? app.files.openFileObject(f) : app.loadProjectFile(f)); } catch (err) { alertBox('Could not open project', String(err.message || err)); }
     inp.remove();
   });
   document.body.append(inp);
@@ -212,13 +213,22 @@ function buildMenus() {
   const defs = [
     { label: 'FILE', items: () => [
       { label: 'New project', key: 'Ctrl+N', fn: () => app.newProject() },
-      { label: 'Open project file…', key: 'Ctrl+O', fn: () => app.openFile() },
+      { label: 'Open…', key: 'Ctrl+O', fn: () => app.files.open() },
+      { label: 'Open recent', submenu: () => (app.recentFiles && app.recentFiles.length
+        ? [...app.recentFiles.map((r) => ({ label: r.name, hint: r.detail, fn: () => r.open().catch((err) => toast(`Could not open ${r.name}: ${err.message}`)) })), { sep: true }, { label: 'Clear the list', fn: async () => { await app.files.clearRecent(); app.recentFiles = []; } }]
+        : [{ label: app.files.canWriteInPlace ? 'No recent files yet' : 'Not available in this browser', disabled: true }]) },
       { label: 'Open demo project', fn: () => app.openDemo() },
       ...(app.fileMenuExtra ? app.fileMenuExtra() : []),
       { sep: true },
-      { label: 'Save in browser', key: 'Ctrl+S', fn: () => app.saveProject() },
-      { label: 'Download project file (.fllua)', fn: () => app.downloadProject() },
-      { label: 'Download project with samples (.zip)', fn: () => app.downloadProjectZip() },
+      { label: 'Save', key: 'Ctrl+S', fn: () => app.files.save() },
+      { label: 'Save as…', key: 'Ctrl+Shift+S', fn: () => app.files.saveAs() },
+      { label: 'Save a copy in the browser', fn: () => app.saveProject() },
+      ...(app.files.desktop ? [] : [
+        { label: 'Download project file (.fllua)', fn: () => app.downloadProject() },
+        { label: 'Download project with samples (.zip)', fn: () => app.downloadProjectZip() },
+      ]),
+      { sep: true },
+      { label: 'Import MIDI file…', fn: () => app.files.importMidi() },
       { sep: true },
       ...(app.exportMenu ? app.exportMenu() : [
         { label: 'Export WAV 16-bit', fn: () => app.exportWav(16) },
@@ -307,7 +317,7 @@ app.shortcutsDialog = () => {
   const rows = [
     ['Space', 'Play / Stop'], ['Ctrl+Space', 'Pause'], ['L', 'Toggle PAT / SONG'], ['Alt+T', 'Tap tempo'],
     ['F5 / F6 / F7 / F9', 'Playlist / Channel rack / Piano roll / Mixer'], ['F8', 'Browser'], ['Alt+F8', 'Plugin picker'],
-    ['Ctrl+Z', 'Undo'], ['Ctrl+Alt+Z, Ctrl+Y', 'Redo'], ['Ctrl+S', 'Save in browser'], ['Ctrl+N / Ctrl+O', 'New / Open'],
+    ['Ctrl+Z', 'Undo'], ['Ctrl+Alt+Z, Ctrl+Y', 'Redo'], ['Ctrl+S / Ctrl+Shift+S', 'Save to the project file / Save as'], ['Ctrl+N / Ctrl+O', 'New / Open (projects, MIDI files)'],
     ['Ctrl+↑ / Ctrl+↓', 'Next / previous pattern'], ['Z S X D C V G B H N J M', 'Play the selected channel from the keyboard (C–B)'], ['Q 2 W 3 E R 5 T 6 Y 7 U I', 'Same, one octave higher'],
     ['Ctrl+L', 'Link hovered control to a MIDI controller'], ['Ctrl+R', 'Export (WAV / FLAC / MP3 / OGG / MIDI / stems)'],
     ['Patcher: Del · Ctrl+D · Ctrl+A', 'Delete / duplicate / select all nodes; wheel zooms, middle mouse (or Space) pans'],
@@ -331,8 +341,8 @@ function onKeyDown(e) {
   if (ctrl) {
     if (lower === 'z' && !e.shiftKey && !e.altKey) { e.preventDefault(); app.store.undo(); return; }
     if ((lower === 'z' && (e.altKey || e.shiftKey)) || lower === 'y') { e.preventDefault(); app.store.redo(); return; }
-    if (lower === 's') { e.preventDefault(); app.saveProject(); return; }
-    if (lower === 'o') { e.preventDefault(); app.openFile(); return; }
+    if (lower === 's') { e.preventDefault(); if (e.shiftKey) app.files.saveAs(); else app.files.save(); return; }
+    if (lower === 'o') { e.preventDefault(); app.files.open(); return; }
     if (lower === 'n') { e.preventDefault(); app.newProject(); return; }
     if (key === ' ') { e.preventDefault(); app.transport.togglePause(); return; }
     if (key === 'ArrowUp') { e.preventDefault(); app.selectPatternRel(1); return; }
@@ -389,7 +399,7 @@ function wireDrop() {
     if (e.defaultPrevented) return;
     e.preventDefault();
     for (const f of e.dataTransfer.files) {
-      if (/\.(fllua|stepwise|json|zip)$/i.test(f.name)) { try { await app.loadProjectFile(f); } catch (err) { toast(`Could not open ${f.name}: ${err.message}`); } continue; }
+      if (/\.(fllua|stepwise|json|zip|mid|midi)$/i.test(f.name)) { try { await app.files.openFileObject(f); } catch (err) { toast(`Could not open ${f.name}: ${err.message}`); } continue; }
       try {
         const smp = await app.bank.decode(f.name, await f.arrayBuffer());
         const ch = cmd.addChannel(app.store, 'sampler', { name: smp.name, sample: { id: smp.id, name: smp.name } });
@@ -440,6 +450,7 @@ export async function boot() {
   app.wm.register('rack', { title: 'Channel rack', create: createRack, rect: { x: 10, y: 10, w: 700, h: 330 }, minW: 380, minH: 140 });
   app.wm.register('picker', { title: 'Plugin picker', create: createPicker, rect: { x: 300, y: 120, w: 300, h: 380 }, minW: 220, minH: 160 });
   installExtensions(app);
+  installFiles(app);
 
   const p = params.has('empty') ? emptyProject() : demoProject();
   await app.store.replaceProject(p);

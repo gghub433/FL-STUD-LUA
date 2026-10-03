@@ -182,9 +182,9 @@ export async function run() {
 
   await test('exporting a WAV adds it to the Rendered section; the sound can be dragged onto the playlist', async () => {
     await fresh();
-    await ev(() => app.exportWav(16)); await sleep(1500);
+    await ev(() => { app.transport.setMode('pat'); return app.exportWav(16); }); await sleep(1500);   // pattern renders are named "…-pattern"
     await expand('Rendered'); await sleep(250);
-    ok((await page.locator(`${BR} .br-row.leaf`).filter({ hasText: /pattern|song/ }).count()) >= 1, 'rendered file listed');
+    ok((await page.locator(`${BR} .br-row.leaf`).filter({ hasText: /pattern/ }).count()) >= 1, 'rendered file listed');
   });
 }
 

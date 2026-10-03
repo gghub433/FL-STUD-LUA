@@ -23,9 +23,19 @@
     },
     "files": [
       "main.js",
+      "preload.js",
       "app/**"
     ],
     "asar": true,
+    "fileAssociations": [
+      {
+        "ext": "fllua",
+        "name": "FL LUA project",
+        "description": "FL LUA project",
+        "mimeType": "application/x-fllua",
+        "role": "Editor"
+      }
+    ],
     "compression": "normal",
     "win": {
       "target": [
