@@ -696,3 +696,46 @@ export function controllerEditor(win, app, chId) {
   return { el, onResize: draw, destroy() { for (const s of subs) s(); } };
 }
 controllerEditor.rect = { w: 560, h: 520 };
+
+// MIDI Out: which device, MIDI channel, program, transpose and velocity; a monitor of what was sent
+export function midiOutEditor(win, app, chId) {
+  const store = app.store, cmd = app.cmd;
+  const ch = () => store.channel(chId);
+  const schema = instrumentSchema('midiout');
+  win.setTitle(ch().name, 'MIDI Out');
+  const port = h('select.select', { style: { minWidth: '200px' }, hint: 'The MIDI device or program that receives this channel\'s notes' });
+  const fillPorts = () => {
+    const names = app.midi ? app.midi.outputNames() : [];
+    const cur = ch() ? ch().port || '' : '';
+    port.textContent = '';
+    port.append(h('option', { value: '' }, names.length ? `First output (${names[0]})` : 'No MIDI outputs found'));
+    for (const n of names) port.append(h('option', { value: n }, n));
+    if (cur && !names.includes(cur)) port.append(h('option', { value: cur }, `${cur} (not connected)`));
+    port.value = cur;
+  };
+  port.addEventListener('change', () => cmd.setChannelField(store, chId, 'port', port.value, 'MIDI Out device'));
+  const head = h('div.rack-head', h('span.dim', 'Name'), (() => { const i = h('input.field', { type: 'text', value: ch().name, style: { width: '140px' } }); i.addEventListener('keydown', (e) => e.stopPropagation()); i.addEventListener('change', () => cmd.renameChannel(store, chId, i.value || ch().name)); return i; })(),
+    h('span.dim', 'Device'), port, h('div.grow'),
+    h('div.btn', { hint: 'Send a note to the device', onclick: () => app.preview(chId) }, '▶ Test'),
+    h('div.btn', { hint: 'MIDI devices, clock and controllers', onclick: () => app.midiSettings && app.midiSettings() }, 'MIDI settings…'));
+  const knobs = h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '10px 14px', padding: '10px' } }, schema.map((d) => paramControl(app, addrOf(chId)(d.id), d, { label: d.id === 'program' ? 'Program (0 = none)' : d.name })));
+  const mon = h('div.dim', { style: { fontFamily: 'monospace', fontSize: '11px', padding: '6px 10px', whiteSpace: 'pre', overflow: 'auto', flex: 1, minHeight: 0 } });
+  const name = (d) => { const t = d[0] >> 4, c = (d[0] & 15) + 1; return t === 9 ? `note on  ${keyName(d[1])} vel ${d[2]} ch ${c}` : t === 8 ? `note off ${keyName(d[1])} ch ${c}` : t === 12 ? `program  ${d[1] + 1} ch ${c}` : d.map((x) => x.toString(16).padStart(2, '0')).join(' '); };
+  let shown = -1;
+  const tick = () => {
+    if (!mon.isConnected) return;
+    const sent = app.midi ? app.midi.sent : [];
+    if (sent.length !== shown) { shown = sent.length; mon.textContent = sent.filter((x) => x.data[0] < 0xf0).slice(-14).map((x) => `${x.name}: ${name(x.data)}`).join('\n') || 'Nothing sent yet. Play the channel (pattern, piano roll, keyboard).'; }
+    requestAnimationFrame(tick);
+  };
+  const el = h('div.rack', head, h('div.mx-title', 'Output'), knobs, h('div.mx-title', 'Sent'), mon);
+  const subs = [
+    store.bus.on('midi-outputs', fillPorts),
+    store.bus.on('change', ({ paths }) => { if (paths.some((p) => p[0] === 'channels')) { if (!ch()) { win.close(); return; } fillPorts(); win.setTitle(ch().name, 'MIDI Out'); } }),
+    store.bus.on('project', () => { if (!ch()) win.close(); }),
+  ];
+  fillPorts();
+  requestAnimationFrame(tick);
+  return { el, destroy() { for (const s of subs) s(); } };
+}
+midiOutEditor.rect = { w: 560, h: 420 };

@@ -406,6 +406,7 @@ body.midi-learn .knob, body.midi-learn .btn { outline: 1px dashed rgba(127,220,9
 .ps-chip { font-size: 10.5px; padding: 2px 7px; border-radius: 10px; background: var(--bg3); color: #c9d0d5; }
 .ps-chip.gen { box-shadow: inset 0 0 0 1px #ffb02e66; }
 .ps-chip.fx { box-shadow: inset 0 0 0 1px #5aaedc88; }
+.ps-chip.ctl { box-shadow: inset 0 0 0 1px #7fdc5c88; }
 .ps-state { color: #7fdc5c; font-size: 11px; }
 .ps-state.upd { color: var(--accent); }
 .ps-banner { display: flex; align-items: center; gap: 10px; padding: 6px 10px; margin-bottom: 8px; background: rgba(255,176,46,.12); border: 1px solid var(--accent-dim); border-radius: 4px; }
@@ -428,3 +429,8 @@ body.midi-learn .knob, body.midi-learn .btn { outline: 1px dashed rgba(127,220,9
 .ld-graph { flex: 1; min-height: 80px; width: calc(100% - 20px); margin: 4px 10px; border-radius: 3px; }
 .ld-report { padding: 4px 10px 10px; font-size: 11px; min-height: 30px; line-height: 1.4; }
 .btn.disabled { opacity: .5; pointer-events: none; }
+/* MIDI settings */
+.ms { max-height: 64vh; overflow: auto; }
+.ms-sec { margin-bottom: 12px; }
+.ms-title { font-weight: 600; color: var(--accent); margin: 4px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.ms-row { gap: 8px; margin: 3px 0; align-items: center; }

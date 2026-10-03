@@ -14,6 +14,7 @@ class StepwiseProcessor extends AudioWorkletProcessor {
     super();
     this.engine = new Engine(sampleRate);
     this.engine.meter = new LoudnessMeter(sampleRate);
+    this.engine.host.midiQueue = [];
     this.loud = new Array(8);
     this.blocks = 0;
     this.cpuMs = 0;
@@ -44,6 +45,7 @@ class StepwiseProcessor extends AudioWorkletProcessor {
         case 'watch': e.watch(m.track, m.slot); break;
         case 'meterReset': e.meter.resetIntegrated(); break;
         case 'touch': e.touch(m.addr, m.on); break;
+        case 'clock': e.clockOut = !!m.on; break;
         case 'ping': this.port.postMessage({ t: 'pong', id: m.id }); break;
         default: break;
       }
@@ -58,6 +60,7 @@ class StepwiseProcessor extends AudioWorkletProcessor {
     const e = this.engine;
     if (!e.project) return true;
     const t0 = Date.now();
+    e.frameOffset = currentFrame - e.frame;                 // MIDI timestamps are in the audio clock's frames
     try {
       e.process(L, R, L.length);
     } catch (err) {
@@ -65,6 +68,9 @@ class StepwiseProcessor extends AudioWorkletProcessor {
       this.port.postMessage({ t: 'error', where: 'process', message: String(err && err.message || err), stack: String(err && err.stack || '') });
       e.tr.playing = false;
     }
+    // MIDI goes out every block, not with the meters: it is scheduled ahead and must not wait
+    const mq = e.host.midiQueue;
+    if (mq.length) { this.port.postMessage({ t: 'midi', events: mq.splice(0) }); }
     // Date.now() has ms resolution; summing many blocks gives an unbiased CPU estimate.
     this.cpuMs += Date.now() - t0;
     this.audioMs += (L.length / sampleRate) * 1000;

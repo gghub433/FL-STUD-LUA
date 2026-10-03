@@ -3,7 +3,7 @@ import { h, clear } from './h.js';
 import { modal, confirmBox, promptText } from './dialog.js';
 import { BUNDLED_URL, fetchCatalog, fetchPackSource, userCatalogs, saveUserCatalogs, compareVersions } from '../host/pack-catalog.js';
 
-const KIND = { instrument: 'generator', effect: 'effect' };
+const KIND = { instrument: 'generator', effect: 'effect', controller: 'controller script' };
 
 export function createStore(win, app) {
   win.setTitle('Plugin store');
@@ -86,7 +86,7 @@ export function createStore(win, app) {
     if (await confirmBox('Reload FL LUA?', 'Reload now to unload the removed plugins? Unsaved changes of the project are kept in the autosave.', 'Reload')) { await app.store.autosave(); location.reload(); }
   });
 
-  const chips = (plugins) => h('div.ps-chips', plugins.map((p) => h('span.ps-chip.' + (p.kind === 'instrument' ? 'gen' : 'fx'), { hint: p.description || p.name }, h('b', p.name), ` ${KIND[p.kind] || p.kind}`)));
+  const chips = (plugins) => h('div.ps-chips', plugins.map((p) => h('span.ps-chip.' + (p.kind === 'instrument' ? 'gen' : p.kind === 'controller' ? 'ctl' : 'fx'), { hint: p.description || p.name }, h('b', p.name), ` ${KIND[p.kind] || p.kind}`)));
 
   const card = (info, actions, extra) => h('div.ps-card',
     h('div.ps-head', h('b.ps-name', info.name), h('span.dim', ` v${info.version}${info.author ? ' · ' + info.author : ''}${info.license ? ' · ' + info.license : ''}`), h('div.grow'), ...actions),

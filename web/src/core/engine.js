@@ -49,7 +49,7 @@ export class Engine {
   constructor(sr = 44100) {
     this.sr = sr;
     this.samples = new Map();
-    this.host = { getSample: (id) => this.samples.get(id) || null, sr };
+    this.host = { getSample: (id) => this.samples.get(id) || null, sr, midiQueue: null, evFrame: 0 };
     this.project = null;
     this.mixer = new Mixer(sr, this.host);
     this.channels = new Map();
@@ -77,6 +77,10 @@ export class Engine {
     this.peakBuf = new Float32Array((MAX_INSERT + 1) * 2);
     this.meter = null;         // LoudnessMeter on the master output (live engine and export set one)
     this.touched = new Set();  // parameters held by the hand while automation is recorded: their automation pauses
+    // MIDI out: the live engine sets host.midiQueue = []; messages carry the frame they belong to
+    this.frameOffset = 0;      // frame of the audio clock minus this.frame (set by the worklet every block)
+    this.clockOut = false;     // MIDI clock (24 per quarter note), Start / Continue / Stop and song position
+    this.clockPhase = 0;
   }
 
   // ------------------------------------------------------------------ project sync
@@ -217,6 +221,35 @@ export class Engine {
     this.autoOut.clear();
     this._applyAutomation(tr.tick);
     tr.playing = true;
+    this._midiStart(tr.tick);
+  }
+
+  // ---- MIDI out: song position + Start / Continue, programs of MIDI Out channels; Stop
+  _midi(data, port = null, clock = false) {
+    const q = this.host.midiQueue;
+    if (q && q.length < 4096) q.push({ port, data, clock, frame: this.host.evFrame || 0 });
+  }
+
+  _midiStart(tick) {
+    if (!this.host.midiQueue) return;
+    this.host.evFrame = this.frame + this.frameOffset;
+    for (const rt of this.chList) if (rt.type === 'midiout' && rt.inst) rt.inst.sendProgram();
+    if (!this.clockOut) return;
+    const spp = Math.max(0, Math.floor(tick / (PPQ / 4)));           // MIDI beats = sixteenth notes
+    if (spp > 0) { this._midi([0xf2, spp & 127, (spp >> 7) & 127], null, true); this._midi([0xfb], null, true); }
+    else this._midi([0xfa], null, true);
+    this.clockPhase = PPQ / 24;                                       // the first clock goes out with the start
+  }
+
+  _midiClock(m) {
+    const per = PPQ / 24, adv = m * this.tps;
+    let need = per - this.clockPhase;
+    while (need <= adv + 1e-9) {
+      this.host.evFrame = this.frame + this.frameOffset + Math.min(m - 1, Math.max(0, Math.round(need / this.tps)));
+      this._midi([0xf8], null, true);
+      need += per;
+    }
+    this.clockPhase = (this.clockPhase + adv) % per;
   }
 
   record(mode, from, countInBars) {
@@ -233,6 +266,8 @@ export class Engine {
   stop() {
     const tr = this.tr;
     const wasPlaying = tr.playing || tr.paused;
+    this.host.evFrame = this.frame + this.frameOffset;
+    if (this.clockOut && tr.playing) this._midi([0xfc], null, true);
     tr.playing = false; tr.paused = false; tr.recording = false; tr.countIn = 0;
     this.touched.clear();
     this.allNotesOff(true);
@@ -243,6 +278,8 @@ export class Engine {
   pause() {
     const tr = this.tr;
     if (!tr.playing) return;
+    this.host.evFrame = this.frame + this.frameOffset;
+    if (this.clockOut) this._midi([0xfc], null, true);
     tr.playing = false; tr.paused = true;
     this.allNotesOff(false);
   }
@@ -347,6 +384,7 @@ export class Engine {
   }
 
   noteOn(chId, key, vel = 0.8, opts) {
+    this.host.evFrame = this.frame + this.frameOffset;
     const ev = { key, vel, pan: 0, rel: 64, fine: 0, mx: 128, my: 128, slide: 0, len: 0, nid: 0 };
     if (opts) Object.assign(ev, opts);
     this._dispatchOn(chId, ev, 0);
@@ -357,6 +395,7 @@ export class Engine {
   }
 
   noteOff(chId, key, opts) {
+    this.host.evFrame = this.frame + this.frameOffset;
     this._dispatchOff(chId, key, 0);
     const tr = this.tr;
     if (tr.recording && tr.playing && tr.tick >= 0 && !(opts && opts.fromSeq)) {
@@ -486,6 +525,8 @@ export class Engine {
     // ---- collect events for this block (sample offsets) ----
     const evs = this.evs;
     evs.length = 0;
+    this.host.evFrame = this.frame + this.frameOffset;
+    if (tr.playing && this.clockOut && this.host.midiQueue && tr.countIn <= 0) this._midiClock(m);
     if (tr.playing) this._collect(m, evs);
 
     // ---- controllers (LFO / Envelope) write their value into the linked parameters once per block ----
@@ -497,6 +538,7 @@ export class Engine {
       const e = evs[i];
       const o = e.off > m ? m : e.off;
       if (o > pos) { this._renderSlice(pos, o); pos = o; }
+      this.host.evFrame = this.frame + this.frameOffset + o;
       this._apply(e);
     }
     if (pos < m) this._renderSlice(pos, m);

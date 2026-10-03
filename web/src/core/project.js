@@ -106,6 +106,7 @@ export function createChannel(p, type, opts = {}) {
   if (type === 'layer') ch.children = opts.children || [];
   if (type === 'patcher') ch.patch = opts.patch ? clone(opts.patch) : defaultPatch('instrument');
   if (type === 'fpc') { ch.pads = opts.pads || defaultPads(); ch.padBank = 0; }
+  if (type === 'midiout') ch.port = opts.port || '';
   if (type === 'slicer') { ch.sample = opts.sample || null; ch.slices = opts.slices || []; ch.loopBpm = opts.loopBpm || 0; }
   if (type === 'automation') { ch.target = opts.target || null; ch.points = opts.points || []; ch.len = opts.len || barTicks(p.timeSig); ch.mixer = 0; }
   return ch;
@@ -227,6 +228,7 @@ export function normalize(raw) {
       ch.slices = Array.isArray(c.slices) ? c.slices.filter((x) => Number.isFinite(x) && x >= 0).slice(0, 64).map((x) => Math.floor(x)) : [];
       ch.loopBpm = num(c.loopBpm, 0, 999, 0);
     }
+    if (type === 'midiout') ch.port = str(c.port, '', 120);
     if (type === 'fpc') {
       ch.padBank = int(c.padBank, 0, 3, 0);
       ch.pads = defaultPads();

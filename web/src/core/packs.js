@@ -41,6 +41,8 @@ export function packApi() {
 const packs = new Map();                 // id -> info
 export let lastPack = null;              // info of the pack registered last (read by the loader right after an import)
 export const loadedPacks = () => [...packs.values()];
+// MIDI controller scripts from packs: id -> { name, description, ports: [substring of the device name], create(api) }
+export const controllerScripts = new Map();
 export const resetLastPack = () => { lastPack = null; };
 export const packOfType = (type) => { const i = String(type).indexOf('.'); return i > 0 ? String(type).slice(0, i) : null; };
 
@@ -116,6 +118,18 @@ function smokeEffect(where, mod, t0) {
   if (now() - t0 > 8000) fail(where, 'the plugin is too slow to run in real time');
 }
 
+// A controller script must survive a burst of messages with a do-nothing API
+function smokeScript(where, mod, t0) {
+  const noop = () => {};
+  const api = new Proxy({}, { get: (_, k) => (k === 'channels' || k === 'channelParams' ? () => [] : k === 'tempo' ? 120 : k === 'playing' ? false : k === 'selected' ? null : noop) });
+  const inst = mod.create(api) || {};
+  if (inst.onMidi && typeof inst.onMidi !== 'function') throw new Error('onMidi must be a function');
+  for (let i = 0; i < 64 && inst.onMidi; i++) inst.onMidi([0x90 | (i & 15), i, i & 1 ? 0 : 100], 'test device');
+  for (let i = 0; i < 64 && inst.onMidi; i++) inst.onMidi([0xb0 | (i & 15), i, i * 2], 'test device');
+  if (inst.dispose) inst.dispose();
+  if (now() - t0 > 500) fail(where, 'the script is far too slow');
+}
+
 // -> { id, name, version, plugins: [{ kind, type, name, desc, mod }], desc } or throws a readable Error
 export function validatePack(desc, { smoke = true } = {}) {
   if (!desc || typeof desc !== 'object') fail('pack', 'the pack did not describe itself');
@@ -141,11 +155,20 @@ export function validatePack(desc, { smoke = true } = {}) {
   };
   take('instrument', made && made.instruments);
   take('effect', made && made.effects);
+  // controller scripts: { name: { meta: { name, description }, ports: ['MPK', …], create(api) -> { onMidi(bytes, port) -> true when handled, dispose() } } }
+  for (const [name, mod] of Object.entries((made && made.controllers) || {})) {
+    const where = `${desc.id}.${name}`;
+    if (!ID_RE.test(name)) fail(where, 'script names are 2 to 31 characters of a-z, 0-9 and "-"');
+    if (!mod || typeof mod.create !== 'function') fail(where, 'create(api) is missing');
+    if (!mod.meta || typeof mod.meta.name !== 'string' || !mod.meta.name) fail(where, 'meta.name is missing');
+    if (mod.ports !== undefined && !(Array.isArray(mod.ports) && mod.ports.every((x) => typeof x === 'string'))) fail(where, 'ports must be a list of device names');
+    plugins.push({ kind: 'controller', type: where, name, mod, desc: String(mod.meta.description || ''), title: mod.meta.name });
+  }
   if (!plugins.length) fail('pack', 'the pack contains no plugins');
   if (plugins.length > 40) fail('pack', 'more than 40 plugins in one pack');
   for (const p of smoke ? plugins : []) {
     const t0 = now();
-    try { (p.kind === 'instrument' ? smokeInstrument : smokeEffect)(p.type, p.mod, t0); }
+    try { (p.kind === 'instrument' ? smokeInstrument : p.kind === 'effect' ? smokeEffect : smokeScript)(p.type, p.mod, t0); }
     catch (e) { if (/^[\w.-]+: /.test(e.message)) throw e; fail(p.type, `crashed during the self-test: ${e.message || e}`); }
   }
   return { id: desc.id, name: desc.name, version: desc.version, author: String(desc.author || ''), license: String(desc.license || ''), description: String(desc.description || ''), plugins };
@@ -158,7 +181,8 @@ export function registerPack(desc, opts) {
     const mod = { schema: p.mod.schema, meta: { ...p.mod.meta, id: p.type, pack: v.id }, create: p.mod.create };
     for (const k of Object.keys(p.mod)) if (!(k in mod) && k !== 'presets') mod[k] = p.mod[k];
     if (p.kind === 'instrument') { registerInstrument(p.type, mod); if (p.mod.presets) INSTRUMENT_PRESETS[p.type] = { ...p.mod.presets }; }
-    else { registerEffect(p.type, mod); if (p.mod.presets) EFFECT_PRESETS[p.type] = { ...p.mod.presets }; }
+    else if (p.kind === 'effect') { registerEffect(p.type, mod); if (p.mod.presets) EFFECT_PRESETS[p.type] = { ...p.mod.presets }; }
+    else controllerScripts.set(p.type, { name: p.title, description: p.desc, ports: p.mod.ports || [], create: p.mod.create, pack: v.id });
   }
   const info = { id: v.id, name: v.name, version: v.version, author: v.author, license: v.license, description: v.description, plugins: v.plugins.map((p) => ({ kind: p.kind, type: p.type, name: p.title, description: p.desc })) };
   packs.set(v.id, info);
@@ -171,7 +195,9 @@ export function unregisterPack(id) {
   const info = packs.get(id);
   if (!info) return false;
   for (const p of info.plugins) {
-    if (p.kind === 'instrument') { delete INSTRUMENTS[p.type]; delete INSTRUMENT_PRESETS[p.type]; } else { delete EFFECTS[p.type]; delete EFFECT_PRESETS[p.type]; }
+    if (p.kind === 'instrument') { delete INSTRUMENTS[p.type]; delete INSTRUMENT_PRESETS[p.type]; }
+    else if (p.kind === 'effect') { delete EFFECTS[p.type]; delete EFFECT_PRESETS[p.type]; }
+    else controllerScripts.delete(p.type);
   }
   packs.delete(id);
   return true;

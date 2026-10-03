@@ -29,7 +29,7 @@ export async function run() {
     await page.locator('.menu-top', { hasText: 'TOOLS' }).click();
     await page.locator('.popup .item', { hasText: 'Plugin store' }).click();
     await page.waitForSelector(`${store} .ps-card`);
-    ok((await page.locator(`${store} .ps-card`).count()) === 2, 'two packs');
+    ok((await page.locator(`${store} .ps-card`).count()) === 3, 'three packs');
     const text = await page.locator(store).innerText();
     for (const n of ['FL LUA Synths', 'FL LUA Effects', 'Acid Bass', 'Tri-Osc', 'Chip', 'Additive', 'Soft Clipper', 'Maximizer', 'Hyper Chorus', 'Waveshaper', 'Overdrive', 'Delay Bank', 'Pitcher']) ok(text.includes(n), `lists ${n}`);
     ok((await page.locator(`${store} .ps-state`).count()) === 0, 'nothing installed');

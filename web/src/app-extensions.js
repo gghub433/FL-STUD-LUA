@@ -17,12 +17,13 @@ import { openStartDialog } from './ui/start-dialog.js';
 import { patcherEditor } from './ui/patcher.js';
 import { openAudioEditor } from './ui/audio-editor.js';
 import { createStore } from './ui/plugin-store.js';
+import { openMidiSettings } from './ui/midi-settings.js';
 import { confirmBox } from './ui/dialog.js';
-import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor } from './ui/instrument-editors.js';
+import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor, midiOutEditor } from './ui/instrument-editors.js';
 
 export function installExtensions(app) {
   // ---- dedicated instrument editors (types without an entry fall back to the generic parameter editor)
-  app.editors = Object.assign(app.editors || {}, { sampler: samplerEditor, fpc: fpcEditor, slicer: slicerEditor, drums: drumsEditor, subsynth: synthEditor, fm: fmEditor, organ: organEditor, wavetable: wavetableEditor, controller: controllerEditor, patcher: patcherEditor });
+  app.editors = Object.assign(app.editors || {}, { sampler: samplerEditor, fpc: fpcEditor, slicer: slicerEditor, drums: drumsEditor, subsynth: synthEditor, fm: fmEditor, organ: organEditor, wavetable: wavetableEditor, controller: controllerEditor, patcher: patcherEditor, midiout: midiOutEditor });
   app.store.bus.on('replaced', () => app.wm.closeDynamic());
 
   // ---- automation, controllers, MIDI
@@ -39,22 +40,20 @@ export function installExtensions(app) {
   };
   app.addControllerChannel = (mode) => { const c = app.cmd.addController(app.store, mode); app.openChannelEditor(c.id); };
   app.store.bus.on('midi-learn', (l) => document.body.classList.toggle('midi-learn', !!l));
-  app.keyHooks.add((e) => { if (e.key === 'Escape' && app.midi.learn) return app.midi.cancelLearn(); return false; });
+  app.keyHooks.add((e) => {
+    if (e.key === 'Escape' && app.midi.learn) return app.midi.cancelLearn();
+    if (e.key === 'Escape' && app.midi.transportLearn) { app.midi.transportLearn = null; app.toast('Learn cancelled'); return true; }
+    return false;
+  });
   const prevTools = app.toolsMenuExtra;
   app.toolsMenuExtra = () => [...(prevTools ? prevTools() : []), { sep: true },
     { label: 'Plugin store…', fn: () => app.openStore() },
     { label: 'Audio editor', fn: () => app.openAudioEditor() },
     { label: 'Edit an audio file…', fn: () => app.editAudioFile() },
-    { label: 'MIDI input devices…', fn: () => app.midiSettings() },
+    { label: 'MIDI settings…', fn: () => app.midiSettings() },
     { label: 'Link hovered knob to MIDI controller', key: 'Ctrl+L', fn: () => app.linkHovered() }];
-  app.midiSettings = async () => {
-    const m = app.midi;
-    if (!m.supported) { app.toast('Web MIDI is not available in this browser'); return; }
-    const list = m.inputs;
-    if (!list.length) { app.toast('No MIDI input devices found. Connect one and try again'); return; }
-    const v = await formDialog('MIDI input devices', list.map((d, i) => ({ id: `d${i}`, label: d.name, type: 'check', value: d.on })), { ok: 'Apply', width: 420 });
-    if (v) list.forEach((d, i) => m.setDeviceEnabled(d.name, !!v[`d${i}`]));
-  };
+  app.midiSettings = () => openMidiSettings(app);
+  app.store.bus.on('plugins', () => app.midi.startScripts());
 
   installBrowser(app);
   installAudioRecording(app);

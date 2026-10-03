@@ -3,6 +3,34 @@
   "name": "FL LUA plugin packs",
   "packs": [
     {
+      "id": "fllua-controllers",
+      "name": "FL LUA Controller Scripts",
+      "version": "1.0.0",
+      "author": "FL LUA",
+      "license": "MIT",
+      "description": "MIDI controller scripts: knobs to the selected channel, faders to the mixer, pads that always play the drums.",
+      "file": "controllers.flpack.js",
+      "size": 3159,
+      "sha256": "2672aa5028de77a70387f64d61111eee69a27cea38f7b487eb343f5d21ccdf09",
+      "plugins": [
+        {
+          "kind": "controller",
+          "name": "Knobs to the selected channel",
+          "description": "CC 21–28 / 70–77 move the selected channel's first eight parameters"
+        },
+        {
+          "kind": "controller",
+          "name": "Faders to the mixer",
+          "description": "CC 7 on MIDI channel n moves mixer insert n (channel 16: the master)"
+        },
+        {
+          "kind": "controller",
+          "name": "Pads play drums",
+          "description": "Notes on MIDI channel 10 go to the first FPC or Drum synth channel"
+        }
+      ]
+    },
+    {
       "id": "fllua-effects",
       "name": "FL LUA Effects",
       "version": "1.0.0",

@@ -18,10 +18,10 @@ test('packs/catalog.json is up to date: every pack file is listed with its real 
     const text = fs.readFileSync(path.join(PACKS_DIR, e.file), 'utf8');
     assert.equal(e.sha256, crypto.createHash('sha256').update(text).digest('hex'), `${e.file} checksum`);
     assert.equal(e.size, Buffer.byteLength(text));
-    assert.ok(e.plugins.length > 0 && e.plugins.every((p) => ['instrument', 'effect'].includes(p.kind) && p.name && p.description), `${e.id} plugin list`);
+    assert.ok(e.plugins.length > 0 && e.plugins.every((p) => ['instrument', 'effect', 'controller'].includes(p.kind) && p.name && p.description), `${e.id} plugin list`);
     assert.match(e.version, /^\d+\.\d+\.\d+/);
   }
-  assert.equal(onDisk.packs.reduce((n, p) => n + p.plugins.length, 0), 11, 'four generators and seven effects are shipped');
+  assert.equal(onDisk.packs.reduce((n, p) => n + p.plugins.length, 0), 14, 'four generators, seven effects and three controller scripts are shipped');
 });
 
 test('pack files are self-contained: no imports, no network, no eval', () => {
