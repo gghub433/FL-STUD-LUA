@@ -428,15 +428,35 @@ const updates = {
   'Save the project before FL LUA restarts?': 'Сохранить проект перед перезапуском FL LUA?', "Don't save": 'Не сохранять',
   'A browser DAW with a pattern-based workflow (Channel rack → Playlist).\nAudio engine in an AudioWorklet; the same engine renders exports offline.\nOpen source (MIT). Not affiliated with any other DAW vendor.': 'Музыкальная студия в браузере с работой на паттернах (Стойка каналов → Плейлист).\nЗвуковой движок работает в AudioWorklet; тот же движок рендерит экспорт.\nОткрытый код (MIT). Не связана ни с одним другим производителем DAW.',
 };
+const wam = {
+  'WAM plugin…': 'Плагин WAM…', 'WAM plugin': 'Плагин WAM', External: 'Внешние', external: 'внешний',
+  'A Web Audio Modules 2.0 instrument loaded from an address (URL)': 'Инструмент Web Audio Modules 2.0, загружаемый по адресу (URL)',
+  'A Web Audio Modules 2.0 effect loaded from an address (URL)': 'Эффект Web Audio Modules 2.0, загружаемый по адресу (URL)',
+  'WAM instrument': 'Инструмент WAM', 'WAM effect': 'Эффект WAM', 'Examples (included)': 'Примеры (в комплекте)', Recent: 'Недавние', 'More plugins: ': 'Больше плагинов: ',
+  '. Plugins from other sites must allow loading from here (CORS).': '. Плагины с других сайтов должны разрешать загрузку отсюда (CORS).',
+  'A WAM effect (Web Audio Modules 2.0) runs in this mixer slot. Paste the address of the plugin’s main module (usually …/index.js).': 'Эффект WAM (Web Audio Modules 2.0) работает в этом слоте микшера. Вставьте адрес главного модуля плагина (обычно …/index.js).',
+  'A WAM instrument (Web Audio Modules 2.0) plays this channel’s notes. Paste the address of the plugin’s main module (usually …/index.js).': 'Инструмент WAM (Web Audio Modules 2.0) играет ноты этого канала. Вставьте адрес главного модуля плагина (обычно …/index.js).',
+  'Polyphonic synth: sine, saw or square, filter, attack and release. A WAM 2.0 plugin built with the WAM SDK, for trying the format': 'Полифонический синтезатор: синус, пила или меандр, фильтр, атака и затухание. Плагин WAM 2.0 на WAM SDK, чтобы попробовать формат',
+  'Tremolo and auto-pan. A WAM 2.0 effect built with the WAM SDK, for trying the format': 'Тремоло и автопанорама. Эффект WAM 2.0 на WAM SDK, чтобы попробовать формат',
+  'Play a note': 'Сыграть ноту', 'Load another plugin here': 'Загрузить сюда другой плагин', 'Change…': 'Сменить…', 'Choose…': 'Выбрать…', 'Load the plugin again': 'Загрузить плагин заново', Reload: 'Перезагрузить',
+  'No plugin yet. Choose one to load it here.': 'Плагина пока нет. Выберите его, чтобы загрузить сюда.', 'Loading the plugin…': 'Загружаю плагин…',
+  'The plugin could not be loaded': 'Плагин не удалось загрузить', 'This plugin has no interface and no parameters.': 'У этого плагина нет ни интерфейса, ни параметров.',
+  'This address is not a WAM 2.0 plugin (its module has no WebAudioModule default export)': 'По этому адресу не плагин WAM 2.0 (модуль не экспортирует WebAudioModule по умолчанию)',
+  'The plugin did not create an audio node': 'Плагин не создал звуковой узел', 'At most 16 WAM plugins can run at the same time': 'Одновременно может работать не больше 16 плагинов WAM',
+  'The song did not end while rendering (is the tempo extremely slow?)': 'Песня не закончилась при рендере (темп очень медленный?)',
+  'Insert WAM plugin': 'Вставить плагин WAM', 'Choose WAM plugin': 'Выбрать плагин WAM', 'WAM plugin copy': 'Копия плагина WAM',
+};
 const parts = { delay: 'задержка', attack: 'атака', hold: 'удержание', decay: 'спад', sustain: 'удержание', release: 'затухание', 'env amount': 'глубина огибающей', 'LFO amount': 'глубина LFO', 'LFO speed': 'скорость LFO', 'LFO shape': 'форма LFO', 'LFO delay': 'задержка LFO', 'LFO attack': 'атака LFO',
   ratio: 'отношение', fine: 'точно', 'fixed frequency': 'фиксированная частота', frequency: 'частота', level: 'уровень', 'output level': 'выходной уровень', 'velocity sensitivity': 'чувствительность к силе', wave: 'волна', feedback: 'обратная связь', output: 'выход', octave: 'октава', semitones: 'полутоны', 'pulse width': 'ширина импульса', 'start phase': 'начальная фаза',
   shape: 'форма', rate: 'скорость', 'tempo sync': 'по темпу', division: 'доля', '→ pitch': '→ высота', '→ cutoff': '→ срез', '→ amplitude': '→ амплитуда', '→ pulse width': '→ ширина импульса', '→ pan': '→ панорама', 'fade-in': 'нарастание' };
 
-export default { ...more, ...params, ...ui, ...tools, ...rest, ...updates };
+export default { ...more, ...params, ...ui, ...tools, ...rest, ...updates, ...wam };
 
 
 // messages with numbers or names in them: [pattern, replacement]
 export const patterns = [
+  [/^WAM plugin “(.+)” could not be loaded( for the export)?: (.+)$/, (m, tr) => `Плагин WAM «${m[1]}» не удалось загрузить${m[2] ? ' для экспорта' : ''}: ${tr(m[3])}`],
+  [/^The plugin’s own interface failed: (.+)$/, 'Собственный интерфейс плагина не открылся: $1'],
   [/^FL LUA (\S+) is the latest version\.$/, 'FL LUA $1 — последняя версия.'],
   [/^FL LUA (\S+) is available \(this is (\S+)\)\.(.*)$/, (m) => `Вышла FL LUA ${m[1]} (у вас ${m[2]}).${m[3].replace(' The download failed:', ' Скачать не удалось:')}`],
   [/^FL LUA (\S+) is downloaded\. It is installed when FL LUA restarts \(or the next time you close it\)\.$/, 'FL LUA $1 скачана. Она установится при перезапуске FL LUA (или когда вы её закроете).'],

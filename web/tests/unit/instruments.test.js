@@ -43,7 +43,7 @@ const off = (inst, key) => () => inst.noteOff(key);
 
 test('every instrument has schema + meta, runs headless without NaN', () => {
   for (const [type, mod] of Object.entries(INSTRUMENTS)) {
-    assert.ok(mod.schema.length && mod.meta.name, type);
+    assert.ok((mod.schema.length || type === 'wam') && mod.meta.name, type);      // a WAM plugin brings its own parameters
     const inst = createInstrument(type, SR, host());
     for (const d of mod.schema) inst.setParam(d.id, d.def);
     if (inst.setData) inst.setData(createChannel(createProject(), type));
@@ -186,8 +186,8 @@ const hz = (key) => 440 * Math.pow(2, (key - 69) / 12);
 
 test('every registered instrument has schema + meta and renders finite, bounded audio for notes across the range', () => {
   for (const [type, mod] of Object.entries(INSTRUMENTS)) {
-    assert.ok(mod.schema.length && mod.meta.name, type);
-    if (['sampler', 'fpc', 'slicer', 'controller', 'midiout', 'multi'].includes(type)) continue;          // need samples / make no sound; covered elsewhere
+    assert.ok((mod.schema.length || type === 'wam') && mod.meta.name, type);
+    if (['sampler', 'fpc', 'slicer', 'controller', 'midiout', 'multi', 'wam'].includes(type)) continue;          // need samples / make no sound; covered elsewhere
     const inst = mkInst(type);
     for (const k of [24, 60, 96, 120]) {
       const { L, R } = render(inst, 8192, [{ at: 0, fn: () => inst.noteOn(ev(k)) }, { at: 5000, fn: () => inst.noteOff(k) }]);

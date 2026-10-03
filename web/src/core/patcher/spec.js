@@ -85,8 +85,8 @@ export const CATEGORIES = ['Input / output', 'Control', 'Audio', 'Notes'];
 export const PLUGIN_NODE_TYPES = ['inst', 'fx'];
 
 // instruments that can live inside a patch (the rest need channel data of their own)
-export const canHostInstrument = (t) => hasInstrument(t) && !['controller', 'patcher', 'fpc', 'slicer', 'audio'].includes(t);
-export const canHostEffect = (t) => hasEffect(t) && t !== 'patcher';
+export const canHostInstrument = (t) => hasInstrument(t) && !['controller', 'patcher', 'fpc', 'slicer', 'audio', 'wam'].includes(t);
+export const canHostEffect = (t) => hasEffect(t) && t !== 'patcher' && t !== 'wam';
 
 // ---- per-node description (depends on the node: plugin nodes take ports and parameters from their plugin)
 export function nodeInfo(node) {

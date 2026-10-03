@@ -16,6 +16,7 @@ import { fromNorm } from './schema.js';
 import { currentArrangement } from './project.js';
 import { hasInstrument, createInstrument } from './instruments/index.js';
 import { AudioClipPlayer } from './instruments/audioclip.js';
+import { wamState } from './wam-link.js';
 
 const EPS = 1e-9;
 
@@ -698,6 +699,15 @@ export class Engine {
   }
 
   touch(addr, on) { if (on) this.touched.add(addr); else this.touched.delete(addr); }
+
+  // WAM plugins (see wam-link.js): which port and processor belong to a channel ('ch:<id>') or a slot ('fx:<id>');
+  // link null unlinks. Effect latency changes with it, so the mixer recomputes its delay compensation.
+  wamPort(owner, link) {
+    const w = wamState(this.host);
+    if (link) w.ports.set(owner, { port: link.port, instanceId: link.instanceId, latency: link.latency || 0 });
+    else w.ports.delete(owner);
+    this.mixer.latencyDirty = true;
+  }
 
   // UI asks for a spectrum (and effect meters) of one effect slot, or of a track output (slot -1)
   watch(track, slot) { this.mixer.setTap(track == null ? null : { track, slot }); }

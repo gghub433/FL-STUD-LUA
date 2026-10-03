@@ -238,7 +238,7 @@ export function nextColor(project) { return COLORS[project.channels.length % COL
 export { instrumentMeta, barTicks, stepsPerBar, currentArrangement, createFxSlot };
 
 // ---------------------------------------------------------------- mixer
-import { reaches } from '../core/project.js';
+import { reaches, normalizeWam } from '../core/project.js';
 import { effectSchema } from '../core/effects/index.js';
 
 const mx = (n) => [['mixer', 'tracks', n]];
@@ -276,7 +276,11 @@ export function swapFx(store, track, a, b) {
 export function copyFx(store, fromTrack, fromSlot, toTrack, toSlot) {
   const src = store.project.mixer.tracks[fromTrack].fx[fromSlot];
   if (!src) return;
-  store.edit('Copy effect', (p) => { p.mixer.tracks[toTrack].fx[toSlot] = JSON.parse(JSON.stringify(src)); }, mx(toTrack));
+  store.edit('Copy effect', (p) => {
+    const c = JSON.parse(JSON.stringify(src));
+    if (c.type === 'wam' && c.extra) c.extra.wam = normalizeWam({ ...c.extra.wam, id: '' }, true);     // a copy is a second plugin instance
+    p.mixer.tracks[toTrack].fx[toSlot] = c;
+  }, mx(toTrack));
 }
 
 export function setTrackField(store, n, field, value, label = 'Edit track') {

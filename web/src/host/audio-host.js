@@ -11,6 +11,8 @@ export function loadAudioSettings() {
   try { return { sampleRate: 0, latency: 'interactive', sinkId: '', ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; } catch (_) { return { sampleRate: 0, latency: 'interactive', sinkId: '' }; }
 }
 export function saveAudioSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sampleRate: s.sampleRate || 0, latency: s.latency, sinkId: s.sinkId || '' })); } catch (_) { /* private mode */ } }
+// the engine node: output 0 is the master; input 0 and output 1 carry 16 stereo ports for WAM plugins (core/wam-link.js)
+export const ENGINE_NODE_OPTIONS = { numberOfInputs: 1, numberOfOutputs: 2, outputChannelCount: [2, 32], channelCount: 32, channelCountMode: 'explicit', channelInterpretation: 'discrete' };
 const hintOf = (l) => (typeof l === 'number' ? l / 1000 : ['interactive', 'balanced', 'playback'].includes(l) ? l : 'interactive');
 
 export class AudioHost {
@@ -26,6 +28,7 @@ export class AudioHost {
     this.peaks = new Float32Array(252);
     this.settings = { sampleRate: 0, latency: 'interactive', sinkId: '' };
     this.moduleHooks = [];          // (ctx) => Promise: extra worklet modules (plugin packs) added before the engine node exists
+    this.restartHooks = [];         // () => Promise: run before the old context closes (WAM plugins save their state)
     this.warning = null;
     this.loud = [-Infinity, -Infinity, -Infinity, 0, -Infinity, -Infinity, -Infinity, 0];   // see LoudnessMeter.snapshot
     this.error = null;
@@ -56,7 +59,7 @@ export class AudioHost {
     this.sampleRate = this.ctx.sampleRate;
     await this.ctx.audioWorklet.addModule(this.workletUrl);
     for (const f of this.moduleHooks) { try { await f(this.ctx); } catch (err) { console.warn('[audio] module', err); } }
-    this.node = new AudioWorkletNode(this.ctx, 'stepwise-engine', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+    this.node = new AudioWorkletNode(this.ctx, 'stepwise-engine', ENGINE_NODE_OPTIONS);
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.7;
@@ -74,6 +77,7 @@ export class AudioHost {
   // 'restarted' send the project and the samples again.
   async restart(settings = null) {
     if (settings) this.settings = { ...this.settings, ...settings };
+    for (const f of this.restartHooks) { try { await f(); } catch (err) { console.warn('[audio] restart', err); } }
     this.ready = false;
     this.queue = [];                                   // anything queued now is superseded by the full resend
     const old = this.ctx;

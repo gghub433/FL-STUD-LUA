@@ -2,7 +2,7 @@
 //
 // The app is plain ES modules, so the build keeps the module graph (and every `new URL('./x.js', import.meta.url)`
 // used for the AudioWorklet and the render worker) exactly as it is and only minifies each file in place:
-//   dist/index.html, dist/assets/*, dist/vendor/*, dist/packs/* (plugin packs, untouched), dist/src/**/*.js (minified), dist/src/ui/theme.css (minified)
+//   dist/index.html, dist/assets/*, dist/vendor/*, dist/packs/* (plugin packs, untouched), dist/wam/* (example WAM plugins), dist/src/**/*.js (minified), dist/src/ui/theme.css (minified)
 // Serve dist/ with any static server (`node tools/serve.mjs dist`) or pack it into one executable (`npm run exe`).
 // Without esbuild installed the files are copied unminified.
 import fs from 'node:fs';
@@ -32,7 +32,7 @@ const put = (rel, data) => { const f = path.join(out, rel); fs.mkdirSync(path.di
 
 let before = 0, after = 0;
 // plugin packs are copied byte for byte: their SHA-256 in packs/catalog.json must keep matching
-for (const top of ['assets', 'vendor', 'packs']) walk(path.join(root, top), (p) => put(path.relative(root, p), fs.readFileSync(p)));
+for (const top of ['assets', 'vendor', 'packs', 'wam']) walk(path.join(root, top), (p) => put(path.relative(root, p), fs.readFileSync(p)));
 put('index.html', fs.readFileSync(path.join(root, 'index.html')));
 walk(path.join(root, 'src'), (p) => {
   const rel = path.relative(root, p), src = fs.readFileSync(p);

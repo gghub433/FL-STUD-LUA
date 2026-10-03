@@ -124,6 +124,18 @@ async function smoke(w) {
           o.fileRoundTrip = app.store.project.tempo === tempo && document.title === 'smoke - FL LUA';
         }
         o.store = (await fetch('/packs/catalog.json').then((r) => r.json())).packs.length;
+        // a WAM plugin (the example synth): it loads from the app's own files and sounds through the engine
+        const wch = await app.wam.addInstrument('wam/example-synth/index.js');
+        let ws = null;
+        for (let i = 0; i < 150; i++) { ws = app.wam.statusOf('ch:' + wch.id); if (ws && ws.state !== 'loading') break; await new Promise((r) => setTimeout(r, 100)); }
+        o.wam = ws ? ws.state + (ws.error ? ': ' + ws.error : '') : 'none';
+        if (ws && ws.state === 'ready') {
+          app.host.send({ t: 'noteOn', ch: wch.id, key: 57, vel: 1 });
+          let wm = 0; const w0 = performance.now();
+          while (performance.now() - w0 < 700) { const [l, r] = app.host.peak(0); wm = Math.max(wm, l, r); await new Promise((r) => setTimeout(r, 20)); }
+          app.host.send({ t: 'noteOff', ch: wch.id, key: 57 });
+          o.wamPeak = wm;
+        }
         const u = await window.flluaDesktop.update.check();
         o.update = { mode: u.mode, current: u.current, latest: u.latest, available: u.available, file: (u.url || '').split('/').pop(), error: u.error };
       }
@@ -131,7 +143,8 @@ async function smoke(w) {
     })()`);
     Object.assign(out, r);
     out.ok = r.title === 'FL LUA' && r.channels > 0 && r.menus >= 8 && r.origin === 'fllua://app' && (!r.audio || r.state !== 'running' || r.peak > 0.02) && r.bridge && (!r.audio || r.fileRoundTrip)
-      && (!r.update || (r.update.available && r.update.latest === '99.0.0' && /^FL-LUA-/.test(r.update.file)));
+      && (!r.update || (r.update.available && r.update.latest === '99.0.0' && /^FL-LUA-/.test(r.update.file)))
+      && (!r.audio || r.state !== 'running' || (r.wam === 'ready' && r.wamPeak > 0.01));
     if (process.env.FLLUA_SHOT) { const img = await w.webContents.capturePage(); fs.writeFileSync(process.env.FLLUA_SHOT, img.toPNG()); }
   } catch (err) { out.error = String(err && err.message || err); }
   server.close();

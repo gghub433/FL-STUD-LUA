@@ -38,7 +38,7 @@ function run(type, params, inL, inR = inL, opts = {}) {
 
 test('every registered effect has a schema, metadata and survives silence + noise without NaN', () => {
   for (const [type, mod] of Object.entries(EFFECTS)) {
-    assert.ok(mod.schema.length > 0 && mod.meta.name, type);
+    assert.ok((mod.schema.length > 0 || type === 'wam') && mod.meta.name, type);      // a WAM plugin brings its own parameters
     const fx = createEffect(type, SR, { ...host, getSample: (id) => (id ? { rate: SR, ch: [new Float32Array(100)], length: 100, peak: 1 } : null) });
     for (const d of mod.schema) fx.setParam(d.id, d.def);
     const L = noise(0.5), R = noise(0.5, 0.3, 9);

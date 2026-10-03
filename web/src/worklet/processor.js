@@ -3,6 +3,8 @@
 import { Engine } from '../core/engine.js';
 import { installPackHook } from '../core/packs.js';
 import { LoudnessMeter } from '../core/loudness.js';
+import { BLOCK, PPQ } from '../core/constants.js';
+import { wamState } from '../core/wam-link.js';
 
 // plugin packs are added with audioWorklet.addModule(); each one calls this when it is evaluated (the page has validated it already)
 installPackHook(globalThis, { smoke: false });
@@ -46,11 +48,59 @@ class StepwiseProcessor extends AudioWorkletProcessor {
         case 'meterReset': e.meter.resetIntegrated(); break;
         case 'touch': e.touch(m.addr, m.on); break;
         case 'clock': e.clockOut = !!m.on; break;
+        case 'wam': this.wam(m); break;
+        case 'offline': e.noLoop = true; this.off = { end: m.end, tailMax: Math.round((m.tail === 'auto' ? 20 : m.tail) * sampleRate), auto: m.tail === 'auto', frames: 0, stopped: false, body: 0, tail: 0, quiet: 0, done: false }; break;
         case 'ping': this.port.postMessage({ t: 'pong', id: m.id }); break;
         default: break;
       }
     } catch (err) {
       this.port.postMessage({ t: 'error', where: m.t, message: String(err && err.message || err), stack: String(err && err.stack || '') });
+    }
+  }
+
+  // WAM plugins: the host group of this page (its processors share this scope), and which port each plugin uses
+  wam(m) {
+    const w = wamState(this.engine.host);
+    if (m.op === 'group') {
+      try { w.group = globalThis.webAudioModules ? globalThis.webAudioModules.getGroup(m.id, m.key) : null; } catch (_) { w.group = null; }
+    } else if (m.op === 'port') this.engine.wamPort(m.owner, m);
+    else if (m.op === 'unport') this.engine.wamPort(m.owner, null);
+    this.wamTransport = null;
+  }
+
+  // tells the plugins when the transport starts or stops and the tempo (wam-transport events)
+  wamSync() {
+    const e = this.engine, w = e.host.wam;
+    if (!w || !w.group || !w.ports.size) return;
+    const playing = e.tr.playing && e.tr.countIn <= 0, tempo = e.project.tempo;
+    const key = `${playing}|${tempo}`;
+    if (key === this.wamTransport) return;
+    this.wamTransport = key;
+    const tick = Math.max(0, e.tr.tick), b = e.timeMap.bbt(tick), sig = b.sig;
+    const inBar = tick - e.timeMap.barStart(b.bar);
+    const data = { tempo, timeSigNumerator: sig.num, timeSigDenominator: sig.den, playing, currentBar: b.bar - 1,
+      currentBarStarted: currentTime + BLOCK / sampleRate - (inBar * 60) / (tempo * PPQ) };
+    for (const link of w.ports.values()) {
+      const proc = w.group.processors.get(link.instanceId);
+      if (proc) proc.scheduleEvents({ type: 'wam-transport', time: currentTime + BLOCK / sampleRate, data });
+    }
+  }
+
+  // export through Web Audio (projects with WAM plugins): stop at the end, ring out, then report where the audio ends
+  offline(L, R) {
+    const o = this.off, e = this.engine;
+    if (o.done) return;
+    if (o.stopped) {
+      o.tail += L.length;
+      if (o.auto) {
+        let peak = 0;
+        for (let i = 0; i < L.length; i++) { const a = Math.max(Math.abs(L[i]), Math.abs(R[i])); if (a > peak) peak = a; }
+        o.quiet = peak < 1e-4 ? o.quiet + L.length : 0;
+      }
+      if (o.tail >= o.tailMax || (o.auto && o.quiet > sampleRate * 0.4)) {
+        o.done = true;
+        this.port.postMessage({ t: 'offlineDone', frames: o.frames, bodyFrames: o.body, loudness: e.meter.stats() });
+      }
     }
   }
 
@@ -61,6 +111,15 @@ class StepwiseProcessor extends AudioWorkletProcessor {
     if (!e.project) return true;
     const t0 = Date.now();
     e.frameOffset = currentFrame - e.frame;                 // MIDI timestamps are in the audio clock's frames
+    const send = outputs[1];
+    if (send) for (let c = 0; c < send.length; c++) send[c].fill(0);
+    e.host.extIn = inputs[0] && inputs[0].length ? inputs[0] : null;
+    e.host.extOut = send && send.length ? send : null;
+    const o = this.off;
+    if (o && !o.stopped && (!e.tr.playing || e.tr.tick >= o.end)) {
+      e.stop(); o.stopped = true; o.body = o.frames;
+      if (o.tailMax <= 0) { o.done = true; this.port.postMessage({ t: 'offlineDone', frames: o.frames, bodyFrames: o.body, loudness: e.meter.stats() }); }
+    }
     try {
       e.process(L, R, L.length);
     } catch (err) {
@@ -68,6 +127,8 @@ class StepwiseProcessor extends AudioWorkletProcessor {
       this.port.postMessage({ t: 'error', where: 'process', message: String(err && err.message || err), stack: String(err && err.stack || '') });
       e.tr.playing = false;
     }
+    if (o) { o.frames += L.length; this.offline(L, R); }
+    this.wamSync();
     // MIDI goes out every block, not with the meters: it is scheduled ahead and must not wait
     const mq = e.host.midiQueue;
     if (mq.length) { this.port.postMessage({ t: 'midi', events: mq.splice(0) }); }
