@@ -63,7 +63,8 @@ export function writeMidi(project, { mode = 'song', channelIds = null } = {}) {
 }
 
 // ---- reader -----------------------------------------------------------------------------------
-// returns { format, ppq, tempo, timeSig: {num, den}, tracks: [{ name, notes: [{ s, l, k, v, ch }] }] } with ticks scaled to PPQ 96
+// returns { format, ppq, tempo, timeSig: {num, den}, tracks: [{ name, notes: [{ s, l, k, v, ch }], programs: { ch: program } }] }
+// with ticks scaled to PPQ 96 (programs: the first program change on each MIDI channel)
 export function readMidi(bytes) {
   const d = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   let p = 0;
@@ -81,7 +82,7 @@ export function readMidi(bytes) {
     const id = tag(), len = u32(), end = Math.min(d.length, p + len);
     if (id !== 'MTrk') { p = end; t--; continue; }
     let tick = 0, status = 0, name = '';
-    const open = new Map(), notes = [];
+    const open = new Map(), notes = [], programs = {};
     while (p < end) {
       let delta = 0, b;
       do { b = d[p++]; delta = (delta << 7) | (b & 127); } while (b & 128 && p < end);
@@ -101,6 +102,7 @@ export function readMidi(bytes) {
       } else {
         const hi = st >> 4, ch = st & 15;
         const a = d[p++], c = hi === 0xc || hi === 0xd ? 0 : d[p++];
+        if (hi === 0xc && !(ch in programs)) programs[ch] = a;
         if (hi === 9 && c > 0) { const key = `${ch}:${a}`; if (!open.has(key)) open.set(key, []); open.get(key).push({ s: tick, v: c }); }
         else if (hi === 8 || (hi === 9 && c === 0)) {
           const q = open.get(`${ch}:${a}`);
@@ -111,7 +113,7 @@ export function readMidi(bytes) {
     for (const [key, q] of open) for (const n of q) notes.push({ s: Math.round(n.s * scale), l: PPQ / 4, k: +key.split(':')[1], v: n.v, ch: +key.split(':')[0] });   // unterminated notes: a step long
     p = end;
     notes.sort((a, b) => a.s - b.s || a.k - b.k);
-    tracks.push({ name, notes });
+    tracks.push({ name, notes, programs });
   }
   return { format, ppq: division, tempo: Math.round(tempo * 100) / 100, timeSig, tracks };
 }

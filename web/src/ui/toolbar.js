@@ -214,11 +214,12 @@ export class Toolbar {
     this.cpuBar = h('i');
     this.cpuTxt = h('span', { style: { fontSize: '9px', color: 'var(--dim)' } }, 'CPU 0%');
     this.cpu = h('div.cpu', { hint: 'Audio engine load' }, this.cpuBar);
+    this.lufs = h('span.tb-lufs', { hint: 'Short-term loudness of the master (LUFS) — click for the loudness meter', onclick: () => this.app.toggleWindow('loudness') }, '−∞ LUFS');
     this.time = new Float32Array(2048);
     this.freq = new Uint8Array(1024);
     this.sctx = this.scope.getContext('2d');
     this.scope.style.width = '112px'; this.scope.style.height = '34px';
-    return h('div.tb-row', this.scope, h('div.tb-col', this.cpu, this.cpuTxt));
+    return h('div.tb-row', this.scope, h('div.tb-col', this.cpu, this.cpuTxt, this.lufs));
   }
 
   // ---- updates
@@ -258,6 +259,10 @@ export class Toolbar {
     this.cpuBar.style.width = `${cpu * 100}%`;
     const txt = `CPU ${Math.round(cpu * 100)}%`;
     if (this.cpuTxt.textContent !== txt) this.cpuTxt.textContent = txt;
+    const s = app.host.loud[1], tp = app.host.loud[4];
+    const lt = `${Number.isFinite(s) && s > -70 ? s.toFixed(1).replace('-', '−') : '−∞'} LUFS`;
+    if (this.lufs.textContent !== lt) this.lufs.textContent = lt;
+    this.lufs.classList.toggle('hot', tp > -0.1);
     this.drawScope();
   }
 

@@ -1,7 +1,15 @@
 // Starter projects. Only uses the factory sample pack, so a fresh install makes sound at once.
 import { STEP, BEAT } from './constants.js';
-import { createProject, createChannel, createNote, createPattern, createClip, currentArrangement, barTicks } from './project.js';
+import { createProject, createChannel, createNote, createPattern, createClip, currentArrangement, barTicks, createFxSlot } from './project.js';
 import { factoryId, FACTORY_BY_ID } from './factory.js';
+
+// New projects get a safety limiter in the last master slot (ceiling −0.3 dB), so nothing clips by surprise;
+// effects added to the master go in front of it.
+export function addMasterLimiter(p) {
+  const fx = p.mixer.tracks[0].fx;
+  if (!fx.some((s) => s && s.type === 'limiter') && !fx[fx.length - 1]) fx[fx.length - 1] = createFxSlot('limiter');
+  return p;
+}
 
 export function addFactorySampler(p, factoryKey, opts = {}) {
   const f = FACTORY_BY_ID.get(factoryId(factoryKey));
@@ -20,7 +28,7 @@ export function setSteps(p, patId, ch, steps, vel = 100, key = 60) {
 export function emptyProject() {
   const p = createProject();
   p.tempo = 130;
-  return p;
+  return addMasterLimiter(p);
 }
 
 // A 4-bar house groove in Pattern 1, a variation in Pattern 2, arranged in the playlist.
@@ -63,7 +71,7 @@ export function demoProject() {
   for (let b = 0; b < 8; b++) arr.clips.push(createClip(p, 'pattern', 1, b * bar, bar, b === 7 ? 2 : 1));
   arr.clips.sort((a, b) => a.s - b.s);
   p.currentPattern = 1;
-  return p;
+  return addMasterLimiter(p);
 }
 
 export { BEAT };

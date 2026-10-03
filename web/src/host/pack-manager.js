@@ -19,6 +19,8 @@ export class PackManager {
     this.failed = new Map();                         // id -> error text of packs that did not load at start-up
     this.pendingRemoval = new Set();
     core.installPackHook(globalThis);                // a pack calls globalThis.__flluaRegisterPack when it is imported
+    // a restarted audio engine needs the packs again, before its first project arrives
+    if (app.host && app.host.moduleHooks) app.host.moduleHooks.push((ctx) => this._addModules(ctx));
   }
 
   async _read() { const r = await idbGet('kv', KEY); return r && typeof r === 'object' ? r : { ...mem }; }
@@ -40,6 +42,13 @@ export class PackManager {
       if (info) core.unregisterPack(info.id);
       throw err;
     } finally { URL.revokeObjectURL(url); }
+  }
+
+  async _addModules(ctx) {
+    for (const { source } of this.sources()) {
+      const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+      try { await ctx.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
+    }
   }
 
   // start-up: bring every installed pack online before any project is loaded

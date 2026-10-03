@@ -2,8 +2,16 @@
 // tracks into stems. Rendering runs in a worker with a progress bar and a Cancel button.
 import { h } from './h.js';
 import { modal } from './dialog.js';
-import { FORMATS, defaultSettings, exportProject } from '../app/export.js';
+import { FORMATS, defaultSettings, exportProject, targetOf } from '../app/export.js';
 import { currentArrangement } from '../core/project.js';
+import { LOUDNESS_TARGETS, fmtLufs } from '../core/loudness.js';
+
+// one line for the toast: where the file ended up, loudness-wise
+export function loudnessLine(rep) {
+  if (!rep || !rep.after) return '';
+  const a = rep.after;
+  return `${fmtLufs(a.integrated)}, ${fmtLufs(a.truePeak, ' dBTP')}${rep.limited ? ', limited' : ''}`;
+}
 
 const KEY = 'stepwise.export';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (_) { return {}; } };
@@ -22,7 +30,11 @@ export function openExportDialog(app) {
   const tailSel = sel([['auto', 'Auto (until the sound dies)'], ['cut', 'Cut at the end'], [2, '2 seconds'], [4, '4 seconds'], [8, '8 seconds']], s.tail, 'Time added after the last note so reverbs, delays and releases can ring out');
   const chk = (label, value, hint) => { const c = h('input', { type: 'checkbox', checked: !!value }); return { c, el: h('label.row', { style: { margin: '4px 0', gap: '8px' }, title: hint }, c, label) }; };
   const dither = chk('Dither (when reducing to 16 bit or MP3)', s.dither, 'Adds a little noise that hides rounding distortion');
-  const norm = chk('Normalise to −0.1 dBFS', s.normalize, 'Scales the whole file so its loudest peak just touches full scale');
+  const targetSel = sel(LOUDNESS_TARGETS, targetOf(s), 'Loudness of the file: Peak scales the loudest sample to −0.1 dBFS; a LUFS target sets the integrated loudness (EBU R128 / BS.1770) and limits true peaks at the ceiling only where needed');
+  const ceilSel = sel([[-0.1, '−0.1 dBTP'], [-0.3, '−0.3 dBTP'], [-1, '−1 dBTP (recommended)'], [-2, '−2 dBTP']], s.ceiling ?? -1, 'True-peak ceiling for LUFS targets');
+  const loudRow = h('div.row', { style: { margin: '6px 0', gap: '6px' } }, h('span', { style: { width: '120px' } }, 'Loudness'), targetSel, ceilSel);
+  const syncCeil = () => { ceilSel.disabled = targetSel.disabled || !/^-?\d/.test(targetSel.value); };
+  targetSel.addEventListener('change', syncCeil);
   const stems = chk('Split mixer tracks (one file per insert, as a ZIP)', s.stems, 'Renders each used mixer insert on its own, including its route to the master');
   const keep = chk('Keep a copy in the Browser (Rendered), up to 60 s', s.keep, 'Short exports can be dragged back into the project from the Browser');
   const nameIn = h('input.field', { type: 'text', value: s.name, style: { flex: 1 } });
@@ -35,7 +47,8 @@ export function openExportDialog(app) {
     qSel.value = f.qualities.some(([v]) => v === s.quality) ? s.quality : f.def;
     qSel.disabled = !f.qualities.length;
     const audio = fmtSel.value !== 'mid';
-    for (const el of [rateSel, tailSel, dither.c, norm.c, stems.c, keep.c]) el.disabled = !audio;
+    for (const el of [rateSel, tailSel, dither.c, targetSel, stems.c, keep.c]) el.disabled = !audio;
+    syncCeil();
     rateSel.disabled = !audio || fmtSel.value === 'ogg';
     srcSel.querySelector('option[value=loop]').disabled = fmtSel.value === 'mid';
     note.textContent = fmtSel.value === 'ogg' ? 'OGG files use Opus and are always rendered at 48 kHz.' : fmtSel.value === 'mid' ? 'Notes of the pattern or the playlist, one track per instrument channel. Audio clips and automation are not included.' : fmtSel.value === 'mp3' ? 'MP3 encoding uses LAME (lamejs, LGPL).' : '';
@@ -44,10 +57,10 @@ export function openExportDialog(app) {
   fillQuality();
   const progress = h('progress', { max: 100, value: 0, style: { width: '100%', display: 'none', height: '14px', accentColor: 'var(--accent)' } });
   const status = h('div.dim', { style: { minHeight: '16px', marginTop: '6px' } }, '');
-  const body = h('div', row('Format', fmtSel), row('Quality', qSel), row('Render', srcSel), row('Sample rate', rateSel), row('Tail', tailSel),
-    h('div', { style: { margin: '8px 0 4px 0' } }, dither.el, norm.el, stems.el, keep.el), row('File name', nameIn, ''), note, progress, status);
+  const body = h('div', row('Format', fmtSel), row('Quality', qSel), row('Render', srcSel), row('Sample rate', rateSel), row('Tail', tailSel), loudRow,
+    h('div', { style: { margin: '8px 0 4px 0' } }, dither.el, stems.el, keep.el), row('File name', nameIn, ''), note, progress, status);
   let running = false, cancelled = false, cancelRun = null, m;
-  const read = () => ({ format: fmtSel.value, quality: qSel.value, source: srcSel.value, rate: +rateSel.value, tail: tailSel.value === 'auto' || tailSel.value === 'cut' ? tailSel.value : +tailSel.value, dither: dither.c.checked, normalize: norm.c.checked, stems: stems.c.checked, keep: keep.c.checked, name: (nameIn.value || 'project').replace(/[^\w\- ]+/g, '_') });
+  const read = () => ({ format: fmtSel.value, quality: qSel.value, source: srcSel.value, rate: +rateSel.value, tail: tailSel.value === 'auto' || tailSel.value === 'cut' ? tailSel.value : +tailSel.value, dither: dither.c.checked, normalize: false, target: /^-?\d/.test(targetSel.value) ? +targetSel.value : targetSel.value, ceiling: +ceilSel.value, stems: stems.c.checked, keep: keep.c.checked, name: (nameIn.value || 'project').replace(/[^\w\- ]+/g, '_') });
   const start = async () => {
     if (running) return;
     const cfg = read();
@@ -61,7 +74,7 @@ export function openExportDialog(app) {
         cancelled: () => cancelled,
         onCancel: (fn) => { cancelRun = fn; },
       });
-      if (res) app.toast(res.kind === 'audio' ? `Exported ${res.name} (${res.seconds.toFixed(1)} s, ${(res.bytes.length / 1048576).toFixed(2)} MB)` : res.kind === 'stems' ? `Exported ${res.count} stems` : `Exported ${res.name}`);
+      if (res) app.toast(res.kind === 'audio' ? `Exported ${res.name} (${res.seconds.toFixed(1)} s, ${(res.bytes.length / 1048576).toFixed(2)} MB) · ${loudnessLine(res.loudness)}` : res.kind === 'stems' ? `Exported ${res.count} stems` : `Exported ${res.name}`);
       else app.toast('Export cancelled');
       m.close();
     } catch (err) {

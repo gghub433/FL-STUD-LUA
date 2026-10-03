@@ -98,7 +98,7 @@ app.whenReady().then(() => {
   if (!lock) return;
   protocol.handle('fllua', serve);
   Menu.setApplicationMenu(null);                                  // the app has its own menu bar
-  const allowed = new Set(['media', 'midi', 'midiSysex', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen', 'audioCapture']);
+  const allowed = new Set(['media', 'midi', 'midiSysex', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen', 'audioCapture', 'speaker-selection']);
   session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(allowed.has(permission)));
   session.defaultSession.setPermissionCheckHandler((wc, permission) => allowed.has(permission));
   const w = createWindow();

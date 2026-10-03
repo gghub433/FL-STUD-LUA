@@ -2,6 +2,7 @@
 // audio thread; the main thread only sends commands and receives meters / playhead updates.
 import { Engine } from '../core/engine.js';
 import { installPackHook } from '../core/packs.js';
+import { LoudnessMeter } from '../core/loudness.js';
 
 // plugin packs are added with audioWorklet.addModule(); each one calls this when it is evaluated (the page has validated it already)
 installPackHook(globalThis, { smoke: false });
@@ -12,6 +13,8 @@ class StepwiseProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.engine = new Engine(sampleRate);
+    this.engine.meter = new LoudnessMeter(sampleRate);
+    this.loud = new Array(8);
     this.blocks = 0;
     this.cpuMs = 0;
     this.audioMs = 0;
@@ -39,6 +42,7 @@ class StepwiseProcessor extends AudioWorkletProcessor {
         case 'noteOff': e.noteOff(m.ch, m.key); break;
         case 'panic': e.allNotesOff(true); e.mixer.reset(); break;
         case 'watch': e.watch(m.track, m.slot); break;
+        case 'meterReset': e.meter.resetIntegrated(); break;
         case 'ping': this.port.postMessage({ t: 'pong', id: m.id }); break;
         default: break;
       }
@@ -69,6 +73,7 @@ class StepwiseProcessor extends AudioWorkletProcessor {
       st.t = 'state';
       st.cpu = this.cpu;
       st.peaks = e.takePeaks().slice();
+      st.loud = e.meter.snapshot(this.loud);
       this.port.postMessage(st, [st.peaks.buffer]);
       const msgs = e.drain();
       if (msgs) for (const m of msgs) this.port.postMessage(m);

@@ -2,7 +2,7 @@
 // synths, so it plays at once with no downloads. The Browser lists them under "Templates".
 import { STEP } from './constants.js';
 import { createProject, createChannel, createNote, createPattern, createClip, currentArrangement, barTicks } from './project.js';
-import { addFactorySampler, setSteps, demoProject, emptyProject } from './demo.js';
+import { addFactorySampler, setSteps, demoProject, emptyProject, addMasterLimiter } from './demo.js';
 
 function name(p, n) { p.meta.title = n; return p; }
 function mixerNames(p, names) { Object.entries(names).forEach(([k, v]) => { p.mixer.tracks[+k].name = v; }); }
@@ -88,5 +88,7 @@ export const TEMPLATES = [
     return p;
   } },
 ];
+
+for (const t of TEMPLATES) { const build = t.build; t.build = () => addMasterLimiter(build()); }
 
 export const TEMPLATE_BY_ID = new Map(TEMPLATES.map((t) => [t.id, t]));

@@ -5,6 +5,7 @@ import { PPQ } from '../core/constants.js';
 
 export function installAudioRecording(app) {
   const rec = new AudioRecorder(app.host);
+  app.host.bus.on('restarted', () => { rec.ready = null; });           // the recorder module belongs to the old context
   let session = null;
   const armed = () => { const t = app.store.project.mixer.tracks; for (let n = 1; n < t.length; n++) if (t[n].arm) return n; return 0; };
 

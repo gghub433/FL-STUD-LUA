@@ -18,19 +18,12 @@ export const FORMATS = {
   mid: { label: 'MIDI file', ext: 'mid', mime: 'audio/midi', qualities: [], def: '' },
 };
 
-export const defaultSettings = (project) => ({ format: 'wav', quality: '16', source: 'song', rate: 44100, tail: 'auto', dither: true, normalize: false, stems: false, keep: true, name: (project.meta.title || 'project').replace(/[^\w\- ]+/g, '_') });
+// target: 'off' | 'peak' (loudest sample at −0.1 dBFS) | integrated loudness in LUFS; ceiling: true-peak limit in dBTP.
+// The older boolean `normalize` still means 'peak'.
+export const defaultSettings = (project) => ({ format: 'wav', quality: '16', source: 'song', rate: 44100, tail: 'auto', dither: true, normalize: false, target: 'off', ceiling: -1, stems: false, keep: true, name: (project.meta.title || 'project').replace(/[^\w\- ]+/g, '_') });
+export const targetOf = (s) => (s.target != null && s.target !== 'off' ? s.target : s.normalize ? 'peak' : 'off');
 
 const safeName = (s) => s.replace(/[^\w\- ]+/g, '_').trim() || 'track';
-const peakOf = (l, r) => { let m = 0; for (let i = 0; i < l.length; i++) { const a = Math.abs(l[i]), b = Math.abs(r[i]); if (a > m) m = a; if (b > m) m = b; } return m; };
-
-export function normalizeInPlace(l, r, targetDb = -0.1) {
-  const pk = peakOf(l, r);
-  if (pk < 1e-6) return 1;
-  const g = Math.pow(10, targetDb / 20) / pk;
-  for (let i = 0; i < l.length; i++) { l[i] *= g; r[i] *= g; }
-  return g;
-}
-
 async function encodeOne(l, r, sr, s, ui) {
   const q = +s.quality;
   switch (s.format) {
@@ -53,7 +46,7 @@ export async function exportProject(app, s, ui = { progress() {}, cancelled: () 
     return { name: `${s.name}.mid`, bytes, kind: 'midi' };
   }
   const mode = s.source === 'pat' ? 'pat' : 'song';
-  const opts = { mode, sampleRate: s.format === 'ogg' ? 48000 : s.rate, tail: s.tail === 'cut' ? 0 : s.tail };
+  const opts = { mode, sampleRate: s.format === 'ogg' ? 48000 : s.rate, tail: s.tail === 'cut' ? 0 : s.tail, target: targetOf(s), ceiling: s.ceiling ?? -1 };
   if (s.source === 'loop') {
     const arr = currentArrangement(project);
     if (!arr.loop) throw new Error('There is no loop region in the playlist. Shift-drag on the playlist ruler to set one');
@@ -61,7 +54,7 @@ export async function exportProject(app, s, ui = { progress() {}, cancelled: () 
   }
   const samples = [...app.bank.map].map(([id, e]) => ({ id, rate: e.rate, channels: e.channels }));
   const job = { project: JSON.parse(JSON.stringify(project)), samples, opts, stems: !!s.stems, packs: app.packs ? app.packs.sources() : [] };
-  const run = renderInWorker(job, { onProgress: (f) => ui.progress(f * (s.format === 'wav' ? 1 : 0.7), 'Rendering…') });
+  const run = renderInWorker(job, { onProgress: (f, text) => ui.progress(f * (s.format === 'wav' ? 1 : 0.7), text || 'Rendering…') });
   ui.onCancel(() => run.cancel());
   const out = await run.promise;
   if (!out) return null;
@@ -72,7 +65,6 @@ export async function exportProject(app, s, ui = { progress() {}, cancelled: () 
     for (const st of out.stems) {
       if (ui.cancelled()) return null;
       i++;
-      if (s.normalize) normalizeInPlace(st.left, st.right);
       const bytes = await encodeOne(st.left, st.right, st.sampleRate, s, ui);
       if (!bytes) return null;
       entries.push({ name: `${String(i).padStart(2, '0')} ${safeName(trackName(project, st.track))}.${fmt.ext}`, data: bytes });
@@ -84,9 +76,8 @@ export async function exportProject(app, s, ui = { progress() {}, cancelled: () 
     return { name: `${s.name} stems.zip`, bytes: zip, kind: 'stems', count: entries.length };
   }
 
-  const { left, right, sampleRate, frames } = out.result;
+  const { left, right, sampleRate, frames, report } = out.result;
   if (!frames) throw new Error('Nothing to render. Add notes or clips first');
-  if (s.normalize) normalizeInPlace(left, right);
   const bytes = await encodeOne(left, right, sampleRate, s, ui);
   if (!bytes) return null;
   const name = `${s.name}${s.source === 'pat' ? '-pattern' : s.source === 'loop' ? '-loop' : ''}.${fmt.ext}`;
@@ -99,7 +90,7 @@ export async function exportProject(app, s, ui = { progress() {}, cancelled: () 
       await app.library.save('rendered', e.name, { id: e.id });
     } catch (_) { /* storage unavailable */ }
   }
-  return { name, bytes, seconds, kind: 'audio', left, right, sampleRate };
+  return { name, bytes, seconds, kind: 'audio', left, right, sampleRate, loudness: report };
 }
 
 export { usedTracks };

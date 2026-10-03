@@ -3,10 +3,11 @@
 import { BLOCK, MAX_INSERT } from './constants.js';
 import { Engine } from './engine.js';
 import { clone, currentArrangement, songLength, patternLength } from './project.js';
+import { LoudnessMeter } from './loudness.js';
 
 // samples: Map id -> { rate, channels: [Float32Array, ...] }
 // opts: { sampleRate=44100, mode='song'|'pat', from=0, to=null (ticks), tail=4 (seconds) | 'auto',
-//         soloTrack=null, onProgress(frac), shouldCancel() }
+//         soloTrack=null, measure=false (adds .loudness: integrated, range, true peak…), onProgress(frac), shouldCancel() }
 export function renderOffline(project, samples, opts = {}) {
   const sr = opts.sampleRate || 44100;
   const mode = opts.mode === 'pat' ? 'pat' : 'song';
@@ -18,6 +19,7 @@ export function renderOffline(project, samples, opts = {}) {
   }
   const eng = new Engine(sr);
   eng.noLoop = true;
+  if (opts.measure) eng.meter = new LoudnessMeter(sr);
   eng.setProject(p);
   for (const [id, s] of samples) eng.addSample(id, s.rate, s.channels);
 
@@ -71,7 +73,7 @@ export function renderOffline(project, samples, opts = {}) {
     }
   }
   if (opts.onProgress) opts.onProgress(1);
-  return { left: L.slice(0, n), right: R.slice(0, n), sampleRate: sr, frames: n, bodyFrames };
+  return { left: L.slice(0, n), right: R.slice(0, n), sampleRate: sr, frames: n, bodyFrames, loudness: eng.meter ? eng.meter.stats() : null };
 }
 
 // Render each used mixer track separately (FL "split mixer tracks"). Returns [{ track, left, right }].

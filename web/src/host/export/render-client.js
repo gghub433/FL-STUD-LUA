@@ -7,7 +7,7 @@ export function renderInWorker(job, { onProgress } = {}) {
     settle = { resolve, reject };
     worker.onmessage = (e) => {
       const m = e.data;
-      if (m.t === 'progress') { if (onProgress) onProgress(m.f); }
+      if (m.t === 'progress') { if (onProgress) onProgress(m.f, m.text); }
       else if (m.t === 'done') { worker.terminate(); resolve(m.stems ? { stems: m.stems } : { result: m.result }); }
       else if (m.t === 'error') { worker.terminate(); reject(new Error(m.message)); }
     };

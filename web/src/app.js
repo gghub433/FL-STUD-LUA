@@ -1,6 +1,7 @@
 // FL LUA: application bootstrap and wiring.
 import { h } from './ui/h.js';
-import { AudioHost } from './host/audio-host.js';
+import { AudioHost, loadAudioSettings } from './host/audio-host.js';
+import { openAudioSettings } from './ui/audio-settings.js';
 import { SampleBank } from './host/sample-bank.js';
 import { Store } from './app/store.js';
 import { Transport } from './app/transport.js';
@@ -251,6 +252,7 @@ function buildMenus() {
     { label: 'VIEW', items: () => [
       win('playlist', 'Playlist', 'F5'), win('rack', 'Channel rack', 'F6'), win('pianoroll', 'Piano roll', 'F7'),
       win('mixer', 'Mixer', 'F9'), win('browser', 'Browser', 'F8'), win('picker', 'Plugin picker', 'Alt+F8'),
+      ...(app.viewMenuExtra ? [{ sep: true }, ...app.viewMenuExtra()] : []),
       { sep: true },
       { label: 'Reset window layout', fn: () => wm.resetLayout() },
     ] },
@@ -262,7 +264,7 @@ function buildMenus() {
       { sep: true },
       { label: 'Project settings…', fn: () => app.projectSettings() },
       ...(app.optionsMenuExtra ? app.optionsMenuExtra() : []),
-      { label: 'Audio info…', fn: () => app.audioInfo() },
+      { label: 'Audio settings…', fn: () => app.audioSettings() },
     ] },
     { label: 'TOOLS', items: () => [
       { label: 'Tap tempo', key: 'Alt+T', fn: () => t.tapTempo() },
@@ -297,16 +299,7 @@ app.projectSettings = () => {
   });
 };
 
-app.audioInfo = () => {
-  const c = app.host.ctx;
-  alertBox('Audio engine', [
-    `Sample rate: ${app.host.sampleRate} Hz`,
-    `Base latency: ${(c.baseLatency * 1000).toFixed(1)} ms`,
-    `Output latency: ${((c.outputLatency || 0) * 1000).toFixed(1)} ms`,
-    `State: ${c.state}`,
-    `Engine: AudioWorklet, 128-frame blocks, sample-accurate event scheduling`,
-  ].join('\n'));
-};
+app.audioSettings = () => openAudioSettings(app);
 
 app.about = () => alertBox('FL LUA', 'A browser DAW with a pattern-based workflow (Channel rack → Playlist).\nAudio engine in an AudioWorklet; the same engine renders exports offline.\nOpen source (MIT). Not affiliated with any other DAW vendor.');
 
@@ -419,9 +412,11 @@ export async function boot() {
   wireKnobs(app);
 
   const status = document.getElementById('status-audio');
+  const showRate = () => { status.textContent = `audio: ${host.sampleRate} Hz`; status.style.color = ''; };
   try {
-    await host.init(new URL('./worklet/processor.js', import.meta.url).href);
-    status.textContent = `audio: ${host.sampleRate} Hz`;
+    await host.init(new URL('./worklet/processor.js', import.meta.url).href, loadAudioSettings());
+    showRate();
+    if (host.warning) setTimeout(() => toast(host.warning), 500);
   } catch (err) {
     status.textContent = 'audio: unavailable';
     status.style.color = 'var(--red)';
@@ -433,6 +428,14 @@ export async function boot() {
   host.bus.on('error', (m) => toast(`Engine error: ${m}`));
   host.bus.on('auto', (m) => { for (const [addr, v] of m.values) app.store.engineParam(addr, v); });
   host.bus.on('ended', () => app.store.bus.emit('transport'));
+  // a restarted engine (other sample rate / buffer) starts empty: give it the samples and the project again
+  host.bus.on('restarted', () => {
+    app.bank.resend();
+    host.send({ t: 'init', project: app.store.project });
+    if (app.mixerRewatch) app.mixerRewatch();
+    showRate();
+    app.store.bus.emit('transport');
+  });
 
   app.wm.register('rack', { title: 'Channel rack', create: createRack, rect: { x: 10, y: 10, w: 700, h: 330 }, minW: 380, minH: 140 });
   app.wm.register('picker', { title: 'Plugin picker', create: createPicker, rect: { x: 300, y: 120, w: 300, h: 380 }, minW: 220, minH: 160 });

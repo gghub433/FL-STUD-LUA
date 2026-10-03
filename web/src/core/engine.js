@@ -75,6 +75,7 @@ export class Engine {
     this.click = { on: false, phase: 0, inc: 0, env: 0, k: 0, amp: 0 };
     this.frame = 0;
     this.peakBuf = new Float32Array((MAX_INSERT + 1) * 2);
+    this.meter = null;         // LoudnessMeter on the master output (live engine and export set one)
   }
 
   // ------------------------------------------------------------------ project sync
@@ -208,6 +209,7 @@ export class Engine {
     tr.startTick = tr.tick;
     tr.paused = false;
     tr.countIn = 0;
+    if (this.meter) this.meter.resetIntegrated();          // integrated loudness measures this playthrough
     this._compile();
     this._startAudioMidway();
     this.lastAuto.clear();
@@ -521,6 +523,7 @@ export class Engine {
     }
     const mL = master.inL, mR = master.inR;
     for (let i = 0; i < m; i++) { outL[off + i] = mL[i]; outR[off + i] = mR[i]; }
+    if (this.meter) this.meter.process(mL, mR, m);            // before the metronome click
     if (this.click.on) this._renderClick(outL, outR, off, m);
     this.frame += m;
   }

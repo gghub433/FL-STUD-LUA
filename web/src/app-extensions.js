@@ -11,6 +11,7 @@ import { formDialog } from './ui/forms.js';
 import { installBrowser } from './app-browser.js';
 import { installAudioRecording } from './app/audio-rec.js';
 import { createHistory } from './ui/history-window.js';
+import { createLoudnessWindow } from './ui/loudness-window.js';
 import { openExportDialog } from './ui/export-dialog.js';
 import { openStartDialog } from './ui/start-dialog.js';
 import { patcherEditor } from './ui/patcher.js';
@@ -87,6 +88,9 @@ export function installExtensions(app) {
 
   // ---- export, history, start dialog
   app.wm.register('history', { title: 'Undo history', create: createHistory, rect: { x: 1060, y: 120, w: 280, h: 360 }, minW: 200, minH: 140 });
+  app.wm.register('loudness', { title: 'Loudness meter', create: createLoudnessWindow, rect: { x: 640, y: 70, w: 560, h: 440 }, minW: 440, minH: 330 });
+  const prevView = app.viewMenuExtra;
+  app.viewMenuExtra = () => [...(prevView ? prevView() : []), { label: 'Loudness meter (LUFS)', checked: app.wm.isOpen('loudness'), fn: () => app.toggleWindow('loudness') }];
   app.exportMenu = () => [
     { label: 'Export…', key: 'Ctrl+R', fn: () => openExportDialog(app) },
     { label: 'Quick export', submenu: [
