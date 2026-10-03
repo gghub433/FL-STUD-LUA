@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import { loadPlaywright } from './pw.mjs';
 import path from 'node:path';
+import os from 'node:os';
 import { createServer } from '../../tools/serve.mjs';
 
 const only = process.argv[3];
@@ -11,11 +12,16 @@ const srv = createServer(process.env.E2E_ROOT ? path.resolve(process.env.E2E_ROO
 const port = srv.address().port;
 fs.mkdirSync('tests/e2e/out', { recursive: true });
 
-const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+const ARGS = ['--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'];
+// The app runs in a persistent profile, like a person's browser. (Chromium 153 takes the whole browser down when a
+// file handle kept in IndexedDB is read back in an off-the-record context, which is what newContext() makes.)
+const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'fllua-e2e-'));
+const ctx = await chromium.launchPersistentContext(profile, { args: ARGS, viewport: { width: 1500, height: 860 }, acceptDownloads: true, permissions: ['microphone'] });
+// a plain browser for tests that need contexts of their own (device scale factor, a stubbed desktop bridge)
+const browser = await chromium.launch({ args: ARGS });
 console.log(`Chromium ${browser.version()}`);
 let finishing = false;
-browser.on('disconnected', () => { if (!finishing) console.log('  !! the browser disconnected'); });
-const ctx = await browser.newContext({ viewport: { width: 1500, height: 860 }, acceptDownloads: true, permissions: ['microphone'] });
+ctx.on('close', () => { if (!finishing) console.log('  !! the browser disconnected'); });
 const errors = [];
 const trace = !!process.env.E2E_TRACE;
 let lastConsole = [];
@@ -27,7 +33,7 @@ function watch(p) {
   p.on('crash', () => { pageLost = true; errors.push('the page crashed'); console.log(`  !! the page crashed (renderer). Last console lines:\n     ${lastConsole.join('\n     ')}`); });
   p.on('close', () => { pageLost = true; if (trace) console.log('  !! the page was closed'); });
 }
-page = await ctx.newPage();
+page = ctx.pages()[0] || await ctx.newPage();
 watch(page);
 
 let passed = 0, failed = 0;
@@ -70,6 +76,7 @@ export async function finish() {
   await page.screenshot({ path: 'tests/e2e/out/final.png' });
   console.log(`\n${passed} passed, ${failed} failed${errors.length ? `, ${errors.length} console errors:\n  ${errors.slice(0, 5).join('\n  ')}` : ''}`);
   finishing = true;
-  await browser.close(); srv.close();
+  await ctx.close(); await browser.close(); srv.close();
+  try { fs.rmSync(profile, { recursive: true, force: true }); } catch (_) { /* busy */ }
   process.exit(failed || errors.length ? 1 : 0);
 }
