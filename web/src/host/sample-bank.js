@@ -30,6 +30,7 @@ export class SampleBank {
     this.map = new Map();    // id -> { id, name, rate, channels: Float32Array[], length }
     this.sent = new Set();
     this.loading = new Map();
+    this.remoteFetch = null;  // (id) => Promise<{ name, rate, channels } | null>: a shared session asks the others
   }
 
   get(id) { return this.map.get(id) || null; }
@@ -69,7 +70,7 @@ export class SampleBank {
   }
 
   // Make sure a sample is decoded/loaded and known to the engine. Resolves to the entry or null.
-  ensure(id) {
+  ensure(id, { remote = true } = {}) {
     if (!id) return Promise.resolve(null);
     if (this.map.has(id)) { this._send(this.map.get(id)); return Promise.resolve(this.map.get(id)); }
     if (this.loading.has(id)) return this.loading.get(id);
@@ -91,8 +92,12 @@ export class SampleBank {
         return this.addPCM(`${src.name} (stretched)`, src.rate, channels, id, false);
       }
       const rec = await idbGet('samples', id);
-      if (!rec) return null;
-      return this.addPCM(rec.name, rec.rate, rec.channels, id, false);
+      if (rec) return this.addPCM(rec.name, rec.rate, rec.channels, id, false);
+      if (remote && this.remoteFetch && id.startsWith('user:')) {      // recorded or imported by someone else in the session
+        const got = await this.remoteFetch(id).catch(() => null);
+        if (got) return this.addPCM(got.name, got.rate, got.channels, id, true);
+      }
+      return null;
     })();
     this.loading.set(id, p);
     p.finally(() => this.loading.delete(id));

@@ -446,15 +446,47 @@ const wam = {
   'The song did not end while rendering (is the tempo extremely slow?)': 'Песня не закончилась при рендере (темп очень медленный?)',
   'Insert WAM plugin': 'Вставить плагин WAM', 'Choose WAM plugin': 'Выбрать плагин WAM', 'WAM plugin copy': 'Копия плагина WAM',
 };
+const collab = {
+  'Collaboration…': 'Совместная работа…', 'Collaboration (local network)…': 'Совместная работа (локальная сеть)…', Collaboration: 'Совместная работа',
+  'Your name': 'Ваше имя', 'Host a session on this computer': 'Сервер сессии на этом компьютере', 'Start session': 'Начать сессию', 'Join a session': 'Подключиться к сессии',
+  'This computer becomes the server: the others join with its address and a code. Your project is the one everybody works on. Stop the session and anyone can host the next one.': 'Этот компьютер станет сервером: остальные подключаются по его адресу и коду. Все работают над вашим проектом. Завершите сессию — и следующую может начать кто угодно на своём компьютере.',
+  'Hosting needs the FL LUA desktop app (a browser cannot open a server). You can join a session from here.': 'Чтобы быть сервером, нужна настольная FL LUA (браузер не может открыть сервер). Подключиться к сессии можно и отсюда.',
+  'Type the address and the code that the host’s FL LUA shows. Your current project is replaced by the session’s project (save it first if you need it).': 'Введите адрес и код, которые показывает FL LUA на компьютере-сервере. Ваш текущий проект заменится проектом сессии (сохраните его, если он нужен).',
+  Address: 'Адрес', Code: 'Код', Join: 'Подключиться', 'Join session': 'Подключение к сессии',
+  'Your unsaved changes in this project will be replaced by the session’s project. Join?': 'Несохранённые изменения этого проекта заменятся проектом сессии. Подключиться?',
+  'Connecting…': 'Подключение…', 'Session code': 'Код сессии', 'Connected to': 'Подключено к', 'Address for the others: ': 'Адрес для остальных: ', host: 'сервер',
+  'On the other computers: TOOLS > Collaboration… > Join, with this address and code. They must be on the same network (Wi-Fi or cable); allow FL LUA in the firewall if asked.': 'На других компьютерах: СЕРВИС > Совместная работа… > Подключиться, с этим адресом и кодом. Компьютеры должны быть в одной сети (Wi-Fi или кабель); если брандмауэр спросит — разрешите FL LUA.',
+  'Edits, knob moves, new channels and recordings reach everyone at once. Undo takes back only your own edits. Playback and the current pattern stay your own.': 'Правки, движения ручек, новые каналы и записи сразу видны всем. Отмена возвращает только ваши правки. Воспроизведение и текущий паттерн у каждого свои.',
+  'Stop session': 'Завершить сессию', 'Leave session': 'Выйти из сессии', 'Collaboration on the local network — click for the session': 'Совместная работа по локальной сети — щелчок открывает сессию',
+  'The host ended the session': 'Сервер завершил сессию', 'You ended the session': 'Вы завершили сессию', 'You left the session': 'Вы вышли из сессии', 'The session ended': 'Сессия завершена',
+  'The connection to the host was lost': 'Связь с сервером потеряна', 'Another project was opened in the session': 'В сессии открыт другой проект', 'The session did not answer in time': 'Сессия не ответила вовремя',
+  'Wrong session code': 'Неверный код сессии', 'There is no session on this computer': 'На этом компьютере нет сессии', 'The session already has a host': 'У сессии уже есть сервер',
+  'Only FL LUA on this computer can host here': 'Быть сервером здесь может только FL LUA на этом компьютере',
+  'No answer. Is the session running, and are both computers on the same network?': 'Нет ответа. Сессия запущена? Компьютеры в одной сети?', 'Could not connect': 'Не удалось подключиться',
+  'Type the host address, for example 192.168.1.20:47800': 'Введите адрес сервера, например 192.168.1.20:47800', 'No free network port for the session (47800–47809)': 'Нет свободного сетевого порта для сессии (47800–47809)',
+};
 const parts = { delay: 'задержка', attack: 'атака', hold: 'удержание', decay: 'спад', sustain: 'удержание', release: 'затухание', 'env amount': 'глубина огибающей', 'LFO amount': 'глубина LFO', 'LFO speed': 'скорость LFO', 'LFO shape': 'форма LFO', 'LFO delay': 'задержка LFO', 'LFO attack': 'атака LFO',
   ratio: 'отношение', fine: 'точно', 'fixed frequency': 'фиксированная частота', frequency: 'частота', level: 'уровень', 'output level': 'выходной уровень', 'velocity sensitivity': 'чувствительность к силе', wave: 'волна', feedback: 'обратная связь', output: 'выход', octave: 'октава', semitones: 'полутоны', 'pulse width': 'ширина импульса', 'start phase': 'начальная фаза',
   shape: 'форма', rate: 'скорость', 'tempo sync': 'по темпу', division: 'доля', '→ pitch': '→ высота', '→ cutoff': '→ срез', '→ amplitude': '→ амплитуда', '→ pulse width': '→ ширина импульса', '→ pan': '→ панорама', 'fade-in': 'нарастание' };
 
-export default { ...more, ...params, ...ui, ...tools, ...rest, ...updates, ...wam };
+export default { ...more, ...params, ...ui, ...tools, ...rest, ...updates, ...wam, ...collab };
 
 
 // messages with numbers or names in them: [pattern, replacement]
 export const patterns = [
+  [/^● (Hosting|Session) · (\d+)$/, (m) => `● ${m[1] === 'Hosting' ? 'Сервер' : 'Сессия'} · ${m[2]}`],
+  [/^● Connecting…$/, '● Подключение…'],
+  [/^People \((\d+)\)$/, 'Участники ($1)'],
+  [/^(.+) \(you\)$/, '$1 (вы)'],
+  [/^(.+) joined the session$/, '$1 подключается к сессии'],
+  [/^(.+) left the session$/, '$1 выходит из сессии'],
+  [/^Joined the session \((\d+) (?:person|people)\)$/, 'Вы в сессии (участников: $1)'],
+  [/^The session is full \((\d+) people\)$/, 'Сессия заполнена (участников: $1)'],
+  [/^No answer from (.+)\. Is the session running, and are both computers on the same network\?$/, 'Нет ответа от $1. Сессия запущена? Компьютеры в одной сети?'],
+  [/^Could not connect to (.+)$/, 'Не удалось подключиться к $1'],
+  [/^Session: (.+)$/, (m, tr) => `Сессия: ${tr(m[1])}`],
+  [/^The session’s project could not be opened: (.+)$/, 'Проект сессии не удалось открыть: $1'],
+  [/^A project opened in the session could not be read: (.+)$/, 'Проект, открытый в сессии, не удалось прочитать: $1'],
   [/^WAM plugin “(.+)” could not be loaded( for the export)?: (.+)$/, (m, tr) => `Плагин WAM «${m[1]}» не удалось загрузить${m[2] ? ' для экспорта' : ''}: ${tr(m[3])}`],
   [/^The plugin’s own interface failed: (.+)$/, 'Собственный интерфейс плагина не открылся: $1'],
   [/^FL LUA (\S+) is the latest version\.$/, 'FL LUA $1 — последняя версия.'],

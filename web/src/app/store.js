@@ -20,6 +20,17 @@ export function getPath(obj, path) {
   return o;
 }
 
+// sets the value at `path` (undefined removes it), making missing containers on the way
+export function setPath(obj, path, value) {
+  let o = obj;
+  for (let i = 0; i < path.length - 1; i++) {
+    if (o[path[i]] == null || typeof o[path[i]] !== 'object') o[path[i]] = typeof path[i + 1] === 'number' ? [] : {};
+    o = o[path[i]];
+  }
+  const k = path[path.length - 1];
+  if (value === undefined) { if (Array.isArray(o) && typeof k === 'number') o[k] = null; else delete o[k]; } else o[k] = value;
+}
+
 export class Store {
   constructor(host, bank) {
     this.host = host;
@@ -36,6 +47,7 @@ export class Store {
     this.saveTimer = null;
     this.lastBackup = 0;
     this.changeCounter = 0;
+    this.selective = false;  // shared session: undo takes back only what each edit changed (see setSelectiveUndo)
   }
 
   // ---------------------------------------------------------------- lookups
@@ -70,16 +82,51 @@ export class Store {
   // ---------------------------------------------------------------- undo
   _snap() { return JSON.stringify(this.project); }
 
-  _push(label, key) {
+  _push(label, key, rec = null) {
     const now = performance.now();
     // keys starting with 'gesture:' belong to one pointer drag and never time out
-    if (key && key === this.lastKey && (key.startsWith('gesture:') || now - this.lastTime < COALESCE_MS)) { this.lastTime = now; return; }
+    if (key && key === this.lastKey && (key.startsWith('gesture:') || now - this.lastTime < COALESCE_MS)) {
+      this.lastTime = now;
+      if (this.selective && rec && this.history.length) this._merge(this.history[this.history.length - 1], rec);
+      return;
+    }
     this.lastKey = key || null;
     this.lastTime = now;
-    this.history.push({ label, time: Date.now(), json: this._snap() });
+    if (this.selective) {
+      const h = { label, time: Date.now(), paths: [], params: [] };
+      if (rec) this._merge(h, rec);
+      this.history.push(h);
+    } else this.history.push({ label, time: Date.now(), json: this._snap() });
     if (this.history.length > MAX_HISTORY) this.history.shift();
     this.future = [];
     this.bus.emit('history');
+  }
+
+  // ---- selective undo (shared sessions): an entry keeps the values its edit replaced, path by path
+  setSelectiveUndo(on) {
+    this.selective = !!on;
+    this.history = []; this.future = []; this.lastKey = null;
+    this.bus.emit('history');
+  }
+
+  _merge(h, rec) {
+    for (const r of rec.paths || []) if (!h.paths.some((x) => samePath(x.path, r.path))) h.paths.push(r);
+    for (const r of rec.params || []) if (!h.params.some((x) => x[0] === r[0])) h.params.push(r);
+  }
+
+  // puts back the values of entry h; returns the entry that brings the current values back again
+  _applyEntry(h) {
+    const back = { label: h.label, time: Date.now(), paths: [], params: [] };
+    for (const r of h.paths) back.paths.push({ path: r.path, json: JSON.stringify(getPath(this.project, r.path)) });
+    for (const [addr] of h.params) back.params.push([addr, this.getParam(addr)]);
+    for (const r of h.paths) setPath(this.project, r.path, r.json === undefined ? undefined : JSON.parse(r.json));
+    if (h.paths.length) {
+      if (this.selected != null && !this.channel(this.selected)) { this.selected = this.project.channels[0] ? this.project.channels[0].id : null; this.bus.emit('selection', this.selected); }
+      this.bank.ensureProject(this.project);
+      this.touch(h.paths.map((r) => r.path), h.label);
+    }
+    for (const [addr, v] of h.params) if (v !== undefined) this.setParam(addr, v, { noUndo: true, force: true });
+    return back;
   }
 
   async _restore(json) {
@@ -94,6 +141,15 @@ export class Store {
   }
 
   async undo() {
+    if (this.selective) {
+      const h = this.history.pop();
+      if (!h) return false;
+      this.lastKey = null;
+      this.future.push(this._applyEntry(h));
+      this.bus.emit('history');
+      this.bus.emit('toast', `Undo: ${h.label}`);
+      return true;
+    }
     const h = this.history.pop();
     if (!h) return false;
     this.future.push({ label: h.label, json: this._snap() });
@@ -105,6 +161,15 @@ export class Store {
   }
 
   async redo() {
+    if (this.selective) {
+      const f = this.future.pop();
+      if (!f) return false;
+      this.lastKey = null;
+      this.history.push(this._applyEntry(f));
+      this.bus.emit('history');
+      this.bus.emit('toast', `Redo: ${f.label}`);
+      return true;
+    }
     const f = this.future.pop();
     if (!f) return false;
     this.history.push({ label: f.label, time: Date.now(), json: this._snap() });
@@ -117,6 +182,7 @@ export class Store {
 
   // Jump to the state before history entry `index` (everything after it moves to the redo stack).
   async undoTo(index) {
+    if (this.selective) { while (this.history.length > index) { const h = this.history.pop(); this.future.push(this._applyEntry(h)); } this.lastKey = null; this.bus.emit('history'); return; }
     while (this.history.length > index + 1) {
       const h = this.history.pop();
       this.future.push({ label: h.label, json: this._snap() });
@@ -133,7 +199,7 @@ export class Store {
   // ---------------------------------------------------------------- edits
   // fn mutates the project; `paths` lists the sections that changed (sent to the audio thread).
   edit(label, fn, paths, opts = {}) {
-    if (!opts.noUndo) this._push(label, opts.coalesce);
+    if (!opts.noUndo) this._push(label, opts.coalesce, this.selective ? { paths: paths.map((path) => ({ path, json: JSON.stringify(getPath(this.project, path)) })) } : null);
     const r = fn(this.project);
     this.touch(paths, label);
     return r;
@@ -164,13 +230,23 @@ export class Store {
     const v = clampParam(def, value);
     const prev = getParam(this.project, addr);
     if (prev === v && !opts.force) return v;
-    if (!opts.noUndo) this._push(`Change ${paramLabel(this.project, addr)}`, opts.coalesce || `param:${addr}`);
+    if (!opts.noUndo) this._push(`Change ${paramLabel(this.project, addr)}`, opts.coalesce || `param:${addr}`, this.selective ? { params: [[addr, prev]] } : null);
     setProjectParam(this.project, addr, v);
     this.host.send({ t: 'param', addr, value: v });
     this.markDirty();
     this.bus.emit('param', addr, v);
-    this.bus.emit('user-param', addr, v, prev);                      // a person changed it (automation recording listens)
+    if (!opts.remote) this.bus.emit('user-param', addr, v, prev);   // a person here changed it (automation recording, sessions)
     return v;
+  }
+
+  // a change made by someone else in a shared session (app/collab.js): no undo entry, not sent back
+  applyRemote(path, value) {
+    if (!Array.isArray(path) || !path.length) return;
+    setPath(this.project, path, value);
+    this.host.send({ t: 'set', path, value });
+    if (this.selected != null && !this.channel(this.selected)) { this.selected = this.project.channels[0] ? this.project.channels[0].id : null; this.bus.emit('selection', this.selected); }
+    this.markDirty();
+    this.bus.emit('change', { paths: [path], label: 'remote', remote: true });
   }
 
   // value changed by the engine (automation playback): update the model without undo/echo
@@ -227,5 +303,7 @@ export class Store {
 
   serialize() { return JSON.stringify(this.project); }
 }
+
+const samePath = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 export { clone };

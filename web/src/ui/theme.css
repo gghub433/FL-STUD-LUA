@@ -475,3 +475,17 @@ html[data-theme="light"] .btn.on, html[data-theme="light"] .btn.primary { box-sh
 .wam-params { display: flex; flex-direction: column; gap: 6px; padding: 4px 2px; max-width: 520px; }
 .wam-param { display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: center; }
 .wam-val { min-width: 64px; text-align: right; }
+
+/* TOOLS > Collaboration */
+.collab .mx-title { margin-top: 12px; }
+.collab-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+.collab-p { line-height: 1.5; margin: 4px 0 8px; }
+.collab-code { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 6px; }
+.collab-code b { font: 600 22px var(--mono); letter-spacing: .12em; color: var(--accent); user-select: all; }
+.collab-addr { font-family: var(--mono); user-select: all; color: var(--text); }
+.collab-people { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; }
+.collab-person { display: flex; align-items: center; gap: 8px; }
+.collab-person i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.collab-msg { min-height: 16px; margin-top: 8px; }
+.collab-msg.err { color: var(--red); }
+.collab-badge { color: var(--green); cursor: pointer; }

@@ -38,6 +38,7 @@ export function commands(app) {
     ['midi.link', 'Link hovered knob to MIDI controller', ['Ctrl+L'], () => app.linkHovered && app.linkHovered()],
     ['options.audio', 'Audio settings…', [], () => app.audioSettings()],
     ['options.midi', 'MIDI settings…', [], () => app.midiSettings && app.midiSettings()],
+    ['tools.collab', 'Collaboration (local network)…', [], () => app.collab && app.collab.open()],
     ['view.zoomIn', 'Interface bigger', desk() ? ['Ctrl+='] : [], () => app.zoomStep && app.zoomStep(1)],
     ['view.zoomOut', 'Interface smaller', desk() ? ['Ctrl+-'] : [], () => app.zoomStep && app.zoomStep(-1)],
     ['view.zoomReset', 'Interface at 100 %', desk() ? ['Ctrl+0'] : [], () => app.setPref && app.setPref('scale', 1)],

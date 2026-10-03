@@ -18,7 +18,10 @@ export const COLORS = [
 ];
 
 export const clone = (o) => JSON.parse(JSON.stringify(o));
-export const nextId = (p) => p.seq++;
+// ids of new channels, notes, clips…; a shared session gives each person ids of their own (app/collab.js)
+let idAllocator = null;
+export const setIdAllocator = (fn) => { idAllocator = fn; };
+export const nextId = (p) => (idAllocator ? idAllocator(p) : p.seq++);
 
 export function createTrack(n) {
   return {

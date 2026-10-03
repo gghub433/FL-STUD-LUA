@@ -1,9 +1,14 @@
 // Zero-dependency static server for development: `npm start` -> http://localhost:8080
 // AudioWorklet needs a secure context; http://localhost qualifies.
+// It also carries the collaboration hub (desktop/collab-hub.js) on /collab: a page on this computer can host a
+// session (TOOLS > Collaboration), FL LUA on other computers joins it with this computer's address and the code.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+
+const { createHub } = createRequire(import.meta.url)('../desktop/collab-hub.js');
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const types = {
@@ -13,7 +18,8 @@ const types = {
 };
 
 export function createServer(dir = root) {
-  return http.createServer((req, res) => {
+  const hub = createHub();
+  const server = http.createServer((req, res) => {
     let rel = decodeURIComponent(req.url.split('?')[0]);
     if (rel.endsWith('/')) rel += 'index.html';
     const file = path.normalize(path.join(dir, rel));
@@ -24,6 +30,9 @@ export function createServer(dir = root) {
       res.end(data);
     });
   });
+  server.on('upgrade', (req, socket, head) => { if (!hub.handleUpgrade(req, socket, head, { allowHost: true })) socket.destroy(); });
+  server.hub = hub;
+  return server;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

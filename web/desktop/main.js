@@ -7,6 +7,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const { installUpdater } = require('./updater');
+const { installCollab } = require('./collab');
 
 const SMOKE = process.argv.includes('--smoke');
 const DEV = process.argv.includes('--dev');
@@ -136,15 +137,43 @@ async function smoke(w) {
           app.host.send({ t: 'noteOff', ch: wch.id, key: 57 });
           o.wamPeak = wm;
         }
+        // a shared session: this window hosts it (the hub runs in the main process)
+        try { await app.collab.start('Smoke'); o.collab = { state: app.collab.state, code: app.collab.code, port: app.collab.port, channels: app.store.project.channels.length }; } catch (e) { o.collab = { error: String(e.message || e) }; }
         const u = await window.flluaDesktop.update.check();
         o.update = { mode: u.mode, current: u.current, latest: u.latest, available: u.available, file: (u.url || '').split('/').pop(), error: u.error };
       }
       return o;
     })()`);
     Object.assign(out, r);
+    // someone joins over the network: welcome, then the host's project
+    if (r.collab && r.collab.port) {
+      out.collabGuest = await new Promise((resolve) => {
+        const got = {};
+        const ws = new WebSocket(`ws://127.0.0.1:${r.collab.port}/collab?code=${r.collab.code}&name=Smoke%20guest`);
+        const t = setTimeout(() => { try { ws.close(); } catch (_) { /* */ } resolve(got); }, 8000);
+        ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === 'welcome') got.welcome = true; if (m.t === 'snapshot') { got.channels = m.project.channels.length; clearTimeout(t); ws.close(); resolve(got); } };
+        ws.onerror = () => { got.error = 'could not connect'; };
+      });
+      await w.webContents.executeJavaScript('app.collab.leave()').catch(() => {});
+      // and the other way round: this app joins a session hosted elsewhere (a hub with a stand-in host here)
+      const { createHub } = require('./collab-hub');
+      const hub = createHub(), srv = http.createServer();
+      srv.on('upgrade', (req, sock, head) => hub.handleUpgrade(req, sock, head));
+      await new Promise((r2) => srv.listen(0, '127.0.0.1', r2));
+      const { code } = hub.start();
+      const fake = JSON.parse(await w.webContents.executeJavaScript('JSON.stringify(app.store.project)'));
+      fake.tempo = 99; fake.meta.title = 'Remote song';
+      let hostLink = null;
+      hostLink = hub.attachLocal({ name: 'Remote host' }, (d) => { if (typeof d !== 'string') return; const m = JSON.parse(d); if (m.t === 'need-snapshot') hostLink.send(JSON.stringify({ t: 'snapshot', to: m.for, seq: 0, project: fake })); });
+      out.collabJoin = await w.webContents.executeJavaScript(`app.collab.join('127.0.0.1:${srv.address().port}', '${code}', 'Smoke').then(() => ({ state: app.collab.state, tempo: app.store.project.tempo, title: app.store.project.meta.title }), (e) => ({ error: String(e.message || e) }))`);
+      await w.webContents.executeJavaScript('app.collab.leave()').catch(() => {});
+      hub.end(); srv.close();
+    }
     out.ok = r.title === 'FL LUA' && r.channels > 0 && r.menus >= 8 && r.origin === 'fllua://app' && (!r.audio || r.state !== 'running' || r.peak > 0.02) && r.bridge && (!r.audio || r.fileRoundTrip)
       && (!r.update || (r.update.available && r.update.latest === '99.0.0' && /^FL-LUA-/.test(r.update.file)))
-      && (!r.audio || r.state !== 'running' || (r.wam === 'ready' && r.wamPeak > 0.01));
+      && (!r.audio || r.state !== 'running' || (r.wam === 'ready' && r.wamPeak > 0.01))
+      && (!r.collab || (r.collab.state === 'on' && out.collabGuest && out.collabGuest.welcome && out.collabGuest.channels === r.collab.channels
+        && out.collabJoin && out.collabJoin.state === 'on' && out.collabJoin.tempo === 99));
     if (process.env.FLLUA_SHOT) { const img = await w.webContents.capturePage(); fs.writeFileSync(process.env.FLLUA_SHOT, img.toPNG()); }
   } catch (err) { out.error = String(err && err.message || err); }
   server.close();
@@ -196,6 +225,8 @@ ipcMain.on('doc:state', (_e, s) => { if (s && typeof s === 'object') docState = 
 ipcMain.on('window:close-now', () => { closing = true; if (win && !win.isDestroyed()) win.close(); });
 ipcMain.on('window:zoom', (_e, f) => { const z = Number(f); if (win && !win.isDestroyed() && z >= 0.5 && z <= 2.5) win.webContents.setZoomFactor(z); });
 installUpdater({ getWin: () => win, beforeInstall: () => { closing = true; } });
+const collab = installCollab({ getWin: () => win });
+app.on('before-quit', () => { collab.stop(); });
 app.on('window-all-closed', () => app.quit());
 
 app.whenReady().then(() => {
