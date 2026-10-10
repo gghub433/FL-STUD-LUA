@@ -157,6 +157,13 @@ export class WindowManager {
       const saved = this.saved[id];
       if (saved && !sp.dynamic) s.rect = { x: saved.x, y: saved.y, w: saved.w, h: saved.h };
       else if (sp.dynamic) s.rect = this.cascade(sp.rect);
+      // a window saved on a bigger screen (or with the browser hidden) comes back inside the workspace
+      const cw = this.container.clientWidth, chh = this.container.clientHeight;
+      if (s.rect && cw > 100 && chh > 100) {
+        const r = s.rect = { ...s.rect };
+        r.w = Math.min(r.w, cw); r.h = Math.min(r.h, chh);
+        r.x = Math.max(0, Math.min(r.x, cw - r.w)); r.y = Math.max(0, Math.min(r.y, chh - r.h));
+      }
       w = new Win(this, id, s);
       this.wins.set(id, w);
       this.container.append(w.el);

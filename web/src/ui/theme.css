@@ -490,3 +490,17 @@ html[data-theme="light"] .btn.on, html[data-theme="light"] .btn.primary { box-sh
 .collab-msg.err { color: var(--red); }
 .collab-badge { color: var(--green); cursor: pointer; }
 .backup-folder { font-family: var(--mono); color: var(--text); word-break: break-all; flex: 1; }
+
+/* AI assistant */
+.ai { display: flex; flex-direction: column; }
+.ai-log { flex: 1; min-height: 0; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.ai-msg { max-width: 92%; padding: 6px 9px; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.4; font-size: 12px; user-select: text; }
+.ai-msg.you { align-self: flex-end; background: var(--accent-dim); color: #fff; }
+.ai-msg.claude { align-self: flex-start; background: var(--bg2); color: var(--text); }
+.ai-msg.tool { align-self: flex-start; padding: 2px 9px; color: var(--green); font-size: 11px; }
+.ai-msg.note { align-self: center; color: var(--dim); font-size: 11px; }
+.ai-hello { color: var(--dim); line-height: 1.5; font-size: 12px; }
+.ai-examples { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.ai-example { white-space: normal; text-align: left; height: auto; padding: 4px 8px; }
+.ai-compose { display: flex; gap: 6px; padding: 6px; border-top: 1px solid var(--line); align-items: flex-end; }
+.ai-input { flex: 1; resize: none; min-height: 34px; max-height: 120px; font: inherit; font-size: 12px; }

@@ -171,6 +171,24 @@ async function smoke(w) {
       await w.webContents.executeJavaScript('app.collab.leave()').catch(() => {});
       hub.end(); srv.close();
     }
+    // AI assistant: the page (fllua://) reaches an HTTPS-style API across origins; a local stand-in answers like the Messages API
+    {
+      const sse = (type, d) => `event: ${type}\ndata: ${JSON.stringify({ type, ...d })}\n\n`;
+      const api = http.createServer((req, res) => {
+        const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
+        if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return; }
+        let body = ''; req.on('data', (c) => { body += c; });
+        req.on('end', () => {
+          res.writeHead(200, { ...cors, 'content-type': 'text/event-stream' });
+          res.end(sse('message_start', { message: { id: 'msg_smoke', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } } })
+            + sse('content_block_start', { index: 0, content_block: { type: 'text', text: '' } }) + sse('content_block_delta', { index: 0, delta: { type: 'text_delta', text: `Hello from the API (${JSON.parse(body).model})` } })
+            + sse('content_block_stop', { index: 0 }) + sse('message_delta', { delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 3 } }) + sse('message_stop', {}));
+        });
+      });
+      await new Promise((r2) => api.listen(0, '127.0.0.1', r2));
+      out.assistant = await w.webContents.executeJavaScript(`(async () => { const a = app.assistant; a.baseURL = 'http://127.0.0.1:${api.address().port}'; a.setKey('sk-ant-smoke'); await a.send('Hi'); const r = { text: (a.log.find((e) => e.who === 'claude') || {}).text, error: a.error }; a.clear(); a.setKey(''); a.baseURL = null; return r; })()`);
+      api.close();
+    }
     // cloud backup: two copies in a row land in the chosen folder under different names
     out.backup = await w.webContents.executeJavaScript(`(async () => { for (let i = 0; i < 50 && !app.backup.folder; i++) await new Promise((r) => setTimeout(r, 50)); const a = await app.backup.now(), n1 = app.backup.lastName; const b = await app.backup.now(); return { a, b, n1, n2: app.backup.lastName, error: app.backup.error }; })()`);
     out.backup.files = fs.readdirSync(path.join(process.env.FLLUA_BACKUP_DIR, 'FL LUA backups')).filter((f) => f.endsWith('.fllua')).length;
@@ -179,7 +197,8 @@ async function smoke(w) {
       && (!r.audio || r.state !== 'running' || (r.wam === 'ready' && r.wamPeak > 0.01))
       && (!r.collab || (r.collab.state === 'on' && out.collabGuest && out.collabGuest.welcome && out.collabGuest.channels === r.collab.channels
         && out.collabJoin && out.collabJoin.state === 'on' && out.collabJoin.tempo === 99))
-      && out.backup && out.backup.a && out.backup.b && out.backup.files === 2;
+      && out.backup && out.backup.a && out.backup.b && out.backup.files === 2
+      && out.assistant && out.assistant.text === 'Hello from the API (claude-opus-5-5)';
     if (process.env.FLLUA_SHOT) { const img = await w.webContents.capturePage(); fs.writeFileSync(process.env.FLLUA_SHOT, img.toPNG()); }
   } catch (err) { out.error = String(err && err.message || err); }
   server.close();

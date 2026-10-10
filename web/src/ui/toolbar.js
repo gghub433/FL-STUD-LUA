@@ -205,7 +205,8 @@ export class Toolbar {
       mk('rack', 'rack', 'Channel rack — F6. Instruments and the step sequencer'),
       mk('mixer', 'mixer', 'Mixer — F9. Inserts, effects and routing'),
       mk('browser', 'browser', 'Browser — F8. Samples, presets and projects'),
-      mk('picker', 'picker', 'Plugin picker — Alt+F8. Add instruments and effects'));
+      mk('picker', 'picker', 'Plugin picker — Alt+F8. Add instruments and effects'),
+      mk('assistant', 'assistant', 'AI assistant — ask Claude to make a beat, a melody or explain the app'));
     return h('div.tb-col', row, h('div.tb-label', 'WINDOWS'));
   }
 

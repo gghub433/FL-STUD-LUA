@@ -471,6 +471,20 @@ const collab = {
   'every 2 minutes': 'каждые 2 минуты', 'every 5 minutes': 'каждые 5 минут', 'every 10 minutes': 'каждые 10 минут', 'every 30 minutes': 'каждые 30 минут',
   'Back up now': 'Сохранить копию сейчас', 'Show folder': 'Показать папку', 'Turn off': 'Выключить', 'No copy yet in this session.': 'В этом сеансе копий ещё не было.',
   'The backup folder is not available': 'Папка бэкапа недоступна', 'Allow FL LUA to write to the backup folder (OPTIONS > Cloud backup…)': 'Разрешите FL LUA запись в папку бэкапа (ПАРАМЕТРЫ > Облачный бэкап…)',
+  'AI assistant…': 'AI-ассистент…', 'AI assistant': 'AI-ассистент', 'AI assistant — ask Claude to make a beat, a melody or explain the app': 'AI-ассистент — попросите Claude сделать бит, мелодию или объяснить программу',
+  'API key…': 'API-ключ…', 'API key ✓': 'API-ключ ✓', 'New chat': 'Новый чат', 'Start a new conversation': 'Начать новый разговор', 'Claude · Ctrl+Z undoes its edits': 'Claude · Ctrl+Z отменяет его правки',
+  Send: 'Отправить', 'Ask or tell what to make… (Enter sends, Shift+Enter: new line)': 'Спросите или скажите, что сделать… (Enter — отправить, Shift+Enter — новая строка)',
+  'Tell me what to make or ask how something works. I can change the tempo, add instruments, write beats and melodies, add effects and build the song.': 'Скажите, что сделать, или спросите, как что-то работает. Я могу менять темп, добавлять инструменты, писать биты и мелодии, ставить эффекты и собирать трек.',
+  'Add your Anthropic API key…': 'Добавить API-ключ Anthropic…', 'Make a house beat at 124 BPM': 'Сделай хаус-бит на 124 BPM', 'Add a bass line to this pattern': 'Добавь басовую линию в этот паттерн',
+  'Put reverb on the snare': 'Поставь реверб на малый барабан', 'How do I record a melody from the keyboard?': 'Как записать мелодию с клавиатуры?',
+  'Anthropic API key': 'API-ключ Anthropic', 'The assistant runs on Claude from Anthropic with your own API key. Create a key at console.anthropic.com (API keys) and paste it here.': 'Ассистент работает на Claude от Anthropic с вашим собственным API-ключом. Создайте ключ на console.anthropic.com (раздел API keys) и вставьте сюда.',
+  'The key is kept on this computer only. Your messages and the project summary go straight to Anthropic; using the API is paid by your Anthropic account.': 'Ключ хранится только на этом компьютере. Ваши сообщения и описание проекта уходят напрямую в Anthropic; использование API оплачивается с вашего аккаунта Anthropic.',
+  'Remove key': 'Удалить ключ', 'API key saved': 'API-ключ сохранён',
+  'Add your Anthropic API key first (the key button above).': 'Сначала добавьте API-ключ Anthropic (кнопка ключа вверху).', 'The API key was not accepted. Check it (the key button above).': 'API-ключ не принят. Проверьте его (кнопка ключа вверху).',
+  'This API key may not use this model.': 'Этому API-ключу недоступна эта модель.', 'Too many requests or the credit ran out. Wait a moment or check your Anthropic account.': 'Слишком много запросов или закончился баланс. Подождите или проверьте аккаунт Anthropic.',
+  'Anthropic is busy right now. Try again in a minute.': 'Сервис Anthropic сейчас перегружен. Попробуйте через минуту.', 'No connection to api.anthropic.com. Check the internet connection.': 'Нет связи с api.anthropic.com. Проверьте интернет.',
+  'The answer was too long and was cut off. Ask for less at a time.': 'Ответ оказался слишком длинным и оборвался. Просите поменьше за раз.', 'Claude declined this request.': 'Claude отклонил этот запрос.',
+  'Stopped after many steps. Say "continue" to go on.': 'Остановлено после многих шагов. Напишите «продолжай», чтобы идти дальше.', 'Stopped.': 'Остановлено.',
 };
 const parts = { delay: 'задержка', attack: 'атака', hold: 'удержание', decay: 'спад', sustain: 'удержание', release: 'затухание', 'env amount': 'глубина огибающей', 'LFO amount': 'глубина LFO', 'LFO speed': 'скорость LFO', 'LFO shape': 'форма LFO', 'LFO delay': 'задержка LFO', 'LFO attack': 'атака LFO',
   ratio: 'отношение', fine: 'точно', 'fixed frequency': 'фиксированная частота', frequency: 'частота', level: 'уровень', 'output level': 'выходной уровень', 'velocity sensitivity': 'чувствительность к силе', wave: 'волна', feedback: 'обратная связь', output: 'выход', octave: 'октава', semitones: 'полутоны', 'pulse width': 'ширина импульса', 'start phase': 'начальная фаза',
@@ -481,6 +495,10 @@ export default { ...more, ...params, ...ui, ...tools, ...rest, ...updates, ...wa
 
 // messages with numbers or names in them: [pattern, replacement]
 export const patterns = [
+  [/^✓ Tempo (.+) BPM$/, '✓ Темп $1 BPM'], [/^✓ Added (.+)$/, '✓ Добавлен $1'], [/^✓ Steps: (\d+)$/, '✓ Шаги: $1'], [/^✓ Notes: (\d+)$/, '✓ Ноты: $1'],
+  [/^✓ New pattern ?(.*)$/, '✓ Новый паттерн $1'], [/^✓ (.+) on mixer track (\d+)$/, '✓ $1 на дорожке микшера $2'], [/^✓ Pattern in the playlist, bar (\d+)$/, '✓ Паттерн в плейлисте, такт $1'],
+  [/^✓ Changed a channel$/, '✓ Канал изменён'], [/^✓ Removed a channel$/, '✓ Канал удалён'], [/^✓ Changed the sound$/, '✓ Звук изменён'], [/^✓ Switched pattern$/, '✓ Паттерн переключён'],
+  [/^✓ Changed a mixer track$/, '✓ Дорожка микшера изменена'], [/^✓ Play$/, '✓ Воспроизведение'], [/^✓ Stop$/, '✓ Стоп'],
   [/^Last copy: (.+)$/, 'Последняя копия: $1'],
   [/^Backed up: (.+)$/, 'Сохранено: $1'],
   [/^● (Hosting|Session) · (\d+)$/, (m) => `● ${m[1] === 'Hosting' ? 'Сервер' : 'Сессия'} · ${m[2]}`],
