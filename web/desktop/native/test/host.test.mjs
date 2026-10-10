@@ -149,7 +149,7 @@ test('process: synths sound on notes, effects process the input with their laten
   assert.equal(tx.texts[0], '50%');
 
   // the editor: opening it makes the test plugin "turn" Tone to 0.75, which FL LUA hears about
-  if (process.platform === 'linux' && process.env.DISPLAY) {
+  if ((process.platform === 'linux' && process.env.DISPLAY) || process.platform === 'win32') {
     const ed = await h.cmd({ cmd: 'editor', inst: inst[0].inst, show: true, title: 'Test' });
     assert.equal(ed.open, true, JSON.stringify(ed));
     const ce = await h.cmd({ cmd: 'editor', inst: inst[2].inst, show: true, title: 'Test CLAP' });

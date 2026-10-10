@@ -160,6 +160,15 @@ export function createPluginManager(win, app) {
   const scanBtn = h('div.btn.primary', { onclick: () => P.scan(), hint: 'Look through the folders for VST3 and CLAP plugins (new ones are checked one by one)' }, 'Find plugins');
   const rescan = h('div.btn', { onclick: () => P.scan(true), hint: 'Check every plugin again' }, 'Check all again');
   const addFolder = h('div.btn', { onclick: () => P.addFolder(), hint: 'Add a folder where you keep plugins' }, 'Add folder…');
+  // how many 128-sample blocks the plugins get to answer: fewer = sooner sound, more = safer on a busy computer
+  const latSel = h('select.select', { hint: 'How long plugins have to answer. Shorter = less delay; longer = no crackles when the computer is busy. The mixer keeps everything in time either way.' });
+  const fillLat = () => {
+    const sr = app.host.sampleRate || 48000;
+    latSel.textContent = '';
+    latSel.append(...[2, 3, 4, 6].map((k) => h('option', { value: String(k) }, `${tr('Plugin delay')} ${((k * 128) / sr * 1000).toFixed(1)} ms${k === 3 ? ` (${tr('default')})` : ''}`)));
+    latSel.value = String(P.K);
+  };
+  latSel.addEventListener('change', () => P.setLatencyBlocks(+latSel.value));
 
   const add = (p) => {
     if (p.kind === 'instrument') { const ch = P.addInstrument(p); app.openChannelEditor(ch.id); }
@@ -175,9 +184,10 @@ export function createPluginManager(win, app) {
     clear(folders); clear(list);
     if (!P.available) {
       list.append(h('div.plug-empty', h('b', 'VST3 and CLAP plugins run in the FL LUA desktop app.'), h('p.dim', 'Download it from the releases page; your projects open there as they are. In the browser you can use the built-in instruments and effects, plugin packs and WAM plugins.')));
-      scanBtn.classList.add('disabled'); rescan.classList.add('disabled'); addFolder.classList.add('disabled');
+      scanBtn.classList.add('disabled'); rescan.classList.add('disabled'); addFolder.classList.add('disabled'); latSel.disabled = true;
       return;
     }
+    if (latSel.value !== String(P.K)) fillLat();
     const c = P.catalog;
     for (const f of c.folders || []) folders.append(h('div.plug-folder', h('span', f), h('div.btn.sm', { onclick: () => P.removeFolder(f), hint: 'Do not look in this folder' }, '✕')));
     const sc = P.scanning;
@@ -202,12 +212,13 @@ export function createPluginManager(win, app) {
   };
 
   const el = h('div.rack.plug-manager',
-    h('div.rack-head', scanBtn, rescan, addFolder, h('div.grow'), search),
+    h('div.rack-head', scanBtn, rescan, addFolder, latSel, h('div.grow'), search),
     h('div.plug-sub', h('span.dim', 'Folders'), folders),
     progress,
     list);
   const off = store.bus.on('plugins', render);
   render();
   if (P.available && !P.catalog.scannedAt && !P.scanning) P.scan();
-  return { el, onShow: () => { P.refreshCatalog && P.refreshCatalog().catch(() => {}); render(); }, destroy() { off(); } };
+  fillLat();
+  return { el, onShow: () => { P.refreshCatalog && P.refreshCatalog().catch(() => {}); fillLat(); render(); }, destroy() { off(); } };
 }
