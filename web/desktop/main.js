@@ -9,6 +9,8 @@ const os = require('node:os');
 const { installUpdater } = require('./updater');
 const { installCollab } = require('./collab');
 const { installBackup } = require('./backup');
+const { installPlugins } = require('./plugins');
+const smokePlugins = require('./smoke-plugins');
 
 const SMOKE = process.argv.includes('--smoke');
 const DEV = process.argv.includes('--dev');
@@ -22,6 +24,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'fllua', privileges: { standard:
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');      // the audio engine starts with the first click anyway; never block it
 if (SMOKE) app.setPath('userData', path.join(os.tmpdir(), `fllua-smoke-${process.pid}`));          // a test run must not touch the real data
 if (SMOKE && !process.env.FLLUA_BACKUP_DIR) process.env.FLLUA_BACKUP_DIR = path.join(app.getPath('userData'), 'cloud');  // backups go to a test folder
+if (SMOKE && !process.env.FLLUA_PLUGIN_PATH) process.env.FLLUA_PLUGIN_PATH = path.join(__dirname, 'native', 'out', `${process.platform}-${process.arch}`, 'testplugins');  // only the test plugins
 if (SMOKE && !process.env.FLLUA_UPDATE_MODE) process.env.FLLUA_UPDATE_MODE = 'page';                  // the smoke test asks a local fake release server
 if (process.platform === 'win32') app.setAppUserModelId('app.fllua.desktop');
 
@@ -62,7 +65,8 @@ function serve(request) {
   const file = path.normalize(path.join(ROOT, rel));
   if (!file.startsWith(ROOT)) return new Response('forbidden', { status: 403 });
   return fs.promises.readFile(file).then(
-    (data) => new Response(data, { status: 200, headers: { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' } }),
+    // cross-origin isolation: the page shares memory (SharedArrayBuffer) with the plugin bridge
+    (data) => new Response(data, { status: 200, headers: { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store', 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'credentialless' } }),
     () => new Response('not found', { status: 404 }),
   );
 }
@@ -73,7 +77,8 @@ function createWindow() {
     width: st.width || 1500, height: st.height || 900, x: st.x, y: st.y, minWidth: 1000, minHeight: 600,
     show: false, backgroundColor: '#272a2d', title: 'FL LUA', autoHideMenuBar: true,
     icon: path.join(ROOT, 'assets', 'icon-512.png'),
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false, spellcheck: false, preload: path.join(__dirname, 'preload.js') },
+    // not sandboxed: the preload loads the native plugin bridge (the page itself has no Node access)
+    webPreferences: { contextIsolation: true, sandbox: false, nodeIntegration: false, backgroundThrottling: false, spellcheck: false, preload: path.join(__dirname, 'preload.js') },
   });
   if (st.max && !SMOKE) win.maximize();
   win.once('ready-to-show', () => win.show());
@@ -189,6 +194,8 @@ async function smoke(w) {
       out.assistant = await w.webContents.executeJavaScript(`(async () => { const a = app.assistant; a.baseURL = 'http://127.0.0.1:${api.address().port}'; a.setKey('sk-ant-smoke'); await a.send('Hi'); const r = { text: (a.log.find((e) => e.who === 'claude') || {}).text, error: a.error }; a.clear(); a.setKey(''); a.baseURL = null; return r; })()`);
       api.close();
     }
+    // VST3 / CLAP plugins with the test plugins (only where the native parts were built)
+    if (fs.existsSync(process.env.FLLUA_PLUGIN_PATH || '')) out.plugins = await smokePlugins.run(w);
     // cloud backup: two copies in a row land in the chosen folder under different names
     out.backup = await w.webContents.executeJavaScript(`(async () => { for (let i = 0; i < 50 && !app.backup.folder; i++) await new Promise((r) => setTimeout(r, 50)); const a = await app.backup.now(), n1 = app.backup.lastName; const b = await app.backup.now(); return { a, b, n1, n2: app.backup.lastName, error: app.backup.error }; })()`);
     out.backup.files = fs.readdirSync(path.join(process.env.FLLUA_BACKUP_DIR, 'FL LUA backups')).filter((f) => f.endsWith('.fllua')).length;
@@ -198,7 +205,8 @@ async function smoke(w) {
       && (!r.collab || (r.collab.state === 'on' && out.collabGuest && out.collabGuest.welcome && out.collabGuest.channels === r.collab.channels
         && out.collabJoin && out.collabJoin.state === 'on' && out.collabJoin.tempo === 99))
       && out.backup && out.backup.a && out.backup.b && out.backup.files === 2
-      && out.assistant && out.assistant.text === 'Hello from the API (claude-opus-5-5)';
+      && out.assistant && out.assistant.text === 'Hello from the API (claude-opus-5-5)'
+      && (out.plugins === undefined || smokePlugins.ok(out.plugins));
     if (process.env.FLLUA_SHOT) { const img = await w.webContents.capturePage(); fs.writeFileSync(process.env.FLLUA_SHOT, img.toPNG()); }
   } catch (err) { out.error = String(err && err.message || err); }
   server.close();
@@ -252,6 +260,7 @@ ipcMain.on('window:zoom', (_e, f) => { const z = Number(f); if (win && !win.isDe
 installUpdater({ getWin: () => win, beforeInstall: () => { closing = true; } });
 const collab = installCollab({ getWin: () => win });
 installBackup({ getWin: () => win });
+const plugins = installPlugins({ getWin: () => win });
 app.on('before-quit', () => { collab.stop(); });
 app.on('window-all-closed', () => app.quit());
 

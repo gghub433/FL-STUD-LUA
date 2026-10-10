@@ -31,7 +31,9 @@
       "collab.js",
       "collab-hub.js",
       "backup.js",
-      "app/**"
+      "app/**",
+      "plugins.js",
+      "smoke-plugins.js"
     ],
     "asar": true,
     "fileAssociations": [
@@ -111,6 +113,17 @@
         "provider": "github",
         "owner": "gghub433",
         "repo": "FL-STUD-LUA"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "native/out/${platform}-${arch}",
+        "to": "native",
+        "filter": [
+          "fllua-plughost",
+          "fllua-plughost.exe",
+          "fllua_bridge.node"
+        ]
       }
     ]
   },

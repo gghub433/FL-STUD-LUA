@@ -39,6 +39,11 @@ export function installFiles(app) {
     ? projectToZip(project, app.bank)
     : new TextEncoder().encode(JSON.stringify(project)));
 
+  // plugins put their current settings into the project first (app.saveHooks: VST3 / CLAP states)
+  async function beforeSave() {
+    for (const f of app.saveHooks || []) { try { await f(); } catch (err) { console.warn('[save]', err); } }
+  }
+
   async function load(bytes, name) {
     if (/\.midi?$/i.test(name)) return importMidiBytes(bytes, name);
     let project, restored = 0;
@@ -151,6 +156,7 @@ export function installFiles(app) {
 
     async save() {
       if (!doc.path && !doc.handle) return files.saveAs();
+      await beforeSave();
       const bytes = encode(store.project);
       if (!(await write(bytes))) return files.saveAs();
       markSaved(doc.name);
@@ -160,6 +166,7 @@ export function installFiles(app) {
 
     async saveAs() {
       const suggested = `${(doc.name || store.project.meta.title || 'Untitled').replace(/[^\w\- ]+/g, '_')}.fllua`;
+      await beforeSave();
       const bytes = encode(store.project);
       if (desk) {
         const r = await desk.saveDialog({ title: 'Save project as', defaultPath: suggested, filters: [{ name: 'FL LUA project', extensions: ['fllua'] }] });

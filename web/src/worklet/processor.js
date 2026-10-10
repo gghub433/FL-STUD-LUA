@@ -49,6 +49,12 @@ class StepwiseProcessor extends AudioWorkletProcessor {
         case 'touch': e.touch(m.addr, m.on); break;
         case 'clock': e.clockOut = !!m.on; break;
         case 'wam': this.wam(m); break;
+        case 'plug':
+          if (m.op === 'attach') e.plugAttach(m.sab, m.K);
+          else if (m.op === 'link') e.plugLink(m.owner, m.slot >= 0 ? { slot: m.slot, latency: m.latency } : null);
+          else if (m.op === 'pause') e.plugPause(m.on);
+          else if (m.op === 'midi') e.plugMidi(m.ch, m.type, m.channel, m.key, m.value);
+          break;
         case 'offline': e.noLoop = true; this.off = { end: m.end, tailMax: Math.round((m.tail === 'auto' ? 20 : m.tail) * sampleRate), auto: m.tail === 'auto', frames: 0, stopped: false, body: 0, tail: 0, quiet: 0, done: false }; break;
         case 'ping': this.port.postMessage({ t: 'pong', id: m.id }); break;
         default: break;

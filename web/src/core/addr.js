@@ -11,6 +11,7 @@
 import { def, clampParam } from './schema.js';
 import { instrumentSchema } from './instruments/index.js';
 import { effectSchema } from './effects/index.js';
+import { channelSchema, slotSchema } from './plugin-schema.js';
 
 export const CHANNEL_BUILTIN = [
   def('vol', 'Volume', 0, 1, 0.8),
@@ -85,14 +86,14 @@ export function paramDef(project, addr) {
     case 'ch': return find(CHANNEL_BUILTIN, a.key);
     case 'chp': {
       const ch = findChannel(project, a.id);
-      const s = ch && instrumentSchema(ch.type);
+      const s = ch && channelSchema(ch);
       return s ? find(s, a.key) : null;
     }
     case 'mx': return find(TRACK_BUILTIN, a.key);
     case 'fxs': return a.key === 'mix' ? MIX_DEF : ON_DEF;
     case 'fxp': {
       const slot = project.mixer.tracks[a.track]?.fx[a.slot];
-      const s = slot && effectSchema(slot.type);
+      const s = slot && slotSchema(slot);
       return s ? find(s, a.key) : null;
     }
     case 'master': return find(MASTER_BUILTIN, a.key);

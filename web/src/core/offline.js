@@ -20,6 +20,11 @@ export function renderOffline(project, samples, opts = {}) {
   const eng = new Engine(sr);
   eng.noLoop = true;
   if (opts.measure) eng.meter = new LoudnessMeter(sr);
+  // native plugins (desktop app): the same plugin instances as live, through the shared ring; the render waits for them
+  if (opts.plug && opts.plug.sab) {
+    eng.plugAttach(opts.plug.sab, opts.plug.K, true);
+    for (const [owner, link] of opts.plug.links || []) eng.plugLink(owner, link);
+  }
   eng.setProject(p);
   for (const [id, s] of samples) eng.addSample(id, s.rate, s.channels);
 
@@ -73,7 +78,9 @@ export function renderOffline(project, samples, opts = {}) {
     }
   }
   if (opts.onProgress) opts.onProgress(1);
-  return { left: L.slice(0, n), right: R.slice(0, n), sampleRate: sr, frames: n, bodyFrames, loudness: eng.meter ? eng.meter.stats() : null };
+  // with plugins the whole mix comes out late by the plugins' latency: the file starts where the music starts
+  const trim = opts.plug && opts.plug.sab ? Math.min(n, eng.mixer.totalLatency || 0) : 0;
+  return { left: L.slice(trim, n), right: R.slice(trim, n), sampleRate: sr, frames: n - trim, bodyFrames: Math.max(0, bodyFrames - trim), loudness: eng.meter ? eng.meter.stats() : null };
 }
 
 // Render each used mixer track separately (FL "split mixer tracks"). Returns [{ track, left, right }].

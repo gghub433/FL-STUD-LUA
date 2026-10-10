@@ -18,8 +18,9 @@ class FxSlotRT {
     this.mix = data.mix;
     this.dryL = new Float32Array(BLOCK);
     this.dryR = new Float32Array(BLOCK);
-    for (const k in data.params) this.inst.setParam(k, data.params[k]);
     if (data.extra && this.inst.setExtra) this.inst.setExtra(data.extra);
+    if (this.inst.syncParams) this.inst.syncParams(data.params);
+    else for (const k in data.params) this.inst.setParam(k, data.params[k]);
     this.latency = this.inst.latency || 0;
   }
 
@@ -89,8 +90,9 @@ export class Mixer {
     if (!data || !hasEffect(data.type)) { t.fx[s] = null; }
     else if (cur && cur.type === data.type) {
       cur.on = data.on !== 0; cur.mix = data.mix;
-      for (const k in data.params) cur.inst.setParam(k, data.params[k]);
       if (data.extra && cur.inst.setExtra) cur.inst.setExtra(data.extra);
+      if (cur.inst.syncParams) cur.inst.syncParams(data.params);
+      else for (const k in data.params) cur.inst.setParam(k, data.params[k]);
     } else t.fx[s] = new FxSlotRT(data, this.sr, this.host);
     t.hasFx = t.fx.some(Boolean);
     this.latencyDirty = true;
@@ -151,15 +153,24 @@ export class Mixer {
     for (const n of this.order) {
       const t = this.tracks[n];
       t.latency = t.fx.reduce((a, s) => a + (s ? s.delay : 0), 0);
+      if ((t.srcLatency || 0) > arrival[n]) arrival[n] = t.srcLatency;      // channels with latency (plugin instruments) feed it
       out[n] = arrival[n] + t.latency;
       for (const r of t.routes) if (!r.sc && out[n] > arrival[r.dest]) arrival[r.dest] = out[n];
     }
     for (const n of this.order) {
       const t = this.tracks[n];
-      t.directDelay = arrival[n];
+      t.directDelay = arrival[n] - (t.srcLatency || 0);
       for (const r of t.routes) r.delay = r.sc ? 0 : arrival[r.dest] - out[n];
     }
     this.totalLatency = out[0];
+  }
+
+  // the latest channel feeding track n arrives `lat` samples late (the engine delays the others to match)
+  setSourceLatency(n, lat) {
+    const t = this.tracks[n];
+    if (!t || (t.srcLatency || 0) === lat) return;
+    t.srcLatency = lat;
+    this.latencyDirty = true;
   }
 
   clearBuffers() {

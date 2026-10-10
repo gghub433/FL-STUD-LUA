@@ -6,7 +6,7 @@
 // compiled event list with a cursor and render the instruments in slices between events.
 // Notes therefore start on the exact sample, independent of any JS timer or message latency.
 import { BLOCK, PPQ, MAX_INSERT } from './constants.js';
-import { faderGain, clamp, TAU } from './dsp.js';
+import { faderGain, clamp, TAU, DelayLine } from './dsp.js';
 import { Sequencer, EV_ON, EV_OFF, EV_AUDIO_ON, EV_AUDIO_OFF } from './sequencer.js';
 import { Mixer } from './mixer.js';
 import { TimeMap } from './timemap.js';
@@ -17,6 +17,7 @@ import { currentArrangement } from './project.js';
 import { hasInstrument, createInstrument } from './instruments/index.js';
 import { AudioClipPlayer } from './instruments/audioclip.js';
 import { wamState } from './wam-link.js';
+import { blockBegin, blockEnd, setLink as setPlugLink, attach as attachPlug, plugState } from './plugin-link.js';
 
 const EPS = 1e-9;
 
@@ -38,7 +39,10 @@ class ChannelRT {
     const was = this.enabled;
     this.enabled = data.enabled !== 0;
     if (was && !this.enabled && this.inst) this.inst.allOff();
-    if (this.inst && data.params) for (const k in data.params) this.inst.setParam(k, data.params[k]);
+    if (this.inst && data.params) {
+      if (this.inst.syncParams) this.inst.syncParams(data.params);
+      else for (const k in data.params) this.inst.setParam(k, data.params[k]);
+    }
     if (this.inst && (data.type === 'sampler' || data.type === 'audio') && this.inst.setParam) {
       this.inst.setParam('sampleId', data.sample ? (data.sample.use || data.sample.id) : null);
     }
@@ -527,6 +531,7 @@ export class Engine {
     const evs = this.evs;
     evs.length = 0;
     this.host.evFrame = this.frame + this.frameOffset;
+    if (this.host.plug) this._plugBegin(m);
     if (tr.playing && this.clockOut && this.host.midiQueue && tr.countIn <= 0) this._midiClock(m);
     if (tr.playing) this._collect(m, evs);
 
@@ -546,6 +551,7 @@ export class Engine {
 
     // ---- channels -> mixer ----
     const live = this.live;
+    if (this.host.plug) this._alignLatency(live, m);
     for (let k = 0; k < live.length; k++) {
       const rt = live[k];
       const g = faderGain(rt.vol);
@@ -561,6 +567,7 @@ export class Engine {
     }
 
     const master = mixer.process(m);
+    if (this.host.plug) blockEnd(this.host);
     if (mixer.tap && mixer.analyzer.ready) {
       const tp = mixer.tap;
       this.out.push({ t: 'spectrum', track: tp.track, slot: tp.slot, mags: mixer.analyzer.compute() });
@@ -573,6 +580,53 @@ export class Engine {
     if (this.click.on) this._renderClick(outL, outR, off, m);
     this.frame += m;
   }
+
+  // native plugins: a block number and the transport for this block (see plugin-link.js)
+  _plugBegin(m) {
+    const tr = this.tr, tick = Math.max(0, tr.tick), p = this.project;
+    let barTick = 0, num = p.timeSig.num, den = p.timeSig.den;
+    try { const b = this.timeMap.bbt(tick); barTick = this.timeMap.barStart(b.bar); num = b.sig.num; den = b.sig.den; } catch (_) { /* no time map yet */ }
+    blockBegin(this.host, m, {
+      playing: tr.playing && tr.countIn <= 0, tempo: p.tempo, tick, barTick, tsNum: num, tsDen: den, sampleRate: this.sr,
+      samplePos: tick / this.tps, loopS: tr.loopS, loopE: tr.loopE,
+    });
+  }
+
+  // Channels whose instrument answers late (plugins) set the time of their mixer track; the others on that track wait
+  // for them, so everything meets aligned. The mixer compensates the tracks (computeLatency).
+  _alignLatency(live, m) {
+    const lat = this.trackLat || (this.trackLat = new Int32Array(MAX_INSERT + 1));
+    const used = this.latTracks || (this.latTracks = new Set());
+    for (const n of used) lat[n] = 0;
+    let any = false;
+    for (let k = 0; k < live.length; k++) {
+      const rt = live[k], l = (rt.inst && rt.inst.latency) || 0;
+      rt.lat = l;
+      if (l > 0) { any = true; if (l > lat[rt.mixer]) lat[rt.mixer] = l; }
+    }
+    const now = new Set();
+    if (any) for (let k = 0; k < live.length; k++) { const rt = live[k]; if (lat[rt.mixer] > 0) now.add(rt.mixer); }
+    for (const n of new Set([...used, ...now])) this.mixer.setSourceLatency(n, lat[n] || 0);
+    this.latTracks = now;
+    if (!any) return;
+    for (let k = 0; k < live.length; k++) {
+      const rt = live[k], d = lat[rt.mixer] - rt.lat;
+      if (d <= 0) continue;
+      if (!rt.dlL || rt.dlL.buf.length < d + BLOCK + 8) { rt.dlL = new DelayLine(d + BLOCK + 8); rt.dlR = new DelayLine(d + BLOCK + 8); }
+      const L = rt.bufL, R = rt.bufR;
+      for (let i = 0; i < m; i++) { rt.dlL.write(L[i]); rt.dlR.write(R[i]); L[i] = rt.dlL.readInt(d + 1); R[i] = rt.dlR.readInt(d + 1); }
+    }
+  }
+
+  // native plugins: the shared ring (null detaches), and which slot belongs to a channel ('ch:<id>') or effect ('fx:<id>')
+  plugAttach(sab, K, offline = false) { attachPlug(this.host, sab, K, offline); this.mixer.latencyDirty = true; }
+  plugLink(owner, link) { setPlugLink(this.host, owner, link); this.mixer.latencyDirty = true; }
+  // MIDI controller messages (mod wheel, pitch bend…) for a plugin instrument
+  plugMidi(chId, type, channel, key, value) {
+    const rt = this.channels.get(chId);
+    if (rt && rt.inst && rt.inst.midi) { this.host.evFrame = this.frame + this.frameOffset; rt.inst.midi(type, channel, key, value); }
+  }
+  plugPause(on) { plugState(this.host).paused = !!on; this.mixer.latencyDirty = true; }
 
   _renderSlice(a, b) {
     const live = this.live;

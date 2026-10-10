@@ -24,6 +24,7 @@ import * as freqshift from './freqshift.js';
 import * as tape from './tape.js';
 import * as patcher from './patcher.js';
 import * as wam from './wam.js';
+import * as plugin from './plugin.js';
 
 export const EFFECTS = {
   eq, compressor, multiband, limiter, gate,
@@ -32,7 +33,7 @@ export const EFFECTS = {
   flanger: { schema: mod.flangerSchema, meta: mod.flangerMeta, create: mod.createFlanger },
   phaser: { schema: mod.phaserSchema, meta: mod.phaserMeta, create: mod.createPhaser },
   distortion, bitcrusher, filter, stereo, vocoder, grossbeat,
-  tremolo, transient, pitchshift, freqshift, tape, patcher, wam,
+  tremolo, transient, pitchshift, freqshift, tape, patcher, wam, plugin,
 };
 
 export function registerEffect(type, m) { EFFECTS[type] = m; }

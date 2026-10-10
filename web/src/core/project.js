@@ -8,6 +8,7 @@ import { CHANNEL_BUILTIN, TRACK_BUILTIN } from './addr.js';
 import { defaultPads, PADS, MAX_LAYERS } from './instruments/fpc.js';
 import { defaultPatch, normalizePatch, normalizeFxExtra } from './patcher/spec.js';
 import { noteMissing } from './packs.js';
+import { normalizePluginRef, normalizePluginParams } from './plugin-schema.js';
 
 export const FORMAT = 'stepwise';
 export const VERSION = 1;
@@ -34,11 +35,12 @@ export function createTrack(n) {
   };
 }
 
-export function createFxSlot(type) {
+export function createFxSlot(type, plugin = null) {
   const s = effectSchema(type);
   const slot = { type, on: 1, mix: 1, params: s ? defaults(s) : {} };
   if (type === 'patcher') slot.extra = { patch: defaultPatch('effect') };
   if (type === 'wam') slot.extra = { wam: normalizeWam(null, true) };
+  if (type === 'plugin') slot.extra = { plugin: normalizePluginRef({ ...(plugin || {}), kind: 'effect' }, true) };
   return slot;
 }
 
@@ -124,6 +126,7 @@ export function createChannel(p, type, opts = {}) {
   if (type === 'midiout') ch.port = opts.port || '';
   if (type === 'multi') ch.zones = opts.zones ? clone(opts.zones) : [];
   if (type === 'wam') ch.wam = normalizeWam(opts.wam);
+  if (type === 'plugin') { ch.plugin = normalizePluginRef({ ...(opts.plugin || {}), kind: 'instrument' }, true); ch.params = normalizePluginParams(ch.plugin, opts.params); }
   if (type === 'slicer') { ch.sample = opts.sample || null; ch.slices = opts.slices || []; ch.loopBpm = opts.loopBpm || 0; }
   if (type === 'automation') { ch.target = opts.target || null; ch.points = opts.points || []; ch.len = opts.len || barTicks(p.timeSig); ch.mixer = 0; }
   return ch;
@@ -247,6 +250,7 @@ export function normalize(raw) {
     }
     if (type === 'midiout') ch.port = str(c.port, '', 120);
     if (type === 'wam') ch.wam = normalizeWam(c.wam);
+    if (type === 'plugin') { ch.plugin = normalizePluginRef(c.plugin, true); ch.params = normalizePluginParams(ch.plugin, c.params); }
     if (type === 'multi') {
       ch.zones = [];
       for (const z of Array.isArray(c.zones) ? c.zones.slice(0, 256) : []) {
@@ -346,6 +350,7 @@ export function normalize(raw) {
       tr.fx[s] = { type: f.type, on: f.on === 0 ? 0 : 1, mix: num(f.mix, 0, 1, 1), params: normParams(effectSchema(f.type), f.params) };
       if (f.type === 'patcher') tr.fx[s].extra = normalizeFxExtra(f.extra);
       else if (f.type === 'wam') tr.fx[s].extra = { wam: normalizeWam(f.extra && f.extra.wam, true) };
+      else if (f.type === 'plugin') { const ref = normalizePluginRef(f.extra && f.extra.plugin, true); tr.fx[s].extra = { plugin: ref }; tr.fx[s].params = normalizePluginParams(ref, f.params); }
       else if (f.extra && typeof f.extra === 'object') tr.fx[s].extra = clone(f.extra); // effect-specific data (IR id, curves)
     }
   }

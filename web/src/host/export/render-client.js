@@ -5,11 +5,23 @@ let webAudioRenderer = null;
 export function useWebAudioRenderer(fn) { webAudioRenderer = fn; }
 const usesWam = (p) => p.channels.some((c) => c.type === 'wam' && c.wam && c.wam.url) || p.mixer.tracks.some((t) => t.fx.some((s) => s && s.type === 'wam' && s.extra && s.extra.wam && s.extra.wam.url));
 
+// projects with VST3 / CLAP plugins (desktop app): the hook hands the plugin ring to the job and returns a cleanup
+let pluginHook = null;
+export function usePluginHook(fn) { pluginHook = fn; }
+
 export function renderInWorker(job, { onProgress } = {}) {
   if (webAudioRenderer && usesWam(job.project)) return webAudioRenderer(job, { onProgress });
-  const worker = new Worker(new URL('../../worker/render-worker.js', import.meta.url), { type: 'module' });
-  let settle;
-  const promise = new Promise((resolve, reject) => {
+  let worker = null, settle, cancelled = false, cleanup = null;
+  const promise = (async () => {
+    if (pluginHook) cleanup = await pluginHook(job);
+    if (cancelled) return null;
+    return run();
+  })().finally(() => { if (cleanup) cleanup(); });
+  return { promise, cancel: () => { cancelled = true; if (worker) worker.terminate(); if (settle) settle.resolve(null); } };
+
+  function run() {
+    worker = new Worker(new URL('../../worker/render-worker.js', import.meta.url), { type: 'module' });
+    const done = new Promise((resolve, reject) => {
     settle = { resolve, reject };
     worker.onmessage = (e) => {
       const m = e.data;
@@ -18,7 +30,8 @@ export function renderInWorker(job, { onProgress } = {}) {
       else if (m.t === 'error') { worker.terminate(); reject(new Error(m.message)); }
     };
     worker.onerror = (e) => { worker.terminate(); reject(new Error(e.message || 'The render worker failed')); };
-  });
-  worker.postMessage(job);
-  return { promise, cancel: () => { worker.terminate(); settle.resolve(null); } };
+    });
+    worker.postMessage(job);
+    return done;
+  }
 }
