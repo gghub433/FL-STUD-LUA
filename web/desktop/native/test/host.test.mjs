@@ -124,6 +124,16 @@ test('process: synths sound on notes, effects process the input with their laten
   for (let i = 0; i < 60; i++) await block();
   assert.ok(peak(lastBlock(0)) < 0.01 && peak(lastBlock(2)) < 0.01, 'released');
 
+  // reset (an export starts): voices and delay lines are gone at once, without a release tail
+  await block({ 0: [[0, L.EV.NOTE_ON, 0, 60, -1, 0, 1]], 2: [[0, L.EV.NOTE_ON, 0, 60, 8, 0, 1]] });
+  for (let i = 0; i < 4; i++) await block();
+  assert.ok(peak(lastBlock(0)) > 0.05 && peak(lastBlock(2)) > 0.05, 'playing before the reset');
+  const reset = [[0, L.EV.RESET, 0, 0, -1, 0, 0]];
+  await block({ 0: reset, 1: reset, 2: reset }, 0);
+  assert.equal(peak(lastBlock(0)), 0, 'VST3 synth silent right after a reset');
+  assert.equal(peak(lastBlock(2)), 0, 'CLAP synth silent right after a reset');
+  assert.equal(peak(lastBlock(1)), 0, 'the VST3 effect forgot its delay line');
+
   // state: save, change, restore
   const st = await h.cmd({ cmd: 'getState', inst: inst[1].inst });
   assert.equal(st.ok, true);

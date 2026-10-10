@@ -101,7 +101,7 @@ export class PluginPort {
       this.touched = pl.seq;
       if (!this.first || this.first < pl.firstSeq) this.first = pl.seq;
       L.beginSlot(pl.v, pl.seq, l.slot);
-      if (pl.offline && this.first === pl.seq) L.addEvent(pl.v, pl.seq, l.slot, 0, L.EV.ALL_OFF, 0, 0, -1, 0, 0);    // an export starts from silence
+      if (pl.offline && this.first === pl.seq) L.addEvent(pl.v, pl.seq, l.slot, 0, L.EV.RESET, 0, 0, -1, 0, 0);      // an export starts from silence
       for (const e of this.pending.splice(0)) L.addEvent(pl.v, pl.seq, l.slot, 0, e[0], e[1], e[2], e[3], e[4], e[5]);
     }
     return l.slot;
@@ -135,6 +135,10 @@ export class PluginPort {
     const pl = this.host.plug, l = this.link;
     if (!pl || !pl.seq || !l) return false;
     const src = pl.seq - pl.K;
+    if (src < pl.firstSeq) {             // before this engine started (or resumed): nothing of its own to play
+      if (replace) { Lb.fill(0, a, b); Rb.fill(0, a, b); }
+      return false;
+    }
     if (src < 1 || L.outSeqOf(pl.v, src, l.slot) !== src) {
       if (this.first && src >= this.first) Atomics.add(pl.v.u32, L.H.xruns, 1);     // it was sent but is not back in time
       if (replace) { Lb.fill(0, a, b); Rb.fill(0, a, b); }

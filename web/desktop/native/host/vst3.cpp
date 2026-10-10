@@ -844,6 +844,12 @@ class Vst3Plugin : public Plugin {
         case fl::EV_CC: if (e.key < 128 && ccMap_[ch][e.key] != 0xffffffff) inParams_.add(ccMap_[ch][e.key], off, e.value); break;
         case fl::EV_CHAN_PRESSURE: if (ccMap_[ch][kAfterTouch] != 0xffffffff) inParams_.add(ccMap_[ch][kAfterTouch], off, e.value); break;
         case fl::EV_PITCH: if (ccMap_[ch][kPitchBend] != 0xffffffff) inParams_.add(ccMap_[ch][kPitchBend], off, (e.value + 1) * 0.5); break;
+        case fl::EV_RESET:
+          std::memset(held_, 0, sizeof held_);
+          events_.clear();
+          proc_->setProcessing(false);
+          proc_->setProcessing(true);
+          break;
         case fl::EV_PARAM:
           inParams_.add(e.param, off, e.value);
           toMain_.push({e.param, e.value});

@@ -626,7 +626,12 @@ export class Engine {
     const rt = this.channels.get(chId);
     if (rt && rt.inst && rt.inst.midi) { this.host.evFrame = this.frame + this.frameOffset; rt.inst.midi(type, channel, key, value); }
   }
-  plugPause(on) { plugState(this.host).paused = !!on; this.mixer.latencyDirty = true; }
+  plugPause(on) {
+    const pl = plugState(this.host);
+    pl.paused = !!on;
+    if (!on) pl.firstSeq = 0;              // blocks numbered meanwhile (an export's) are not this engine's
+    this.mixer.latencyDirty = true;
+  }
 
   _renderSlice(a, b) {
     const live = this.live;

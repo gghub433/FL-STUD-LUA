@@ -164,7 +164,7 @@ class TestPlugin : public IComponent, public IAudioProcessor, public IEditContro
   tresult PLUGIN_API canProcessSampleSize(int32 s) override { return s == kSample32 ? kResultTrue : kResultFalse; }
   uint32 PLUGIN_API getLatencySamples() override { return synth_ ? 0 : 64; }
   tresult PLUGIN_API setupProcessing(ProcessSetup& s) override { sr_ = s.sampleRate; return kResultOk; }
-  tresult PLUGIN_API setProcessing(TBool) override { return kResultOk; }
+  tresult PLUGIN_API setProcessing(TBool on) override { if (!on) { std::memset(voices_, 0, sizeof voices_); std::memset(dl_, 0, sizeof dl_); } return kResultOk; }
   uint32 PLUGIN_API getTailSamples() override { return 0; }
   tresult PLUGIN_API process(ProcessData& d) override {
     if (d.inputParameterChanges) {

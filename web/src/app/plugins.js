@@ -8,7 +8,7 @@
 // In the browser version there is no plugin host: app.plugins.available is false.
 import { pluginUses } from '../core/plugin-link.js';
 import { paramListOf, normalizePluginRef } from '../core/plugin-schema.js';
-import { matches as layoutMatches, SLOTS } from '../core/plugin-layout.js';
+import { matches as layoutMatches, SLOTS, H } from '../core/plugin-layout.js';
 import { createFxSlot } from '../core/project.js';
 import { usePluginHook } from '../host/export/render-client.js';
 import { toast } from '../ui/dialog.js';
@@ -233,9 +233,21 @@ export function installNativePlugins(app) {
   });
 
   // ---------------------------------------------------------------- settings (state) into the project
-  let captureTimer = 0;
+  let captureTimer = 0, exporting = false;
+  // a knob turned just now reaches the plugin with the next blocks: wait for them (two blocks back from the host)
+  // before reading its settings, or they would miss it. Not when the engine is not running blocks.
+  const settle = async () => {
+    if (!sab || exporting || !P.items.size) return;
+    const u = new Uint32Array(sab, 0, 16), start = Atomics.load(u, H.nextSeq), target = start + 2, t0 = performance.now();
+    while (((Atomics.load(u, H.doneSeq) - target) | 0) < 0 && Atomics.load(u, H.hostState) === 1) {
+      const dt = performance.now() - t0;
+      if (dt > 250 || (dt > 40 && Atomics.load(u, H.nextSeq) === start)) return;
+      await new Promise((r) => setTimeout(r, 3));
+    }
+  };
   P.capture = async (all = false) => {
     let changed = false;
+    if (P.items.size && (all || dirty.size)) await settle();
     for (const [owner, it] of [...P.items]) {
       if (!all && !dirty.has(owner)) continue;
       dirty.delete(owner);
@@ -312,17 +324,31 @@ export function installNativePlugins(app) {
   };
 
   // ---------------------------------------------------------------- export with plugins
+  // the pause reaches the audio thread a little later: the export takes the ring over only when the live engine has
+  // stopped numbering blocks and every block it sent is back (otherwise their numbers would interleave)
+  const liveStopped = async () => {
+    const u = new Uint32Array(sab, 0, 16), t0 = performance.now();
+    let last = Atomics.load(u, H.nextSeq), since = t0;
+    while (performance.now() - t0 < 1500) {
+      await new Promise((r) => setTimeout(r, 5));
+      const n = Atomics.load(u, H.nextSeq), now = performance.now();
+      if (n !== last) { last = n; since = now; } else if (now - since >= 30 && Atomics.load(u, H.doneSeq) === Atomics.load(u, H.reqSeq)) return;
+    }
+  };
   usePluginHook(async (job) => {
     const uses = pluginUses(job.project);
     if (!uses.length || !P.connected || !sab) return null;
     await P.capture(true);
     const rate = job.opts.sampleRate || host.sampleRate;
     host.send({ t: 'plug', op: 'pause', on: true });
+    exporting = true;
+    await liveStopped();
     if (rate !== host.sampleRate) await desk.cmd({ cmd: 'setRate', sampleRate: rate });
     job.opts.plug = { sab, K: P.K, links: [...P.items].map(([owner, it]) => [owner, { slot: it.slot, latency: it.latency }]) };
     return async () => {
       if (rate !== host.sampleRate) await desk.cmd({ cmd: 'setRate', sampleRate: host.sampleRate });
       host.send({ t: 'plug', op: 'pause', on: false });
+      exporting = false;
     };
   });
 

@@ -70,6 +70,7 @@ if(FLLUA_TEST_PLUGINS)
   if(APPLE)
     set_target_properties(fllua-test-vst3 PROPERTIES BUNDLE TRUE BUNDLE_EXTENSION vst3)
     set_target_properties(fllua-test-clap PROPERTIES BUNDLE TRUE BUNDLE_EXTENSION clap)
+    target_link_libraries(fllua-test-vst3 PRIVATE "-framework CoreFoundation")       # FUID::generate
   elseif(UNIX)
     target_link_libraries(fllua-test-vst3 PRIVATE X11)
     target_link_libraries(fllua-test-clap PRIVATE X11)

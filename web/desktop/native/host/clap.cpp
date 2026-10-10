@@ -535,6 +535,10 @@ class ClapPlugin : public Plugin {
           in_.list.push_back(&in_.params.back().header);
           break;
         }
+        case fl::EV_RESET:
+          std::memset(held_, 0, sizeof held_);
+          plugin_->reset(plugin_);
+          break;
         case fl::EV_ALL_OFF:
           for (int c = 0; c < 16; c++)
             for (int k = 0; k < 128; k++)

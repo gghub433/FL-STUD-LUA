@@ -19,6 +19,7 @@ enum EventType : uint16_t {
   EV_NOTE_ON = 1, EV_NOTE_OFF = 2, EV_CC = 3, EV_PITCH = 4, EV_CHAN_PRESSURE = 5, EV_POLY_PRESSURE = 6,
   EV_PARAM = 7,       // param = parameter id, value = normalized 0..1
   EV_ALL_OFF = 8,
+  EV_RESET = 9,       // start from silence (an export): voices, tails and delay lines from before are dropped
 };
 
 struct Event {           // 24 bytes

@@ -20,7 +20,7 @@ export const SAB_SIZE = HEADER_SIZE + RING * FRAME_SIZE;
 
 // header fields (Uint32 indices)
 export const H = { magic: 0, version: 1, reqSeq: 2, doneSeq: 3, nextSeq: 4, hostState: 5, xruns: 6, latencyBlocks: 7 };
-export const EV = { NOTE_ON: 1, NOTE_OFF: 2, CC: 3, PITCH: 4, CHAN_PRESSURE: 5, POLY_PRESSURE: 6, PARAM: 7, ALL_OFF: 8 };
+export const EV = { NOTE_ON: 1, NOTE_OFF: 2, CC: 3, PITCH: 4, CHAN_PRESSURE: 5, POLY_PRESSURE: 6, PARAM: 7, ALL_OFF: 8, RESET: 9 };
 export const FLAG = { PLAYING: 1, LOOP: 2, OFFLINE: 4 };
 
 export function matches(layout) {
