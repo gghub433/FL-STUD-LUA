@@ -12,13 +12,14 @@ async function fresh() {
     await app.bank.ensure('factory:kick-punch');
     for (const s of [0, 4, 8, 12]) app.cmd.setStep(app.store, ch.id, s, true, { key: 60 });
     app.store.select(ch.id);
+    for (const [wid, w] of app.wm.wins) if (wid !== 'rack' && w.open) app.wm.close(wid);   // editors of the last test would cover the rack
     app.openWindow('rack');
     await new Promise((r) => setTimeout(r, 200));
     return ch.id;
   });
 }
 const knobOf = (id) => page.locator(`.ch-row[data-ch="${id}"] .knob`).nth(1);   // pan, volume, pitch: second is the volume
-const rightClick = async (loc) => { const b = await loc.boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2, { button: 'right' }); };
+const rightClick = async (loc) => { await ev(() => app.wm.focus('rack')); const b = await loc.boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2, { button: 'right' }); };
 
 export async function run() {
   console.log('automation, controllers, MIDI');
