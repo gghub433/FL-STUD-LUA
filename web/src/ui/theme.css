@@ -518,3 +518,32 @@ html[data-theme="light"] .btn.on, html[data-theme="light"] .btn.primary { box-sh
 .flux-name { color: var(--accent); font-size: 20px; font-weight: 600; line-height: 1.2; }
 .flux-hint { font-size: 10.5px; }
 .flux-macros { display: grid; grid-template-columns: repeat(4, minmax(70px, 1fr)); gap: 14px 8px; justify-items: center; padding: 8px 0; }
+
+/* VST3 / CLAP plugins: wrapper panel and plugin manager */
+.plug-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.plug-top { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.plug-status { min-width: 0; }
+.plug-name { font-weight: 600; color: var(--text); font-size: 12px; }
+.plug-line { color: var(--dim); font-size: 11px; margin-top: 2px; }
+.plug-line.err, .plug-row.err, .plug-group.err { color: var(--red); }
+.plug-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+.plug-search { width: 180px; }
+.plug-scroll { flex: 1; min-height: 0; padding: 4px 10px 10px; }
+.plug-params { display: flex; flex-wrap: wrap; gap: 10px 14px; align-content: flex-start; }
+.plug-params .knob-label { max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plug-manager { display: flex; flex-direction: column; }
+.plug-sub { display: flex; gap: 8px; align-items: flex-start; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.plug-folders { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; max-height: 90px; overflow: auto; }
+.plug-folder { display: flex; gap: 6px; align-items: center; font-family: var(--mono); font-size: 10.5px; color: var(--text); }
+.plug-folder span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plug-progress { padding: 4px 10px; font-size: 11px; }
+.plug-list { flex: 1; min-height: 0; padding: 0 6px 8px; }
+.plug-group { color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; padding: 10px 4px 3px; }
+.plug-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 3px; }
+.plug-row:hover { background: var(--bg2); }
+.plug-row .dim { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plug-fmt { font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; background: var(--bg3); color: var(--dim); }
+.plug-empty { padding: 20px 12px; line-height: 1.5; }
+.btn.disabled { opacity: .45; pointer-events: none; }
+.plug-val { color: var(--accent); max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-name.plug-bad { color: var(--red) !important; text-decoration: line-through; }

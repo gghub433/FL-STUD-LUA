@@ -15,6 +15,7 @@ import { EFFECT_PRESETS } from '../core/presets.js';
 import { IRS } from '../core/factory.js';
 import { trackName } from '../core/addr.js';
 import { patcherFxPanel } from './patcher.js';
+import { pluginPanel } from './plugin-ui.js';
 
 const BAND_COLORS = ['#e35d5d', '#e8894a', '#e0b84a', '#7fdc5c', '#4cc3a6', '#4aaedc', '#a07fe0'];
 
@@ -28,7 +29,7 @@ export function openFxEditor(app, track, slot) {
   const big = ['eq', 'grossbeat', 'convolver', 'multiband', 'compressor', 'limiter', 'gate'].includes(s.type);
   return app.wm.open(id, {
     title: meta.name, dynamic: true,
-    rect: s.type === 'wam' ? { x: 220, y: 80, w: 580, h: 340 } : { x: 220, y: 80, w: s.type === 'patcher' ? 980 : s.type === 'grossbeat' ? 820 : big ? 680 : 520, h: s.type === 'patcher' ? 580 : s.type === 'grossbeat' ? 640 : s.type === 'eq' ? 560 : 400 },
+    rect: s.type === 'wam' ? { x: 220, y: 80, w: 580, h: 340 } : s.type === 'plugin' ? { x: 220, y: 80, w: 560, h: 380 } : { x: 220, y: 80, w: s.type === 'patcher' ? 980 : s.type === 'grossbeat' ? 820 : big ? 680 : 520, h: s.type === 'patcher' ? 580 : s.type === 'grossbeat' ? 640 : s.type === 'eq' ? 560 : 400 },
     minW: 360, minH: 220,
     create: (win) => fxEditor(win, app, track, slot),
   });
@@ -79,6 +80,13 @@ function fxEditor(win, app, track, slotIdx) {
   const slot0 = store.project.mixer.tracks[track].fx[slotIdx];
   const type = slot0.type;
   if (type === 'wam') return app.wam.editor(win, `fx:${slot0.extra.wam.id}`, { title: () => `${trackName(store.project, track)} / slot ${slotIdx + 1}` });
+  if (type === 'plugin') {
+    const owner = `fx:${slot0.extra.plugin.id}`;
+    win.setTitle(`${trackName(store.project, track)} / slot ${slotIdx + 1}`, slot0.extra.plugin.name || 'Plugin');
+    const panel = pluginPanel(app, owner, { addrOf: (pid) => `mx:${track}:fx:${slotIdx}:p:${pid}` });
+    app.plugins.sync().then(() => { const it = app.plugins.item(owner); if (it && it.hasEditor && !it.editorOpen) app.plugins.openEditor(owner); });
+    return { el: h('div.rack', panel.el), destroy() { panel.destroy(); } };
+  }
   const mod = EFFECTS[type];
   const schema = mod.schema;
   const addrOf = (id) => `mx:${track}:fx:${slotIdx}:p:${id}`;

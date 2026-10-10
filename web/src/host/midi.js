@@ -249,6 +249,8 @@ export class MidiHub {
     else if (type === 8 || (type === 9 && b === 0)) this.noteOff(chan, a);
     else if (type === 11) this.cc(chan, a, b);
     else if (type === 14) this.bend(chan, a | (b << 7));
+    else if (type === 13 && this.app.store.selected != null) this.toPlugin(this.app.store.selected, 5, chan, 0, a / 127);
+    else if (type === 10 && this.app.store.selected != null) this.toPlugin(this.app.store.selected, 6, chan, a, b / 127);
   }
 
   noteOn(chan, key, vel) {
@@ -269,8 +271,18 @@ export class MidiHub {
   // pitch wheel: +-2 semitones on the selected channel's pitch while it is held away from the centre
   bend(chan, v14) {
     const app = this.app, ch = app.store.selected;
-    if (ch == null || !app.store.channel(ch) || !this.bendEnabled) return;
+    if (ch == null || !app.store.channel(ch)) return;
+    if (this.toPlugin(ch, 4, chan, 0, (v14 - 8192) / 8192)) return;         // VST3 / CLAP: the plugin bends itself
+    if (!this.bendEnabled) return;
     app.store.setParam(`ch:${ch}:pitch`, ((v14 - 8192) / 8192) * 2, { noUndo: true });
+  }
+
+  // a VST3 / CLAP instrument on the selected channel gets the controller messages itself
+  toPlugin(ch, type, chan, key, value) {
+    const c = this.app.store.channel(ch);
+    if (!c || c.type !== 'plugin' || !this.app.plugins) return false;
+    this.app.plugins.midi(ch, type, chan, key, value);
+    return true;
   }
 
   cc(chan, cc, value) {
@@ -285,12 +297,15 @@ export class MidiHub {
       this.app.toast(`“${label}” linked to CC ${cc} (channel ${chan + 1})`);
       return;
     }
+    let linked = false;
     for (const l of p.controllers) {
       if (l.cc !== cc || (l.chan !== 0 && l.chan !== chan + 1)) continue;
+      linked = true;
       const d = paramDef(p, l.addr);
       if (!d) continue;
       const x = value / 127, n = l.min + (l.max - l.min) * (l.invert ? 1 - x : x);
       store.setParam(l.addr, fromNorm(d, n), { noUndo: true });
     }
+    if (!linked && store.selected != null) this.toPlugin(store.selected, 3, chan, cc, value / 127);
   }
 }

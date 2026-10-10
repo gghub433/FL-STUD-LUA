@@ -158,10 +158,10 @@ export class PluginPort {
 // which channels and effect slots of a project use native plugins: [{ owner, kind, data }]
 export function pluginUses(project) {
   const out = [];
-  for (const ch of project.channels) if (ch.type === 'plugin' && ch.plugin && ch.plugin.path) out.push({ owner: `ch:${ch.id}`, kind: 'inst', data: ch.plugin, name: ch.name });
+  for (const ch of project.channels) if (ch.type === 'plugin' && ch.plugin && ch.plugin.path) out.push({ owner: `ch:${ch.id}`, kind: 'inst', data: ch.plugin, params: ch.params, name: ch.name });
   project.mixer.tracks.forEach((t, n) => t.fx.forEach((s, i) => {
     const pdata = s && s.type === 'plugin' && s.extra && s.extra.plugin;
-    if (pdata && pdata.path && pdata.id) out.push({ owner: `fx:${pdata.id}`, kind: 'fx', data: pdata, name: pdata.name, track: n, slot: i });
+    if (pdata && pdata.path && pdata.id) out.push({ owner: `fx:${pdata.id}`, kind: 'fx', data: pdata, params: s.params, name: pdata.name, track: n, slot: i });
   }));
   return out;
 }

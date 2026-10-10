@@ -8,6 +8,7 @@ import { faderGain } from '../core/dsp.js';
 import { FX_SLOTS, MAX_INSERT } from '../core/constants.js';
 import { EFFECTS } from '../core/effects/index.js';
 import { trackName } from '../core/addr.js';
+import { pluginMenuItems } from './plugin-ui.js';
 import { reaches } from '../core/project.js';
 
 const ICONS = ['', '♪', '♫', '◉', '▲', '■', '●', '★', '☼', '☁', '⚑', '⚡', '♥', '☾'];
@@ -392,7 +393,10 @@ export class MixerView {
     const items = [];
     for (const [cat, list] of Object.entries(cats)) {
       items.push({ title: cat });
-      for (const [id, meta] of list) items.push({ label: meta.name, fn: () => { if (id === 'wam') this.app.wam.setEffect(n, i); else this.app.cmd.setFx(this.store, n, i, id); } });
+      for (const [id, meta] of list) {
+        if (id === 'plugin') items.push({ label: meta.name, submenu: () => pluginMenuItems(this.app, 'effect', (pl) => this.app.plugins.addEffect(n, i, pl)) });
+        else items.push({ label: meta.name, fn: () => { if (id === 'wam') this.app.wam.setEffect(n, i); else this.app.cmd.setFx(this.store, n, i, id); } });
+      }
     }
     const r = e.currentTarget.getBoundingClientRect();
     showPopup(items, r.left, r.bottom, r);

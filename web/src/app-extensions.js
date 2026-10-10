@@ -19,11 +19,13 @@ import { openAudioEditor } from './ui/audio-editor.js';
 import { createStore } from './ui/plugin-store.js';
 import { openMidiSettings } from './ui/midi-settings.js';
 import { confirmBox } from './ui/dialog.js';
+import { pluginEditor, createPluginManager } from './ui/plugin-ui.js';
 import { samplerEditor, fpcEditor, slicerEditor, drumsEditor, synthEditor, fmEditor, organEditor, wavetableEditor, controllerEditor, midiOutEditor, multiEditor, fluxEditor } from './ui/instrument-editors.js';
 
 export function installExtensions(app) {
   // ---- dedicated instrument editors (types without an entry fall back to the generic parameter editor)
-  app.editors = Object.assign(app.editors || {}, { sampler: samplerEditor, fpc: fpcEditor, slicer: slicerEditor, drums: drumsEditor, subsynth: synthEditor, fm: fmEditor, organ: organEditor, wavetable: wavetableEditor, controller: controllerEditor, patcher: patcherEditor, midiout: midiOutEditor, multi: multiEditor, flux: fluxEditor });
+  app.editors = Object.assign(app.editors || {}, { sampler: samplerEditor, fpc: fpcEditor, slicer: slicerEditor, drums: drumsEditor, subsynth: synthEditor, fm: fmEditor, organ: organEditor, wavetable: wavetableEditor, controller: controllerEditor, patcher: patcherEditor, midiout: midiOutEditor, multi: multiEditor, flux: fluxEditor, plugin: pluginEditor });
+  app.wm.register('plugins', { title: 'Plugin manager', create: createPluginManager, rect: { x: 160, y: 50, w: 640, h: 480 }, minW: 420, minH: 260 });
   app.store.bus.on('replaced', () => app.wm.closeDynamic());
 
   // ---- automation, controllers, MIDI

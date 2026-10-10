@@ -30,8 +30,8 @@ const str = (description) => ({ type: 'string', description });
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
 
 export function toolDefs() {
-  const instruments = Object.keys(INSTRUMENTS).filter((t) => !['wam', 'midiout', 'controller'].includes(t));
-  const effects = effectList().map((e) => e.id).filter((t) => t !== 'wam');
+  const instruments = Object.keys(INSTRUMENTS).filter((t) => !['wam', 'midiout', 'controller', 'plugin'].includes(t));
+  const effects = effectList().map((e) => e.id).filter((t) => t !== 'wam' && t !== 'plugin');
   const tools = [
     { name: 'get_project', description: 'Read the open project: tempo, channels, patterns with their notes per channel, mixer inserts with effects, and the playlist.', input_schema: obj({}) },
     { name: 'set_tempo', description: 'Set the project tempo in beats per minute.', input_schema: obj({ bpm: num('Tempo, 10 to 522 BPM', 10, 522) }, ['bpm']) },

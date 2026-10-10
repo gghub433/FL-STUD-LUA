@@ -36,6 +36,7 @@ import { installWam } from './app/wam.js';
 import { installCollab } from './app/collab.js';
 import { installBackup } from './app/backup.js';
 import { installAssistant } from './app/assistant.js';
+import { pluginMenuItems } from './ui/plugin-ui.js';
 import { installNativePlugins } from './app/plugins.js';
 
 const PIANO = { z: 0, s: 1, x: 2, d: 3, c: 4, v: 5, g: 6, b: 7, h: 8, n: 9, j: 10, m: 11, q: 12, 2: 13, w: 14, 3: 15, e: 16, r: 17, 5: 18, t: 19, 6: 20, y: 21, 7: 22, u: 23, i: 24 };
@@ -121,6 +122,7 @@ app.openChannelEditor = (id) => openChannelEditor(app, id);
 
 app.addInstrument = (type) => {
   if (type === 'wam') return app.wam.addInstrument();
+  if (type === 'plugin') { app.openWindow('plugins'); return null; }
   const ch = cmd.addChannel(app.store, type, { name: INSTRUMENTS[type].meta.name });
   app.openChannelEditor(ch.id);
   return ch;
@@ -128,6 +130,7 @@ app.addInstrument = (type) => {
 
 app.addEffectToSelected = (type) => {
   if (type === 'wam') return app.wam.addEffectToSelected();
+  if (type === 'plugin') { app.openWindow('plugins'); return; }
   const p = app.store.project;
   const tn = p.mixer.selected;
   const t = p.mixer.tracks[tn];
@@ -158,13 +161,14 @@ app.addChannelItems = () => [
   { label: 'Sampler with factory sample', submenu: () => FACTORY.map((f) => ({ label: `${f.cat} · ${f.name}`, fn: () => { const ch = cmd.addChannel(app.store, 'sampler', { name: f.name, sample: { id: `factory:${f.id}`, name: f.name } }); app.preview(ch.id); } })) },
   { label: 'Sampler from file…', fn: () => { const ch = cmd.addChannel(app.store, 'sampler', { name: 'Sampler' }); app.pickSampleFor(ch.id); } },
   { label: 'Flux — preset synth', fn: () => app.addInstrument('flux') },
+  { label: 'VST3 / CLAP plugin', submenu: () => pluginMenuItems(app, 'instrument', (p) => { const ch = app.plugins.addInstrument(p); if (ch) app.openChannelEditor(ch.id); }) },
   { sep: true },
   { label: 'Audio clip', fn: () => app.addAudioClipChannel && app.addAudioClipChannel(), disabled: !app.addAudioClipChannel },
   { label: 'Automation clip', fn: () => app.addAutomationChannel && app.addAutomationChannel(), disabled: !app.addAutomationChannel },
   { label: 'Controller (LFO / Envelope)', submenu: [{ label: 'LFO', fn: () => app.addControllerChannel(0) }, { label: 'Envelope controller', fn: () => app.addControllerChannel(1) }] },
   { label: 'Layer', fn: () => cmd.addChannel(app.store, 'layer', { name: 'Layer' }) },
   { sep: true },
-  { label: 'Instrument plugin', submenu: () => Object.keys(INSTRUMENTS).filter((t) => t !== 'sampler').map((t) => ({ label: INSTRUMENTS[t].meta.name, fn: () => app.addInstrument(t) })) },
+  { label: 'Instrument plugin', submenu: () => Object.keys(INSTRUMENTS).filter((t) => t !== 'sampler' && t !== 'plugin').map((t) => ({ label: INSTRUMENTS[t].meta.name, fn: () => app.addInstrument(t) })) },
   { label: 'Get more plugins…', fn: () => app.openStore && app.openStore() },
 ];
 
@@ -312,6 +316,7 @@ function buildMenus() {
       { label: 'Project settings…', fn: () => app.projectSettings() },
       ...(app.optionsMenuExtra ? app.optionsMenuExtra() : []),
       { label: 'Audio settings…', fn: () => app.audioSettings() },
+      { label: 'Manage plugins…', fn: () => app.openWindow('plugins') },
       { label: 'Cloud backup…', fn: () => app.backup.open() },
       { label: 'Interface', submenu: () => [
         { title: 'Theme' },

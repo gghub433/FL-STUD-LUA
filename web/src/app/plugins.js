@@ -23,10 +23,23 @@ export function installNativePlugins(app) {
     catalog: { plugins: [], failed: [], folders: [], scannedAt: 0, available: false },
     scanning: null,                 // { done, total, file } while a scan runs
     items: new Map(),               // owner -> { inst, slot, latency, hasEditor, editorOpen, params, values, hasInput }
-    status: new Map(),              // owner -> { state: 'loading' | 'ready' | 'error' | 'missing', error }
+    status: null,                   // owner -> { state: 'loading' | 'ready' | 'error' | 'missing', error }
     K: (() => { try { return Math.max(2, Math.min(6, +localStorage.getItem(K_KEY) || 3)); } catch (_) { return 3; } })(),
   };
   const emit = () => store.bus.emit('plugins', P);
+  // statuses change rarely: the channel rack listens to this, not to every 'plugins' event
+  const statusMap = new Map();
+  P.status = { get: (k) => statusMap.get(k), has: (k) => statusMap.has(k), keys: () => statusMap.keys(),
+    set: (k, v) => { statusMap.set(k, v); store.bus.emit('plugins-status'); }, delete: (k) => { statusMap.delete(k); store.bus.emit('plugins-status'); },
+    clear: () => { statusMap.clear(); store.bus.emit('plugins-status'); } };
+  // what the rest of the app may call in the browser version too (no plugin host there)
+  P.statusOf = (owner) => P.status.get(owner) || null;
+  P.item = () => null;
+  P.sync = async () => {};
+  P.reload = async () => {};
+  P.paramTexts = async () => [];
+  P.openEditor = async () => false;
+  P.closeEditor = async () => {};
   if (!desk) return P;
   const free = new Set(Array.from({ length: SLOTS }, (_, i) => i));
   let sab = null, connecting = null;
@@ -116,8 +129,18 @@ export function installNativePlugins(app) {
     // the parameter list and the names go into the project (knobs and automation work without the plugin too)
     const list = paramListOf(r.params);
     const info = r.info || {};
-    if (JSON.stringify(list) !== JSON.stringify(u.data.params) || (!u.data.name && info.name)) {
-      store.edit('Plugin parameters', () => { const d = useOf(u.owner); if (!d) return; d.data.params = list; if (!d.data.name) d.data.name = info.name || ''; if (!d.data.vendor) d.data.vendor = info.vendor || ''; }, [sectionOf(u.owner)], { noUndo: true });
+    // ...and the plugin's current values, so knobs show where it really is
+    const values = r.values || {};
+    const differs = list.some(([id]) => values[id] !== undefined && u.params[String(id)] !== values[id]);
+    if (differs || JSON.stringify(list) !== JSON.stringify(u.data.params) || (!u.data.name && info.name)) {
+      store.edit('Plugin parameters', () => {
+        const d = useOf(u.owner);
+        if (!d) return;
+        d.data.params = list;
+        if (!d.data.name) d.data.name = info.name || '';
+        if (!d.data.vendor) d.data.vendor = info.vendor || '';
+        for (const [id] of list) if (typeof values[id] === 'number') d.params[String(id)] = values[id];
+      }, [sectionOf(u.owner)], { noUndo: true });
     }
     host.send({ t: 'plug', op: 'link', owner: u.owner, slot, latency: r.latency || 0 });
   }
@@ -191,7 +214,13 @@ export function installNativePlugins(app) {
     } else if (m.ev === 'params') {
       it.params = m.params || it.params; Object.assign(it.values, m.values || {});
       const list = paramListOf(it.params), u = useOf(owner);
-      if (u && JSON.stringify(list) !== JSON.stringify(u.data.params)) store.edit('Plugin parameters', () => { const d = useOf(owner); if (d) d.data.params = list; }, [sectionOf(owner)], { noUndo: true });
+      // a preset chosen in the plugin's window changes many values at once: the knobs follow
+      if (u) store.edit('Plugin parameters', () => {
+        const d = useOf(owner);
+        if (!d) return;
+        if (JSON.stringify(list) !== JSON.stringify(d.data.params)) d.data.params = list;
+        for (const [id] of list) if (typeof it.values[id] === 'number') d.params[String(id)] = it.values[id];
+      }, [sectionOf(owner)], { noUndo: true });
       dirty.add(owner);
       emit();
     } else if (m.ev === 'latency') {
@@ -255,10 +284,11 @@ export function installNativePlugins(app) {
   P.midi = (chId, type, channel, key, value) => host.send({ t: 'plug', op: 'midi', ch: chId, type, channel, key, value });
 
   // ---------------------------------------------------------------- the list of installed plugins
-  P.refreshCatalog = async () => { P.catalog = await desk.list(); emit(); return P.catalog; };
-  P.scan = async (force = false) => { P.scanning = { done: 0, total: 0 }; emit(); try { P.catalog = await desk.scan({ force }); } finally { P.scanning = null; emit(); } return P.catalog; };
-  P.addFolder = async () => { P.catalog = await desk.addFolder(); emit(); return P.catalog; };
-  P.removeFolder = async (f) => { P.catalog = await desk.removeFolder(f); emit(); return P.catalog; };
+  const setCatalog = (c) => { P.catalog = c; store.bus.emit('plugins-catalog', c); emit(); return c; };
+  P.refreshCatalog = async () => setCatalog(await desk.list());
+  P.scan = async (force = false) => { P.scanning = { done: 0, total: 0 }; emit(); try { setCatalog(await desk.scan({ force })); } finally { P.scanning = null; emit(); } return P.catalog; };
+  P.addFolder = async () => setCatalog(await desk.addFolder());
+  P.removeFolder = async (f) => setCatalog(await desk.removeFolder(f));
   P.setLatencyBlocks = (k) => {
     P.K = Math.max(2, Math.min(6, k | 0));
     try { localStorage.setItem(K_KEY, String(P.K)); } catch (_) { /* private mode */ }

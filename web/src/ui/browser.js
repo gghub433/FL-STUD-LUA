@@ -53,7 +53,7 @@ export class Browser {
     this.build();
     const bus = app.store.bus;
     const refresh = () => { this.cache.clear(); if (this.visible()) this.render(); };
-    bus.on('library', refresh); bus.on('presets', refresh); bus.on('saved', refresh); bus.on('autosaved', () => { this.cache.delete('backup'); });
+    bus.on('library', refresh); bus.on('presets', refresh); bus.on('plugins-catalog', refresh); bus.on('saved', refresh); bus.on('autosaved', () => { this.cache.delete('backup'); });
     bus.on('samples', () => { this.cache.delete('current'); });
     bus.on('project', refresh);
     bus.on('plugins', refresh);                                           // a pack with sounds was installed or removed
@@ -169,7 +169,19 @@ export class Browser {
       for (const b of list) out.push({ id: `bk:${b.key}`, label: b.name, right: ago(b.time), project: b, restore: true, menu: () => [{ label: 'Restore', fn: () => app.openSavedProject(b) }] });
       return out.length ? out : [{ label: 'Backups appear here while you work', hintOnly: true }];
     } };
-    return [packs, presets, channelPresets, mixerPresets, projects, this.samplesNode('rendered', 'Rendered', 'Export audio and it shows up here'), this.samplesNode('recorded', 'Recorded', 'Audio you record appears here'), scores, templates, current, backup];
+    // installed VST3 / CLAP plugins (desktop app): double-click adds one
+    const P = app.plugins;
+    const pluginDb = P && P.available ? { id: 'plugdb', label: 'Plugin database', folder: true, children: () => {
+      const all = P.catalog.plugins || [];
+      if (!all.length) return [{ label: P.catalog.scannedAt ? 'No VST3 / CLAP plugins found (OPTIONS > Manage plugins…)' : 'OPTIONS > Manage plugins… > Find plugins', hintOnly: true }];
+      const node = (kind, label) => ({ id: `plugdb:${kind}`, label, folder: true, children: () => {
+        const byVendor = new Map();
+        for (const p of all.filter((x) => x.kind === kind)) { const v = p.vendor || 'Other'; if (!byVendor.has(v)) byVendor.set(v, []); byVendor.get(v).push(p); }
+        return [...byVendor].sort((a, b) => a[0].localeCompare(b[0])).map(([v, ps]) => ({ id: `plugdb:${kind}:${v}`, label: v, folder: true, children: () => ps.map((p) => ({ id: `plugdb:${p.format}:${p.uid}:${p.path}`, label: p.name, right: p.format === 'clap' ? 'CLAP' : 'VST3', installed: p })) }));
+      } });
+      return [node('instrument', 'Generators'), node('effect', 'Effects')];
+    } } : null;
+    return [pluginDb, packs, presets, channelPresets, mixerPresets, projects, this.samplesNode('rendered', 'Rendered', 'Export audio and it shows up here'), this.samplesNode('recorded', 'Recorded', 'Audio you record appears here'), scores, templates, current, backup].filter(Boolean);
   }
 
   // ------------------------------------------------------------------ rendering
@@ -295,6 +307,15 @@ export class Browser {
     if (n.sample) { const e = await app.bank.ensure(n.sample.id); if (e) app.addSamplerFor(n.sample); return; }
     if (n.preset) { n.preset.kind === 'inst' ? app.addInstrumentPreset(n.preset.type, n.preset.params, n.preset.name) : app.addEffectPreset(n.preset.type, n.preset.params, n.preset.extra, n.preset.name); return; }
     if (n.chanPreset) { app.addChannelPreset(n.chanPreset.data); return; }
+    if (n.installed) {
+      const p = n.installed;
+      if (p.kind === 'instrument') { const ch = app.plugins.addInstrument(p); app.openChannelEditor(ch.id); return; }
+      const pr = app.store.project, tn = pr.mixer.selected, slot = pr.mixer.tracks[tn].fx.findIndex((s) => !s);
+      if (slot < 0) { app.toast('All 10 effect slots on this track are used'); return; }
+      app.plugins.addEffect(tn, slot, p);
+      app.toast(`${p.name} added to ${tn === 0 ? 'Master' : `insert ${tn}`}, slot ${slot + 1}`);
+      return;
+    }
     if (n.mixPreset) { app.applyMixerPreset(n.mixPreset.data); return; }
     if (n.score) { app.pasteScore(n.score.data); return; }
     if (n.template) { app.newFromTemplate(n.template); return; }

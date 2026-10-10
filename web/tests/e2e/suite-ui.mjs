@@ -149,4 +149,27 @@ export async function run() {
     ok((await body()).includes('FL LUA 0.3.0 is the latest version.'), await body());
     await ctx.close();
   });
+
+  await test('VST3 / CLAP in the browser: the plugin manager says they run in the desktop app; menus offer them only there', async () => {
+    await page.locator('#menubar .menu-top[data-menu="OPTIONS"]').click();
+    await page.locator('.popup .item', { hasText: 'Manage plugins' }).click();
+    await page.waitForSelector('.plug-manager');
+    ok((await page.locator('.plug-manager').innerText()).includes('desktop app'), 'explains');
+    ok(await page.locator('.plug-manager .btn', { hasText: 'Find plugins' }).evaluate((b) => b.classList.contains('disabled')), 'no scanning here');
+    await ev(() => app.wm.close('plugins'));
+    await page.locator('#menubar .menu-top[data-menu="ADD"]').click();
+    await page.locator('.popup .item', { hasText: 'VST3 / CLAP plugin' }).first().hover();
+    await page.waitForSelector('.popup .item:has-text("in the desktop app")');
+    await page.keyboard.press('Escape');
+    // a project that uses a plugin opens; the channel is marked and its window explains
+    const id = await ev(() => { const ch = app.cmd.addChannel(app.store, 'plugin', { name: 'Serum', plugin: { format: 'vst3', path: 'C:/x/Serum.vst3', uid: '0123', name: 'Serum', params: [[1, 'Cutoff', 0.5, 0, '']] } }); return ch.id; });
+    await page.waitForFunction((id) => document.querySelector(`.ch-name[data-ch="${id}"]`)?.classList.contains('plug-bad'), id);
+    await ev((id) => app.openChannelEditor(id), id);
+    await page.waitForSelector('.plug-panel');
+    ok((await page.locator('.plug-panel').innerText()).includes('desktop app'), 'the window explains');
+    ok((await page.locator('.plug-panel .knob').count()) === 1, 'its parameter is a knob (automatable without the plugin)');
+    await ev((id) => app.store.setParam(`ch:${id}:p:1`, 0.8), id);
+    ok((await ev((id) => app.store.channel(id).params['1'], id)) === 0.8, 'value kept in the project');
+    await ev((id) => app.cmd.removeChannel(app.store, id), id);
+  });
 }

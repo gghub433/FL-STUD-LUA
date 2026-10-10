@@ -207,6 +207,7 @@ async function smoke(w) {
       && out.backup && out.backup.a && out.backup.b && out.backup.files === 2
       && out.assistant && out.assistant.text === 'Hello from the API (claude-opus-5-5)'
       && (out.plugins === undefined || smokePlugins.ok(out.plugins));
+    if (process.env.FLLUA_SHOT_SCRIPT) await w.webContents.executeJavaScript(fs.readFileSync(process.env.FLLUA_SHOT_SCRIPT, 'utf8')).catch((e) => { out.shotScript = String(e); });   // screenshots for the docs
     if (process.env.FLLUA_SHOT) { const img = await w.webContents.capturePage(); fs.writeFileSync(process.env.FLLUA_SHOT, img.toPNG()); }
   } catch (err) { out.error = String(err && err.message || err); }
   server.close();

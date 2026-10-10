@@ -73,6 +73,7 @@ export class ChannelRack {
 
     const rebuild = () => { this.buildGroups(); this.buildRows(); this.refreshAll(); };
     store.bus.on('project', rebuild);
+    store.bus.on('plugins-status', () => { for (const el of this.el.querySelectorAll('.ch-name')) { const ch = store.channel(+el.dataset.ch); if (ch) this.markPlugin(el, ch); } });
     store.bus.on('change', ({ paths }) => {
       const first = new Set(paths.map((p) => p[0]));
       if (first.has('channels') || first.has('groups')) rebuild();
@@ -332,6 +333,17 @@ export class ChannelRack {
     const nm = row.el.querySelector('.ch-name');
     nm.textContent = ch.name; nm.style.setProperty('--ch', ch.color);
     row.el.querySelector('.ch-fx').textContent = String(ch.mixer);
+    this.markPlugin(nm, ch);
+  }
+
+  // a VST3 / CLAP channel whose plugin is missing or stopped is marked red, with the reason in its hint
+  markPlugin(nm, ch) {
+    const P = this.app.plugins;
+    if (ch.type !== 'plugin' || !P) return;
+    const st = P.available ? P.statusOf(`ch:${ch.id}`) : { state: 'error', error: 'VST3 / CLAP plugins run in the desktop app' };
+    const bad = !!st && (st.state === 'error' || st.state === 'missing');
+    nm.classList.toggle('plug-bad', bad);
+    if (bad) nm.setAttribute('hint', `${ch.name} — ${st.state === 'missing' ? 'the plugin is not installed on this computer' : st.error}. Double-click: open`);
   }
 
   markSelection() {
