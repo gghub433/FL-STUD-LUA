@@ -1,7 +1,7 @@
 # Native parts of the FL LUA desktop app:
 #   fllua-plughost     the VST3 / CLAP plugin host (a process of its own)
+#   fllua_bridge.node  the page-process bridge (a Node-API module, see bridge/bridge.cc)
 #   test plugins       a tiny VST3 and CLAP synth + effect used by the tests (not shipped)
-# The page-process bridge (fllua_bridge.node) is built by build.mjs with node-gyp / the compiler directly.
 cmake_minimum_required(VERSION 3.16)
 project(fllua_native CXX C)
 set(CMAKE_CXX_STANDARD 17)
@@ -43,6 +43,19 @@ elseif(APPLE)
 else()
   find_package(X11 REQUIRED)
   target_link_libraries(fllua-plughost PRIVATE ${X11_LIBRARIES} pthread dl rt)
+endif()
+
+# ---------------------------------------------------------------- bridge (Node-API module; no node-gyp, no node.lib)
+add_library(fllua-bridge MODULE bridge/bridge.cc)
+set_target_properties(fllua-bridge PROPERTIES PREFIX "" OUTPUT_NAME fllua_bridge SUFFIX ".node")
+target_include_directories(fllua-bridge PRIVATE third_party/node-api ${CMAKE_CURRENT_SOURCE_DIR})
+if(WIN32)
+  target_sources(fllua-bridge PRIVATE bridge/napi_win.cc)           # finds the Node-API functions in the loading exe
+  target_compile_definitions(fllua-bridge PRIVATE NAPI_EXTERN= _WIN32_WINNT=0x0A00 WINVER=0x0A00)
+elseif(APPLE)
+  target_link_options(fllua-bridge PRIVATE -undefined dynamic_lookup)
+else()
+  target_link_libraries(fllua-bridge PRIVATE pthread rt)
 endif()
 
 # ---------------------------------------------------------------- test plugins

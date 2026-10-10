@@ -112,6 +112,7 @@ class Library {
     if (!bundle_) return nullptr;
     CFStringRef s = CFStringCreateWithCString(nullptr, name, kCFStringEncodingUTF8);
     void* p = CFBundleGetFunctionPointerForName(bundle_, s);
+    if (!p) p = CFBundleGetDataPointerForName(bundle_, s);       // clap_entry is a variable
     CFRelease(s);
     return p;
 #elif defined(_WIN32)

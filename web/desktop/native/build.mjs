@@ -1,6 +1,6 @@
 // Builds the native parts of the desktop app and puts them in native/out/<platform>-<arch>/:
 //   fllua-plughost(.exe)   the VST3 / CLAP host (CMake)
-//   fllua_bridge.node      the page-process bridge (Node-API; the C++ compiler on Linux, node-gyp elsewhere)
+//   fllua_bridge.node      the page-process bridge (Node-API)
 //   testplugins/           the test VST3 and CLAP plugins in their usual bundle layout (only for tests)
 // Usage: node native/build.mjs [--no-test-plugins]
 import { execFileSync } from 'node:child_process';
@@ -20,7 +20,7 @@ fs.mkdirSync(build, { recursive: true });
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
-// ---------------------------------------------------------------- host + test plugins (CMake)
+// ---------------------------------------------------------------- host, bridge, test plugins (CMake)
 const cfg = ['-S', here, '-B', build, '-DCMAKE_BUILD_TYPE=Release', `-DFLLUA_TEST_PLUGINS=${testPlugins ? 'ON' : 'OFF'}`];
 if (mac) cfg.push('-DCMAKE_OSX_ARCHITECTURES=' + (process.arch === 'arm64' ? 'arm64' : 'x86_64'));
 if (win) cfg.push('-A', 'x64');
@@ -30,18 +30,7 @@ const art = (name) => [path.join(build, 'Release', name), path.join(build, name)
 const exe = win ? 'fllua-plughost.exe' : 'fllua-plughost';
 fs.copyFileSync(art(exe), path.join(out, exe));
 if (!win) fs.chmodSync(path.join(out, exe), 0o755);
-
-// ---------------------------------------------------------------- bridge (Node-API)
-const bridgeOut = path.join(out, 'fllua_bridge.node');
-if (process.platform === 'linux') {
-  const inc = path.join(path.dirname(path.dirname(process.execPath)), 'include', 'node');
-  run(process.env.CXX || 'g++', ['-std=c++17', '-O2', '-shared', '-fPIC', '-DNODE_GYP_MODULE_NAME=fllua_bridge', `-I${inc}`, `-I${here}`, path.join(here, 'bridge', 'bridge.cc'), '-o', bridgeOut, '-lrt', '-lpthread']);
-} else {
-  // node-gyp builds in native/bridge/build (Node-API: the same binary works in Electron)
-  const gyp = path.join(here, 'bridge');
-  run(win ? 'npx.cmd' : 'npx', ['--yes', 'node-gyp@11', 'rebuild', '--release'], { cwd: gyp, shell: win });
-  fs.copyFileSync(path.join(gyp, 'build', 'Release', 'fllua_bridge.node'), bridgeOut);
-}
+fs.copyFileSync(art('fllua_bridge.node'), path.join(out, 'fllua_bridge.node'));
 
 // ---------------------------------------------------------------- test plugins in their bundle layout
 if (testPlugins) {
