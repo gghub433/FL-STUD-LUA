@@ -55,12 +55,18 @@ jobs:
       - name: Install the desktop shell
         run: npm ci
         working-directory: web/desktop
+      - name: Build the VST3 / CLAP plugin host and its bridge (with the test plugins for the checks below)
+        working-directory: web/desktop
+        run: |
+          if [ "${{ matrix.os }}" = ubuntu-latest ]; then sudo apt-get update -qq && sudo apt-get install -y -qq libx11-dev; fi
+          node native/build.mjs
+          echo "FLLUA_PLUGIN_PATH=$(node -p "require('path').resolve('native/out/' + process.platform + '-' + process.arch + '/testplugins')")" >> "$GITHUB_ENV"
       - name: Build the app and package it
         run: |
           node prepare.mjs
           npx electron-builder ${{ matrix.build }} --publish never
         working-directory: web/desktop
-      - name: Test the packaged app (starts it, plays the demo, checks that sound comes out)
+      - name: Test the packaged app (starts it, plays the demo, checks that sound comes out, runs the test plugins)
         working-directory: web/desktop
         run: |
           case "${{ matrix.os }}" in

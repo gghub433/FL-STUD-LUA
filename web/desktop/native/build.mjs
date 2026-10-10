@@ -37,12 +37,8 @@ if (process.platform === 'linux') {
   const inc = path.join(path.dirname(path.dirname(process.execPath)), 'include', 'node');
   run(process.env.CXX || 'g++', ['-std=c++17', '-O2', '-shared', '-fPIC', '-DNODE_GYP_MODULE_NAME=fllua_bridge', `-I${inc}`, `-I${here}`, path.join(here, 'bridge', 'bridge.cc'), '-o', bridgeOut, '-lrt', '-lpthread']);
 } else {
-  const gyp = path.join(build, 'bridge');
-  fs.rmSync(gyp, { recursive: true, force: true });
-  fs.mkdirSync(gyp, { recursive: true });
-  fs.copyFileSync(path.join(here, 'bridge', 'bridge.cc'), path.join(gyp, 'bridge.cc'));
-  fs.writeFileSync(path.join(gyp, 'binding.gyp'), fs.readFileSync(path.join(here, 'bridge', 'binding.gyp'), 'utf8').replace('"include_dirs": [".."]', `"include_dirs": [${JSON.stringify(here.replace(/\\/g, '/'))}]`));
-  fs.mkdirSync(path.join(gyp, '..', 'common'), { recursive: true });
+  // node-gyp builds in native/bridge/build (Node-API: the same binary works in Electron)
+  const gyp = path.join(here, 'bridge');
   run(win ? 'npx.cmd' : 'npx', ['--yes', 'node-gyp@11', 'rebuild', '--release'], { cwd: gyp, shell: win });
   fs.copyFileSync(path.join(gyp, 'build', 'Release', 'fllua_bridge.node'), bridgeOut);
 }

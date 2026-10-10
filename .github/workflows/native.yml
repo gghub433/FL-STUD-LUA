@@ -1,0 +1,40 @@
+name: native
+
+# The desktop app's VST3 / CLAP plugin host and its bridge, on every system the app ships for: builds them with the
+# test plugins and runs the end-to-end test of the native path (host process, bridge, shared memory, plugins).
+on:
+  push:
+    paths: ['web/desktop/native/**', 'web/src/core/plugin-layout.js', '.github/workflows/native.yml']
+  pull_request:
+    paths: ['web/desktop/native/**', 'web/src/core/plugin-layout.js', '.github/workflows/native.yml']
+  workflow_dispatch:
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: X11 headers and a virtual display (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libx11-dev xvfb
+      - name: Build the plugin host, the bridge and the test plugins
+        run: node web/desktop/native/build.mjs
+      - name: Test the native path
+        run: |
+          if [ "${{ matrix.os }}" = ubuntu-latest ]; then xvfb-run -a node --test web/desktop/native/test/host.test.mjs
+          else node --test web/desktop/native/test/host.test.mjs; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-${{ matrix.os }}
+          path: web/desktop/native/out/
