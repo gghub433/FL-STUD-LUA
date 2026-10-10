@@ -155,4 +155,28 @@ export async function run() {
     ok(loud > 0.02, `stretched sample audible, peak=${loud}`);
     await stop();
   });
+
+  await test('Flux: preset library by category, eight macro knobs named for the sound, a new preset resets the macros; makes sound', async () => {
+    const id = await fresh('flux');
+    await ev((id) => app.openChannelEditor(id), id);
+    const w = winOf(id);
+    await w.locator('.flux-item').first().waitFor();
+    ok((await w.locator('.flux-group').count()) >= 6 && (await w.locator('.flux-item').count()) >= 20, 'library');
+    ok((await w.locator('.flux-macros .knob').count()) === 8, 'eight macros');
+    await ev((id) => app.store.setParam(`ch:${id}:p:m1`, 0.9), id);
+    await w.locator('.flux-item', { hasText: 'Acid Line' }).click();
+    await sleep(150);
+    const st = await ev((id) => app.store.channel(id).params, id);
+    ok(st.preset > 0 && st.m1 === 0.5, JSON.stringify(st));
+    ok((await w.locator('.flux-name').innerText()) === 'Acid Line' && (await w.locator('.flux-macros .knob-label').allInnerTexts()).includes('Punch'), 'name and macro labels follow the preset');
+    await w.locator('.flux-screen .btn', { hasText: '▶' }).click();
+    ok((await ev((id) => app.store.channel(id).params.preset, id)) === st.preset + 1, 'next sound');
+    await page.screenshot({ path: 'tests/e2e/out/flux.png' });
+    await play();
+    const loud = await maxPeak(5, 2200);
+    ok(loud > 0.02, `flux should be audible, peak=${loud}`);
+    await stop();
+    await ev(() => app.store.undo());
+    ok((await ev((id) => app.store.channel(id).params.preset, id)) === st.preset, 'undo goes back to the previous sound');
+  });
 }

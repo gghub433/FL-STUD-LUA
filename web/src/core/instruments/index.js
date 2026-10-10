@@ -13,8 +13,9 @@ import * as patcher from './patcher.js';
 import * as midiout from './midiout.js';
 import * as multi from './multisampler.js';
 import * as wam from './wam.js';
+import * as flux from './flux.js';
 
-export const INSTRUMENTS = { sampler, fpc, slicer, subsynth, fm, drums, wavetable, pluck, organ, controller, patcher, midiout, multi, wam };
+export const INSTRUMENTS = { sampler, fpc, slicer, flux, subsynth, fm, drums, wavetable, pluck, organ, controller, patcher, midiout, multi, wam };
 
 export function registerInstrument(type, mod) { INSTRUMENTS[type] = mod; }
 export const hasInstrument = (type) => Object.prototype.hasOwnProperty.call(INSTRUMENTS, type);

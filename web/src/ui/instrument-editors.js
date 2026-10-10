@@ -22,6 +22,7 @@ import { paramLabel } from '../core/addr.js';
 import { LFO_SHAPES } from '../core/dsp.js';
 import { FOOTAGE, PRESETS as ORGAN_PRESETS } from '../core/instruments/organ.js';
 import { frameWave, WT_FRAMES, TABLE_NAMES } from '../core/instruments/wavetable.js';
+import { PRESETS as FLUX_PRESETS, CATEGORIES as FLUX_CATS, macroNames } from '../core/instruments/flux.js';
 
 const addrOf = (chId) => (id) => `ch:${chId}:p:${id}`;
 
@@ -839,3 +840,50 @@ export function multiEditor(win, app, chId) {
   return { el, destroy() { for (const s of subs) s(); } };
 }
 multiEditor.rect = { w: 760, h: 560 };
+
+// =================================================================================== FLUX
+// The preset library on the left, the chosen sound with its eight macro knobs on the right.
+export function fluxEditor(win, app, chId) {
+  const store = app.store, cmd = app.cmd;
+  const ch = () => store.channel(chId);
+  const head = chHead(app, win, chId);
+  const list = h('div.flux-list.scroll');
+  const name = h('div.flux-name'), cat = h('div.flux-cat');
+  const macros = h('div.flux-macros');
+  const choose = (i) => {
+    i = (i + FLUX_PRESETS.length) % FLUX_PRESETS.length;
+    // a new sound starts with its macros in the middle, as designed
+    cmd.applyParams(store, chId, { preset: i, m1: 0.5, m2: 0.5, m3: 0.5, m4: 0.5, m5: 0.5, m6: 0.5, m7: 0.5, m8: 0.5 }, `Flux: ${FLUX_PRESETS[i].name}`);
+    app.preview(chId);
+  };
+  for (const c of FLUX_CATS) {
+    list.append(h('div.flux-group', c));
+    FLUX_PRESETS.forEach((p, i) => { if (p.cat === c) list.append(h('div.flux-item', { dataset: { i }, onclick: () => choose(i), hint: `${p.name} — click to load and hear it` }, p.name)); });
+  }
+  let shown = -1;
+  const paint = () => {
+    const c = ch(); if (!c) return;
+    const i = c.params.preset | 0;
+    list.querySelectorAll('.flux-item').forEach((el) => el.classList.toggle('on', +el.dataset.i === i));
+    if (i === shown) return;
+    shown = i;
+    name.textContent = tr(FLUX_PRESETS[i].name); cat.textContent = tr(FLUX_PRESETS[i].cat);
+    clear(macros);
+    macroNames(i).forEach((label, k) => macros.append(new Knob(app, { addr: `ch:${chId}:p:m${k + 1}`, size: 'lg', label: tr(label), title: `Macro ${k + 1}: ${label}` }).root));
+    const on = list.querySelector('.flux-item.on');
+    if (on) on.scrollIntoView({ block: 'nearest' });
+  };
+  const screen = h('div.flux-screen',
+    h('div.btn.sm', { hint: 'Previous sound', onclick: () => choose((ch().params.preset | 0) - 1) }, '◀'),
+    h('div.grow', cat, name),
+    h('div.btn.sm', { hint: 'Next sound', onclick: () => choose((ch().params.preset | 0) + 1) }, '▶'));
+  const right = h('div.flux-main', screen,
+    h('div.flux-hint.dim', 'Turn the macros to shape the sound. Middle = the preset as designed. Right-click a knob to automate it.'),
+    macros,
+    h('div.row', { style: { gap: '10px', padding: '6px 2px', alignItems: 'center' } }, new Knob(app, { addr: `ch:${chId}:p:gain`, label: tr('Volume'), title: 'Volume' }).root));
+  const el = h('div.rack', head, h('div.flux', list, right));
+  const subs = [store.bus.on('param', (a) => { if (a.startsWith(`ch:${chId}:p:preset`)) paint(); }), store.bus.on('change', paint), store.bus.on('project', () => { if (!ch()) win.close(); else { shown = -1; paint(); } })];
+  requestAnimationFrame(paint);
+  return { el, destroy() { for (const s of subs) s(); } };
+}
+fluxEditor.rect = { w: 620, h: 420 };
