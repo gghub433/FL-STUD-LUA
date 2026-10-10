@@ -34,6 +34,7 @@ import { setLang, LANGS } from './ui/i18n.js';
 import { installUpdates } from './app/updates.js';
 import { installWam } from './app/wam.js';
 import { installCollab } from './app/collab.js';
+import { installBackup } from './app/backup.js';
 
 const PIANO = { z: 0, s: 1, x: 2, d: 3, c: 4, v: 5, g: 6, b: 7, h: 8, n: 9, j: 10, m: 11, q: 12, 2: 13, w: 14, 3: 15, e: 16, r: 17, 5: 18, t: 19, 6: 20, y: 21, 7: 22, u: 23, i: 24 };
 
@@ -308,6 +309,7 @@ function buildMenus() {
       { label: 'Project settings…', fn: () => app.projectSettings() },
       ...(app.optionsMenuExtra ? app.optionsMenuExtra() : []),
       { label: 'Audio settings…', fn: () => app.audioSettings() },
+      { label: 'Cloud backup…', fn: () => app.backup.open() },
       { label: 'Interface', submenu: () => [
         { title: 'Theme' },
         ...[['dark', 'Dark'], ['light', 'Light'], ['system', 'Same as the system']].map(([v, l]) => ({ label: l, checked: app.prefs.theme === v, fn: () => app.setPref('theme', v) })),
@@ -475,6 +477,7 @@ export async function boot() {
   installUpdates(app);
   installWam(app);
   installCollab(app);
+  installBackup(app);
   installAutomationRecording(app);
   // audio clips that follow the tempo are stretched again shortly after the tempo changes
   let followTimer = 0;

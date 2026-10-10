@@ -30,6 +30,7 @@
       "updater.js",
       "collab.js",
       "collab-hub.js",
+      "backup.js",
       "app/**"
     ],
     "asar": true,

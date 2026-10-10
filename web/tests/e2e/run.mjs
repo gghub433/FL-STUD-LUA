@@ -20,8 +20,9 @@ import { run as midi } from './suite-midi.mjs';
 import { run as ui } from './suite-ui.mjs';
 import { run as wam } from './suite-wam.mjs';
 import { run as collab } from './suite-collab.mjs';
+import { run as backup } from './suite-backup.mjs';
 
-const suites = { basic, mixer, instruments, roll, playlist, plugins, automation, browser, export: exporting, record, patcher, audioedit, packs, master, files, midi, ui, wam, collab };
+const suites = { basic, mixer, instruments, roll, playlist, plugins, automation, browser, export: exporting, record, patcher, audioedit, packs, master, files, midi, ui, wam, collab, backup };
 const pick = process.argv[2];
 if (pick && !suites[pick]) { console.error(`unknown suite "${pick}" (${Object.keys(suites).join(', ')})`); process.exit(2); }
 for (const [name, run] of Object.entries(suites)) if (!pick || pick === name) await run();

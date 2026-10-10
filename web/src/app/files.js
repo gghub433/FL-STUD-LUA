@@ -95,6 +95,7 @@ export function installFiles(app) {
   }
 
   const files = app.files = {
+    encode,                                             // project -> .fllua bytes (JSON, or ZIP with the user samples)
     get desktop() { return !!desk; },
     get canWriteInPlace() { return !!desk || fsa; },
 

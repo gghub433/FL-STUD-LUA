@@ -28,6 +28,13 @@ contextBridge.exposeInMainWorld('flluaDesktop', {
     onDownloaded: (cb) => { ipcRenderer.on('update:downloaded', (_e, v) => cb(v)); },
     onError: (cb) => { ipcRenderer.on('update:error', (_e, m) => cb(m)); },
   },
+  backup: {                                                                  // copies of the project in a (cloud) folder (backup.js)
+    folder: () => ipcRenderer.invoke('backup:folder'),
+    choose: () => ipcRenderer.invoke('backup:choose'),
+    off: () => ipcRenderer.invoke('backup:off'),
+    show: () => ipcRenderer.invoke('backup:show'),
+    write: (title, data) => ipcRenderer.invoke('backup:write', title, data),
+  },
   collab: {                                                                  // working together on the local network (collab.js)
     host: (o) => ipcRenderer.invoke('collab:host', o),                       // -> { code, port, addresses }
     join: (o) => ipcRenderer.invoke('collab:join', o),                       // { address, code, name } -> { host }

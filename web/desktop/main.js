@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const { installUpdater } = require('./updater');
 const { installCollab } = require('./collab');
+const { installBackup } = require('./backup');
 
 const SMOKE = process.argv.includes('--smoke');
 const DEV = process.argv.includes('--dev');
@@ -20,6 +21,7 @@ const MIME = {
 protocol.registerSchemesAsPrivileged([{ scheme: 'fllua', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');      // the audio engine starts with the first click anyway; never block it
 if (SMOKE) app.setPath('userData', path.join(os.tmpdir(), `fllua-smoke-${process.pid}`));          // a test run must not touch the real data
+if (SMOKE && !process.env.FLLUA_BACKUP_DIR) process.env.FLLUA_BACKUP_DIR = path.join(app.getPath('userData'), 'cloud');  // backups go to a test folder
 if (SMOKE && !process.env.FLLUA_UPDATE_MODE) process.env.FLLUA_UPDATE_MODE = 'page';                  // the smoke test asks a local fake release server
 if (process.platform === 'win32') app.setAppUserModelId('app.fllua.desktop');
 
@@ -169,11 +171,15 @@ async function smoke(w) {
       await w.webContents.executeJavaScript('app.collab.leave()').catch(() => {});
       hub.end(); srv.close();
     }
+    // cloud backup: two copies in a row land in the chosen folder under different names
+    out.backup = await w.webContents.executeJavaScript(`(async () => { for (let i = 0; i < 50 && !app.backup.folder; i++) await new Promise((r) => setTimeout(r, 50)); const a = await app.backup.now(), n1 = app.backup.lastName; const b = await app.backup.now(); return { a, b, n1, n2: app.backup.lastName, error: app.backup.error }; })()`);
+    out.backup.files = fs.readdirSync(path.join(process.env.FLLUA_BACKUP_DIR, 'FL LUA backups')).filter((f) => f.endsWith('.fllua')).length;
     out.ok = r.title === 'FL LUA' && r.channels > 0 && r.menus >= 8 && r.origin === 'fllua://app' && (!r.audio || r.state !== 'running' || r.peak > 0.02) && r.bridge && (!r.audio || r.fileRoundTrip)
       && (!r.update || (r.update.available && r.update.latest === '99.0.0' && /^FL-LUA-/.test(r.update.file)))
       && (!r.audio || r.state !== 'running' || (r.wam === 'ready' && r.wamPeak > 0.01))
       && (!r.collab || (r.collab.state === 'on' && out.collabGuest && out.collabGuest.welcome && out.collabGuest.channels === r.collab.channels
-        && out.collabJoin && out.collabJoin.state === 'on' && out.collabJoin.tempo === 99));
+        && out.collabJoin && out.collabJoin.state === 'on' && out.collabJoin.tempo === 99))
+      && out.backup && out.backup.a && out.backup.b && out.backup.files === 2;
     if (process.env.FLLUA_SHOT) { const img = await w.webContents.capturePage(); fs.writeFileSync(process.env.FLLUA_SHOT, img.toPNG()); }
   } catch (err) { out.error = String(err && err.message || err); }
   server.close();
@@ -226,6 +232,7 @@ ipcMain.on('window:close-now', () => { closing = true; if (win && !win.isDestroy
 ipcMain.on('window:zoom', (_e, f) => { const z = Number(f); if (win && !win.isDestroyed() && z >= 0.5 && z <= 2.5) win.webContents.setZoomFactor(z); });
 installUpdater({ getWin: () => win, beforeInstall: () => { closing = true; } });
 const collab = installCollab({ getWin: () => win });
+installBackup({ getWin: () => win });
 app.on('before-quit', () => { collab.stop(); });
 app.on('window-all-closed', () => app.quit());
 

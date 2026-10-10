@@ -489,3 +489,4 @@ html[data-theme="light"] .btn.on, html[data-theme="light"] .btn.primary { box-sh
 .collab-msg { min-height: 16px; margin-top: 8px; }
 .collab-msg.err { color: var(--red); }
 .collab-badge { color: var(--green); cursor: pointer; }
+.backup-folder { font-family: var(--mono); color: var(--text); word-break: break-all; flex: 1; }

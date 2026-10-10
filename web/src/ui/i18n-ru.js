@@ -464,6 +464,13 @@ const collab = {
   'Only FL LUA on this computer can host here': 'Быть сервером здесь может только FL LUA на этом компьютере',
   'No answer. Is the session running, and are both computers on the same network?': 'Нет ответа. Сессия запущена? Компьютеры в одной сети?', 'Could not connect': 'Не удалось подключиться',
   'Type the host address, for example 192.168.1.20:47800': 'Введите адрес сервера, например 192.168.1.20:47800', 'No free network port for the session (47800–47809)': 'Нет свободного сетевого порта для сессии (47800–47809)',
+  'Cloud backup…': 'Облачный бэкап…', 'Cloud backup': 'Облачный бэкап',
+  'A copy of the project goes to a folder every few minutes while you work. Choose the folder of Yandex Disk, Google Drive, OneDrive or Dropbox on this computer and their app takes the copies to the cloud. A copy opens like any project (FILE > Open).': 'Пока вы работаете, каждые несколько минут копия проекта сохраняется в папку. Выберите папку Яндекс Диска, Google Drive, OneDrive или Dropbox на этом компьютере — их программа сама отправит копии в облако. Копия открывается как обычный проект (ФАЙЛ > Открыть).',
+  'This browser cannot write to a folder. Use the FL LUA desktop app, Chrome or Edge.': 'Этот браузер не умеет писать в папку. Используйте приложение FL LUA, Chrome или Edge.',
+  Folder: 'Папка', 'not chosen': 'не выбрана', 'Change…': 'Изменить…', 'Choose folder…': 'Выбрать папку…', Copy: 'Копия',
+  'every 2 minutes': 'каждые 2 минуты', 'every 5 minutes': 'каждые 5 минут', 'every 10 minutes': 'каждые 10 минут', 'every 30 minutes': 'каждые 30 минут',
+  'Back up now': 'Сохранить копию сейчас', 'Show folder': 'Показать папку', 'Turn off': 'Выключить', 'No copy yet in this session.': 'В этом сеансе копий ещё не было.',
+  'The backup folder is not available': 'Папка бэкапа недоступна', 'Allow FL LUA to write to the backup folder (OPTIONS > Cloud backup…)': 'Разрешите FL LUA запись в папку бэкапа (ПАРАМЕТРЫ > Облачный бэкап…)',
 };
 const parts = { delay: 'задержка', attack: 'атака', hold: 'удержание', decay: 'спад', sustain: 'удержание', release: 'затухание', 'env amount': 'глубина огибающей', 'LFO amount': 'глубина LFO', 'LFO speed': 'скорость LFO', 'LFO shape': 'форма LFO', 'LFO delay': 'задержка LFO', 'LFO attack': 'атака LFO',
   ratio: 'отношение', fine: 'точно', 'fixed frequency': 'фиксированная частота', frequency: 'частота', level: 'уровень', 'output level': 'выходной уровень', 'velocity sensitivity': 'чувствительность к силе', wave: 'волна', feedback: 'обратная связь', output: 'выход', octave: 'октава', semitones: 'полутоны', 'pulse width': 'ширина импульса', 'start phase': 'начальная фаза',
@@ -474,6 +481,8 @@ export default { ...more, ...params, ...ui, ...tools, ...rest, ...updates, ...wa
 
 // messages with numbers or names in them: [pattern, replacement]
 export const patterns = [
+  [/^Last copy: (.+)$/, 'Последняя копия: $1'],
+  [/^Backed up: (.+)$/, 'Сохранено: $1'],
   [/^● (Hosting|Session) · (\d+)$/, (m) => `● ${m[1] === 'Hosting' ? 'Сервер' : 'Сессия'} · ${m[2]}`],
   [/^● Connecting…$/, '● Подключение…'],
   [/^People \((\d+)\)$/, 'Участники ($1)'],
