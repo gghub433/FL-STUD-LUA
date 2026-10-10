@@ -4,7 +4,7 @@ import { h, drag, clamp } from './h.js';
 import { contextMenu } from './menu.js';
 
 const SNAP = 10;
-const LS_KEY = 'stepwise.layout.v1';
+const LS_KEY = 'fllua.layout.v2';                 // v2: the FL Studio layout (browser left, playlist behind, rack on top)
 
 class Win {
   constructor(wm, id, spec) {
@@ -163,6 +163,7 @@ export class WindowManager {
       w.comp = sp.create(w, this.app) || {};
       if (w.comp.el && !w.comp.el.parentNode) w.bodyEl.append(w.comp.el);
       if (saved && saved.min && !sp.dynamic) w.toggleMin();
+      if (saved && saved.max && !sp.dynamic) w.toggleMax();
     }
     w.open = true;
     w.el.style.display = '';
@@ -203,7 +204,7 @@ export class WindowManager {
     const w = this.wins.get(id);
     if (!w) return;
     for (const o of this.wins.values()) o.el.classList.toggle('active', o === w);
-    w.el.style.zIndex = ++this.z;
+    w.el.style.zIndex = w.max ? 1 : ++this.z;                 // a maximized window stays behind the floating ones, like FL Studio's playlist
     this.bus.emit('focus', id);
   }
 
@@ -276,7 +277,7 @@ export class WindowManager {
     for (const [id, w] of this.wins) {
       if (w.spec.dynamic) continue;
       const r = w.max ? (w.restoreRect || w.rect) : w.rect;
-      out[id] = { ...r, open: w.open, min: w.min };
+      out[id] = { ...r, open: w.open, min: w.min, max: w.max };
     }
     this.saved = out;
     try { localStorage.setItem(LS_KEY, JSON.stringify(out)); } catch (_) { /* storage disabled */ }
@@ -291,7 +292,10 @@ export class WindowManager {
       const r = this.specs.get(id).rect;
       w.setRect(r.x, r.y, r.w, r.h);
     }
+    if (this.app && this.app.flLayout) this.app.flLayout();
   }
+
+  get hasSavedLayout() { return Object.keys(this.saved).length > 0; }
 
   wasOpen(id) { return this.saved[id] ? this.saved[id].open : undefined; }
 }

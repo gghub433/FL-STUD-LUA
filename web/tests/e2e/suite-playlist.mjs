@@ -14,6 +14,7 @@ async function fresh() {
     app.cmd.setStep(app.store, ch.id, 8, true, { key: 60 });
     app.transport.setMode('song');
     app.store.setState(['settings', 'snap'], 'cell');
+    if (app.wm.isOpen('rack')) app.wm.close('rack');                // the floating channel rack would cover the clips
     app.openWindow('playlist');
     await new Promise((r) => setTimeout(r, 200));
     const pl = app.playlist;

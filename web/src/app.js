@@ -90,7 +90,24 @@ app.toggleWindow = (id) => {
   app.wm.toggle(id);
 };
 app.browserVisible = () => !document.getElementById('browser-pane').classList.contains('hidden');
+const BROWSER_KEY = 'fllua.browser.visible';
+const browserWanted = () => { try { return localStorage.getItem(BROWSER_KEY) !== '0'; } catch (_) { return true; } };
+// FL Studio's layout: the browser on the left, the playlist filling the rest (behind), the channel rack floating on
+// top of it, the mixer and the piano roll on F9 / F7
+app.flLayout = () => {
+  app.showBrowser(true);
+  const ws = document.getElementById('workspace');
+  const W = ws.clientWidth, H = ws.clientHeight;
+  const pl = app.wm.open('playlist');
+  if (pl && !pl.max) pl.toggleMax();
+  const rack = app.wm.open('rack');
+  const rw = Math.min(720, W - 40), rh = Math.min(380, H - 40);
+  if (rack) { rack.max = false; rack.setRect(Math.max(20, Math.round((W - rw) * 0.45)), Math.max(20, Math.round(Math.min(H - rh - 20, H * 0.3))), rw, rh); }
+  app.wm.focus('rack');
+  app.wm.saveSoon();
+};
 app.showBrowser = (v) => {
+  try { localStorage.setItem(BROWSER_KEY, v ? '1' : '0'); } catch (_) { /* private mode */ }
   document.getElementById('browser-pane').classList.toggle('hidden', !v);
   document.getElementById('splitter').classList.toggle('hidden', !v);
   if (v && app.browser && app.browser.onShow) app.browser.onShow();
@@ -476,9 +493,13 @@ export async function boot() {
   window.addEventListener('blur', () => { for (const [k, v] of app.held) app.host.send({ t: 'noteOff', ch: v.ch, key: v.note }); app.held.clear(); });
   window.addEventListener('beforeunload', (e) => { if (app.store.dirty && app.store.project.channels.length) { app.store.autosave(); } });
 
-  for (const id of ['rack', ...(app.defaultWindows || [])]) {
-    const was = app.wm.wasOpen(id);
-    if (was !== false) app.wm.open(id);
+  if (!app.wm.hasSavedLayout) app.flLayout();                    // first start: the layout of FL Studio
+  else {
+    for (const id of ['rack', ...(app.defaultWindows || [])]) {
+      const was = app.wm.wasOpen(id);
+      if (was !== false) app.wm.open(id);
+    }
+    app.showBrowser(browserWanted());
   }
   app.store.bus.emit('project', app.store.project);
   window.app = app;
