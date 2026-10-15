@@ -41,8 +41,8 @@ npm run smoke:built -- out/linux-unpacked/fl-lua-desktop   # запустить 
 | Piano Roll | все инструменты (draw, paint, delete, mute, slice, select, zoom, slide, stamp, chord), панели свойств нот, шкалы, Riff machine, Arpeggiator, Strum, Quantize, Chop, Glue, Articulate, Claw machine и др. |
 | Playlist | до 500 треков, клипы паттернов / аудио / автоматизации, маркеры, лупы, Performance mode, аранжировки, time-stretch и pitch клипов, фейды |
 | Mixer | 125 инсертов + Master, 10 слотов эффектов, произвольная маршрутизация, sidechain, PDC, 3-полосный EQ, анализатор спектра |
-| Инструменты | **плагины VST3 и CLAP**, установленные на компьютере (настольная версия), **Flux** (24 пресета, 8 макро-ручек), Sampler, FPC, Slicer, **Multisampler** (зоны по нотам и силе нажатия, определение высоты), SubSynth, FM (6 операторов), Drum synth, Wavetable, Pluck, Organ, **MIDI Out**, **Patcher**, плагины **WAM 2.0** |
-| Эффекты | **VST3 и CLAP** (настольная версия), 20 встроенных + **Patcher** (свой эффект из узлов) + эффекты **WAM 2.0** |
+| Инструменты | **плагины VST3, VST2, CLAP и AU**, установленные на компьютере (настольная версия), **Flux** (24 пресета, 8 макро-ручек), Sampler, FPC, Slicer, **Multisampler** (зоны по нотам и силе нажатия, определение высоты), SubSynth, FM (6 операторов), Drum synth, Wavetable, Pluck, Organ, **MIDI Out**, **Patcher**, плагины **WAM 2.0** |
+| Эффекты | **VST3, VST2, CLAP и AU** (настольная версия), 20 встроенных + **Patcher** (свой эффект из узлов) + эффекты **WAM 2.0** |
 | Мастер | лимитер на мастере в новых проектах, окно **Loudness**: LUFS (M / S / I), диапазон, истинный пик (4×), корреляция |
 | Автоматизация | клипы автоматизации с кривыми, **запись движений ручек**, LFO и Envelope-контроллеры, MIDI learn |
 | MIDI | клавиатуры и контроллеры, **MIDI Out** с точной синхронизацией, MIDI clock, привязка транспорта (профили), **скрипты контроллеров** |
@@ -76,14 +76,14 @@ npm run smoke:built -- out/linux-unpacked/fl-lua-desktop   # запустить 
 
 **OPTIONS → Cloud backup…** → **Choose folder…**: каждые 2–30 минут, пока проект меняется, его копия пишется в подпапку `FL LUA backups` выбранной папки. Выберите папку Яндекс Диска, Google Drive, OneDrive или Dropbox — их программа сама отправит копии в облако. Хранятся 30 последних копий каждого проекта; копия открывается как обычный проект (**FILE → Open**). В браузере работает в Chrome и Edge.
 
-## Плагины VST3 и CLAP
+## Плагины VST3, VST2, CLAP и AU
 
-Настольная версия подключает синтезаторы и эффекты, установленные на компьютере, в форматах **VST3** и **CLAP**: Vital, Surge XT, Serum 2, Diva, Dexed, FabFilter, Valhalla и любые другие.
+Настольная версия подключает синтезаторы и эффекты, установленные на компьютере, в форматах **VST3**, **VST2**, **CLAP** и (на macOS) **AU**: Vital, Surge XT, Serum, Sylenth1, Massive, Diva, Dexed, FabFilter, Valhalla и любые другие.
 
 **Как подключить:**
 
 1. **OPTIONS → Manage plugins… → Find plugins.** Программа сама просматривает стандартные папки (таблица ниже), вписывать пути не нужно. Если плагины лежат в другом месте, нажмите **Add folder…**.
-2. **Инструмент:** **ADD → VST3 / CLAP plugin**, или Plugin picker, или Browser → **Plugin database** (двойной клик или перетаскивание). **Эффект:** слот микшера → **VST3 / CLAP plugin**.
+2. **Инструмент:** **ADD → VST / CLAP plugin**, или Plugin picker, или Browser → **Plugin database** (двойной клик или перетаскивание). **Эффект:** слот микшера → **VST / CLAP plugin**. Рядом с названием видно формат: VST3, VST2, CLAP или AU. Если у плагина есть несколько форматов, выбирайте любой.
 3. Откроется окно самого плагина. В окне канала или слота FL LUA, как в FL Studio, есть обёртка: показать или скрыть окно плагина, **Reload**, поиск параметра и ручки всех параметров.
 
 **Что работает:**
@@ -97,16 +97,17 @@ npm run smoke:built -- out/linux-unpacked/fl-lua-desktop   # запустить 
 
 | Система | Где программа ищет плагины |
 |---|---|
-| Windows | `C:\Program Files\Common Files\VST3` и `…\Common Files\CLAP`, `%LOCALAPPDATA%\Programs\Common\VST3` и `…\CLAP` |
-| macOS | `/Library/Audio/Plug-Ins/VST3` и `/CLAP`, то же в `~/Library` |
-| Linux | `~/.vst3`, `/usr/lib/vst3`, `/usr/local/lib/vst3`, `~/.clap`, `/usr/lib/clap`, `/usr/local/lib/clap` |
+| Windows | VST3: `C:\Program Files\Common Files\VST3`, `%LOCALAPPDATA%\Programs\Common\VST3`; CLAP: `…\Common Files\CLAP`, `%LOCALAPPDATA%\Programs\Common\CLAP`; VST2: `C:\Program Files\VSTPlugins`, `C:\Program Files\Steinberg\VSTPlugins`, `…\Common Files\VST2`, `…\Common Files\Steinberg\VST2` и папка из реестра (`HKLM\SOFTWARE\VST`) |
+| macOS | `/Library/Audio/Plug-Ins/VST3`, `/CLAP`, `/VST` и то же в `~/Library`; Audio Units — все, что установлены в системе (папки не нужны) |
+| Linux | VST3: `~/.vst3`, `/usr/lib/vst3`, `/usr/local/lib/vst3`; CLAP: `~/.clap`, `/usr/lib/clap`, `/usr/local/lib/clap`; VST2: `~/.vst`, `/usr/lib/vst`, `/usr/local/lib/vst`, `~/.lxvst`, `/usr/lib/lxvst`, `/usr/local/lib/lxvst` |
 
-Плюс папки из переменных `CLAP_PATH` (на Linux ещё `VST3_PATH`) и добавленные вручную. Как это устроено: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), раздел 20.
+Плюс папки из переменных `VST_PATH`, `CLAP_PATH` (на Linux ещё `VST3_PATH`, `LXVST_PATH`) и добавленные вручную. В папках VST2 обычно лежат и вспомогательные библиотеки плагинов: программа узнаёт их и не показывает как ошибки. Как это устроено: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), раздел 20.
 
 ## Чего нет и почему
 
-* **VST2 и AU** не подключаются. VST2 — старый формат: Steinberg больше не выдаёт его SDK, а почти все плагины давно выходят в VST3. AU есть только на macOS, и почти все AU-плагины есть и в VST3.
-* **В браузерной версии** нет VST3 / CLAP: это машинный код, ему нужен свой процесс на компьютере. В браузере работают встроенные плагины, Plugin store и веб-плагины **WAM 2.0**.
+* **32-битные плагины** не подключаются: FL LUA 64-битная, а мост для старых 32-битных плагинов нужен редко. Программа прямо пишет, что плагин 32-битный.
+* **AU** только на macOS: на других системах Audio Units не существует.
+* **В браузерной версии** нет VST / CLAP / AU: это машинный код, ему нужен свой процесс на компьютере. В браузере работают встроенные плагины, Plugin store и веб-плагины **WAM 2.0**.
 * **Apple Silicon** поддерживается: `FL-LUA-macos-arm64.zip` в каждом релизе — родная сборка для M1–M4.
 
 ## Plugin store: скачиваемые плагины
