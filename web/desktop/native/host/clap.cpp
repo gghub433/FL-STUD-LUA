@@ -154,7 +154,7 @@ class ClapPlugin : public Plugin {
     host_.name = "FL LUA";
     host_.vendor = "FL LUA";
     host_.url = "https://github.com/gghub433/FL-STUD-LUA";
-    host_.version = "0.6.0";
+    host_.version = "0.7.0";
     host_.get_extension = [](const clap_host_t* h, const char* id) -> const void* { return self(h)->hostExtension(id); };
     host_.request_restart = [](const clap_host_t* h) { auto* p = self(h); plat::post([p] { p->restartRequested(); }); };
     host_.request_process = [](const clap_host_t*) {};
