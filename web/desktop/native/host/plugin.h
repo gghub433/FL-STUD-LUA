@@ -1,4 +1,4 @@
-// What the host needs from a loaded plugin, whatever its format (vst3.cpp, clap.cpp, vst2.cpp).
+// What the host needs from a loaded plugin, whatever its format (vst3.cpp, clap.cpp, vst2.cpp, au.mm).
 #pragma once
 #include <atomic>
 #include <cstdint>
@@ -92,6 +92,9 @@ std::unique_ptr<Plugin> loadClap(const std::string& path, const std::string& uid
 // notPlugin: the file is no VST2 plugin at all (a library next to the plugins): not worth listing as a failure
 std::vector<ClassInfo> scanVst2(const std::string& path, std::string& error, bool& notPlugin);
 std::unique_ptr<Plugin> loadVst2(const std::string& path, const std::string& uid, std::string& error);
+// Audio Units (macOS): every unit registered on the Mac; uid = "<type>:<subtype>:<manufacturer>" in hex
+std::vector<ClassInfo> scanAu(std::string& error);
+std::unique_ptr<Plugin> loadAu(const std::string& uid, std::string& error);
 
 // the thread processing audio right now (CLAP thread-check, VST3 asserts in some plugins)
 bool isAudioThread();

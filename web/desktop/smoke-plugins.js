@@ -1,5 +1,5 @@
 'use strict';
-// Part of `--smoke`: VST3 / CLAP / VST2 plugins in the real app window with the test plugins (native/out/<platform>/testplugins).
+// Part of `--smoke`: VST3 / CLAP / VST2 (and on macOS Audio Unit) plugins in the real app window with the test plugins (native/out/<platform>/testplugins).
 // Runs in the page; returns what it saw. Checked in main.js.
 async function pageCheck() {
   const P = app.plugins, out = { available: P.available };
@@ -74,6 +74,23 @@ async function pageCheck() {
     out.vst2Peak = await peakOf(3, 600);
     app.host.send({ t: 'noteOff', ch: ch3.id, key: 64 });
 
+    // macOS: Apple's General MIDI synth as an Audio Unit
+    let ch4 = null;
+    const dls = cat.plugins.find((p) => p.format === 'au' && p.uid === '61756d75:646c7320:6170706c');
+    if (navigator.platform.startsWith('Mac')) {
+      out.auFound = !!dls;
+      if (dls) {
+        ch4 = P.addInstrument(dls);
+        app.cmd.setMixerTarget(app.store, ch4.id, 4);
+        await P.sync();
+        out.auStatus = (P.statusOf(`ch:${ch4.id}`) || {}).state;
+        app.host.send({ t: 'noteOn', ch: ch4.id, key: 60, vel: 1 });
+        out.auPeak = await peakOf(4, 800);
+        app.host.send({ t: 'noteOff', ch: ch4.id, key: 60 });
+        await P.closeEditor(`ch:${ch4.id}`);
+      }
+    }
+
     // export with plugins: the same instances render the pattern
     app.cmd.setStep(app.store, ch.id, 0, true, { key: 69 });
     let wav = null;
@@ -89,6 +106,7 @@ async function pageCheck() {
     app.cmd.removeChannel(app.store, ch.id);
     app.cmd.removeChannel(app.store, ch2.id);
     app.cmd.removeChannel(app.store, ch3.id);
+    if (ch4) app.cmd.removeChannel(app.store, ch4.id);
     app.cmd.setFx(app.store, 1, 0, null);
     await P.sync();
     out.left = P.items.size;
@@ -104,7 +122,8 @@ function ok(r) {
   return !!r && r.available && !r.error && r.status === 'ready' && r.items === 2 && r.peak > 0.05 && r.quiet < r.peak * 0.05
     && (r.editor === undefined || (r.editor === true && r.tone === 0.75)) && r.state > 0 && r.params === 2
     && r.reloaded === 'ready' && (r.toneAfterReopen === undefined || r.editor === undefined || Math.abs(r.toneAfterReopen - 0.75) < 1e-6)
-    && r.clapPeak > 0.05 && r.vst2Status === 'ready' && r.vst2Peak > 0.05 && r.exportPeak > 0.05 && r.left === 0;
+    && r.clapPeak > 0.05 && r.vst2Status === 'ready' && r.vst2Peak > 0.05 && r.exportPeak > 0.05 && r.left === 0
+    && (r.auFound === undefined || (r.auFound && r.auStatus === 'ready' && r.auPeak > 0.001));
 }
 
 module.exports = { run, ok };

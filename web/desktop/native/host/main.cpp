@@ -1,6 +1,7 @@
-// fllua-plughost: runs VST3, CLAP and VST2 plugins for FL LUA in a process of its own, so a plugin that crashes takes
-// only this process down.
+// fllua-plughost: runs VST3, CLAP, VST2 and (macOS) Audio Unit plugins for FL LUA in a process of its own, so a plugin
+// that crashes takes only this process down.
 //   fllua-plughost --scan <file>          prints the plugins in one file as a JSON line and exits
+//   fllua-plughost --scan-au              the same for the Audio Units registered on this Mac
 //   fllua-plughost --serve <shm name>     creates the shared memory (common/layout.h) and reads commands as JSON lines
 //                                         on stdin; answers and events are JSON lines on stdout
 // Audio: the bridge in FL LUA's page process copies a block into the shared memory and rings `reqSeq`; the audio
@@ -147,7 +148,8 @@ json::Value handle(const json::Value& m) {
     if (slot < 0 || slot >= fl::SLOTS || bySlot[slot].load()) { r.set("ok", false).set("error", "No free plugin slot"); return r; }
     std::string error, format = m["format"].str(), path = m["path"].str(), uid = m["uid"].str();
     if (m.has("sampleRate")) sampleRate = m["sampleRate"].num(sampleRate);
-    std::unique_ptr<Plugin> p = format == "clap" ? loadClap(path, uid, error) : format == "vst2" ? loadVst2(path, uid, error) : loadVst3(path, uid, error);
+    std::unique_ptr<Plugin> p = format == "clap" ? loadClap(path, uid, error) : format == "vst2" ? loadVst2(path, uid, error)
+                              : format == "au" ? loadAu(uid, error) : loadVst3(path, uid, error);
     if (!p) { r.set("ok", false).set("error", error.empty() ? "Could not load the plugin" : error); return r; }
     std::string state = json::unbase64(m["state"].str());
     if (!state.empty() && !p->loadState(state)) r.set("stateError", "The saved settings could not be restored");
@@ -220,9 +222,19 @@ json::Value handle(const json::Value& m) {
   return r;
 }
 
-int scanMain(const std::string& path) {
+int scanMain(const std::string& path, bool au = false) {
   std::string error;
   std::vector<ClassInfo> list;
+  if (au) {
+    list = scanAu(error);
+    json::Value v = json::Value::object(), arr = json::Value::array();
+    for (auto& c : list) arr.push(c.toJson());
+    v.set("ok", !list.empty()).set("plugins", arr);
+    if (list.empty()) v.set("error", error);
+    emit(v);
+    std::fflush(stdout);
+    std::_Exit(0);
+  }
   std::string lower = path;
   for (auto& c : lower) c = (char)std::tolower((unsigned char)c);
   while (!lower.empty() && (lower.back() == '/' || lower.back() == '\\')) lower.pop_back();
@@ -243,6 +255,11 @@ int scanMain(const std::string& path) {
 
 }  // namespace
 
+#ifndef __APPLE__
+std::vector<ClassInfo> scanAu(std::string& error) { error = "Audio Units exist only on macOS"; return {}; }
+std::unique_ptr<Plugin> loadAu(const std::string&, std::string& error) { error = "Audio Units exist only on macOS"; return nullptr; }
+#endif
+
 bool isAudioThread() { return tAudio; }
 void setAudioThread(bool on) { tAudio = on; }
 
@@ -256,7 +273,8 @@ int main(int argc, char** argv) {
   if (mode == "--version") { std::printf("fllua-plughost 1 layout %u\n", fl::VERSION); return 0; }
   plat::init();
   if (mode == "--scan" && argc > 2) return scanMain(argv[2]);
-  if (mode != "--serve" || argc < 3) { std::fprintf(stderr, "usage: fllua-plughost --scan <file> | --serve <shm-name>\n"); return 2; }
+  if (mode == "--scan-au") return scanMain("", true);
+  if (mode != "--serve" || argc < 3) { std::fprintf(stderr, "usage: fllua-plughost --scan <file> | --scan-au | --serve <shm-name>\n"); return 2; }
 
   std::string name = argv[2];
   if (!shm.open(name, fl::SHM_SIZE, true)) { json::Value e = json::Value::object(); e.set("ev", "fatal").set("error", "Could not create shared memory " + name); emit(e); return 1; }

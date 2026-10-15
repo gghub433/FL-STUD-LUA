@@ -215,3 +215,83 @@ test('process: synths sound on notes, effects process the input with their laten
   await h.cmd({ cmd: 'quit' });
   await new Promise((r) => { if (h.p.exitCode !== null) r(); else h.p.on('exit', r); });
 });
+
+// Audio Units: Apple's own units are on every Mac (DLSMusicDevice: a General MIDI synth; AULowpass: a filter)
+test('Audio Units (macOS): found without files, play, filter, parameters, state, reset, window', { skip: (process.platform !== 'darwin' && 'macOS only') || (!fs.existsSync(exe) && 'native build missing') }, async () => {
+  const r = await new Promise((res) => { const p = spawn(exe, ['--scan-au']); let o = ''; p.stdout.on('data', (d) => { o += d; }); p.on('close', () => res(JSON.parse(o))); });
+  assert.equal(r.ok, true, JSON.stringify(r).slice(0, 500));
+  const DLS = '61756d75:646c7320:6170706c', LOWPASS = '61756678:6c706173:6170706c';
+  const dls = r.plugins.find((p) => p.uid === DLS), lp = r.plugins.find((p) => p.uid === LOWPASS);
+  assert.ok(dls && lp, r.plugins.map((p) => `${p.vendor}: ${p.name} ${p.uid}`).join('\n'));
+  assert.deepEqual([dls.format, dls.kind, lp.kind, lp.vendor], ['au', 'instrument', 'effect', 'Apple']);
+
+  const h = host();
+  await h.isReady;
+  const bridge = require(path.join(out, 'fllua_bridge.node'));
+  const sab = new SharedArrayBuffer(L.SAB_SIZE);
+  const v = L.views(sab);
+  assert.equal(bridge.open(h.name, new Uint8Array(sab)).ok, true);
+  const sr = 48000;
+  const a = await h.cmd({ cmd: 'load', format: 'au', path: 'AudioUnit', uid: DLS, slot: 0, sampleRate: sr });
+  assert.equal(a.ok, true, JSON.stringify(a));
+  const b = await h.cmd({ cmd: 'load', format: 'au', path: 'AudioUnit', uid: LOWPASS, slot: 1, sampleRate: sr });
+  assert.equal(b.ok, true, JSON.stringify(b));
+  assert.equal(b.hasInput, true);
+  assert.ok(b.params.length >= 2, JSON.stringify(b.params));
+
+  let seq = 0;
+  const outputs = [[], []];
+  async function block(events = {}, input = 0.5) {
+    seq++;
+    L.writeFrame(v, seq, 128, sr, { flags: L.FLAG.PLAYING, tempo: 120 });
+    for (let s = 0; s < 2; s++) {
+      L.beginSlot(v, seq, s);
+      for (const e of events[s] || []) L.addEvent(v, seq, s, ...e);
+      const il = L.inIndex(seq, s, 0), ir = L.inIndex(seq, s, 1);
+      v.f32.fill(input, il, il + 128); v.f32.fill(input, ir, ir + 128);
+    }
+    Atomics.store(v.u32, L.H.reqSeq, seq);
+    for (let t = 0; Atomics.load(v.u32, L.H.doneSeq) !== seq; t++) { if (t > 4000) throw new Error(`no answer for block ${seq}`); await sleep(1); }
+    for (let s = 0; s < 2; s++) {
+      assert.equal(L.outSeqOf(v, seq, s), seq);
+      const o = L.outIndex(seq, s, 0);
+      outputs[s].push(...v.f32.subarray(o, o + 128));
+    }
+  }
+  const peak = (arr) => arr.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+  await block({ 0: [[0, L.EV.NOTE_ON, 0, 60, -1, 0, 1]] });
+  for (let i = 0; i < 80; i++) await block();
+  assert.ok(peak(outputs[0]) > 0.001, `the DLS synth plays: ${peak(outputs[0])}`);
+  const settled = outputs[1].slice(-128);
+  assert.ok(settled.every((x) => Math.abs(x - 0.5) < 0.05), `a low-pass lets a constant through: ${settled[100]}`);
+
+  // parameters: texts, a change from FL LUA, state back and forth
+  const p0 = b.params[0];
+  const tx = await h.cmd({ cmd: 'paramText', inst: b.inst, items: [{ id: p0.id, value: 0.5 }] });
+  assert.ok(tx.texts[0], JSON.stringify(tx));
+  const st = await h.cmd({ cmd: 'getState', inst: b.inst });
+  assert.equal(st.ok, true);
+  await block({ 1: [[0, L.EV.PARAM, 0, 0, -1, p0.id, 0.1]] });
+  await sleep(50);
+  const changed = await h.cmd({ cmd: 'params', inst: b.inst });
+  assert.ok(Math.abs(changed.values[String(p0.id)] - 0.1) < 0.02, JSON.stringify(changed.values));
+  const back = await h.cmd({ cmd: 'setState', inst: b.inst, data: st.data });
+  assert.equal(back.ok, true);
+  assert.ok(Math.abs(back.values[String(p0.id)] - b.values[String(p0.id)]) < 0.02, `state restored: ${JSON.stringify(back.values)}`);
+
+  // reset (an export starts) keeps the unit working
+  await block({ 0: [[0, L.EV.RESET, 0, 0, -1, 0, 0]], 1: [[0, L.EV.RESET, 0, 0, -1, 0, 0]] }, 0);
+  await block({}, 0);
+
+  // its window: the unit's own view or the generic one
+  const ed = await h.cmd({ cmd: 'editor', inst: b.inst, show: true, title: 'AULowpass' });
+  assert.equal(ed.open, true, JSON.stringify(ed));
+  await sleep(300);
+  await h.cmd({ cmd: 'editor', inst: b.inst, show: false });
+
+  await h.cmd({ cmd: 'unload', inst: a.inst });
+  await h.cmd({ cmd: 'unload', inst: b.inst });
+  bridge.close();
+  await h.cmd({ cmd: 'quit' });
+  await new Promise((res) => { if (h.p.exitCode !== null) res(); else h.p.on('exit', res); });
+});

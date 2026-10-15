@@ -1,5 +1,5 @@
 'use strict';
-// VST3, CLAP and VST2 plugins in the desktop app (see native/): this process starts the plugin host (fllua-plughost),
+// VST3, CLAP, VST2 and (macOS) Audio Unit plugins in the desktop app (see native/): this process starts the plugin host (fllua-plughost),
 // passes the page's commands to it and its events back, and keeps the list of installed plugins:
 //   plugins:start      starts the host (once) -> { shm, K } ; the page's bridge then opens the shared memory
 //   plugins:cmd        a command for the host (load, unload, editor, getState, setState, params, …)
@@ -170,6 +170,16 @@ function installPlugins({ getWin }) {
       });
     });
   }
+  // Audio Units are registered with macOS, not kept in folders: the host lists them all at once
+  function scanAudioUnits() {
+    const dir = nativeDir();
+    return new Promise((resolve) => {
+      execFile(hostExe(dir), ['--scan-au'], { timeout: 60000, maxBuffer: 16 << 20 }, (err, stdout) => {
+        try { const r = JSON.parse(String(stdout).trim().split('\n').pop()); resolve(r.ok ? { plugins: r.plugins } : { error: r.error || 'No Audio Units' }); }
+        catch (_) { resolve({ error: err && err.killed ? 'Listing the Audio Units took too long' : 'The Audio Units could not be listed' }); }
+      });
+    });
+  }
   let scanning = null;
   async function scan({ force = false } = {}) {
     if (scanning) return scanning;
@@ -193,6 +203,10 @@ function installPlugins({ getWin }) {
         }
       });
       await Promise.all(workers);
+      if (process.platform === 'darwin') {
+        const r = await scanAudioUnits();
+        c.files.AudioUnit = r.plugins ? { plugins: r.plugins } : { error: r.error };
+      }
       c.scannedAt = Date.now();
       saveCache();
       toPage('plugins:event', { ev: 'scan', done, total: done, finished: true });
