@@ -5,7 +5,7 @@ import { PluginPort, latencyOf } from '../plugin-link.js';
 import { EV } from '../plugin-layout.js';
 
 export const schema = [];
-export const meta = { id: 'plugin', name: 'VST3 / CLAP plugin', kind: 'external', description: 'An instrument plugin installed on this computer (desktop app)' };
+export const meta = { id: 'plugin', name: 'VST / CLAP plugin', kind: 'external', description: 'An instrument plugin installed on this computer (desktop app)' };
 
 const clampKey = (k) => Math.max(0, Math.min(127, k));
 

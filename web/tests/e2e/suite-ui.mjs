@@ -158,7 +158,7 @@ export async function run() {
     ok(await page.locator('.plug-manager .btn', { hasText: 'Find plugins' }).evaluate((b) => b.classList.contains('disabled')), 'no scanning here');
     await ev(() => app.wm.close('plugins'));
     await page.locator('#menubar .menu-top[data-menu="ADD"]').click();
-    await page.locator('.popup .item', { hasText: 'VST3 / CLAP plugin' }).first().hover();
+    await page.locator('.popup .item', { hasText: 'VST / CLAP plugin' }).first().hover();
     await page.waitForSelector('.popup .item:has-text("in the desktop app")');
     await page.keyboard.press('Escape');
     // a project that uses a plugin opens; the channel is marked and its window explains

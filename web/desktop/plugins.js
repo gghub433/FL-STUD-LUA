@@ -1,5 +1,5 @@
 'use strict';
-// VST3 and CLAP plugins in the desktop app (see native/): this process starts the plugin host (fllua-plughost),
+// VST3, CLAP and VST2 plugins in the desktop app (see native/): this process starts the plugin host (fllua-plughost),
 // passes the page's commands to it and its events back, and keeps the list of installed plugins:
 //   plugins:start      starts the host (once) -> { shm, K } ; the page's bridge then opens the shared memory
 //   plugins:cmd        a command for the host (load, unload, editor, getState, setState, params, …)
@@ -21,18 +21,38 @@ const nativeDir = () => {
 };
 const hostExe = (dir) => path.join(dir, process.platform === 'win32' ? 'fllua-plughost.exe' : 'fllua-plughost');
 
+// where VST3, CLAP and VST2 plugins are installed by convention on each system
 function defaultFolders() {
   const home = os.homedir();
   const env = (k) => (process.env[k] || '').split(path.delimiter).filter(Boolean);
   if (process.platform === 'win32') {
     const common = process.env.CommonProgramFiles || 'C:\\Program Files\\Common Files';
     const local = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
-    return [path.join(common, 'VST3'), path.join(local, 'Programs', 'Common', 'VST3'), path.join(common, 'CLAP'), path.join(local, 'Programs', 'Common', 'CLAP'), ...env('CLAP_PATH')];
+    const pf = process.env.ProgramFiles || 'C:\\Program Files';
+    return [path.join(common, 'VST3'), path.join(local, 'Programs', 'Common', 'VST3'), path.join(common, 'CLAP'), path.join(local, 'Programs', 'Common', 'CLAP'), ...env('CLAP_PATH'),
+      path.join(pf, 'VSTPlugins'), path.join(pf, 'Steinberg', 'VSTPlugins'), path.join(common, 'VST2'), path.join(common, 'Steinberg', 'VST2'), ...env('VST_PATH')];
   }
   if (process.platform === 'darwin') {
-    return ['/Library/Audio/Plug-Ins/VST3', path.join(home, 'Library/Audio/Plug-Ins/VST3'), '/Library/Audio/Plug-Ins/CLAP', path.join(home, 'Library/Audio/Plug-Ins/CLAP'), ...env('CLAP_PATH')];
+    return ['/Library/Audio/Plug-Ins/VST3', path.join(home, 'Library/Audio/Plug-Ins/VST3'), '/Library/Audio/Plug-Ins/CLAP', path.join(home, 'Library/Audio/Plug-Ins/CLAP'), ...env('CLAP_PATH'),
+      '/Library/Audio/Plug-Ins/VST', path.join(home, 'Library/Audio/Plug-Ins/VST'), ...env('VST_PATH')];
   }
-  return [path.join(home, '.vst3'), '/usr/lib/vst3', '/usr/local/lib/vst3', path.join(home, '.clap'), '/usr/lib/clap', '/usr/local/lib/clap', ...env('VST3_PATH'), ...env('CLAP_PATH')];
+  return [path.join(home, '.vst3'), '/usr/lib/vst3', '/usr/local/lib/vst3', path.join(home, '.clap'), '/usr/lib/clap', '/usr/local/lib/clap', ...env('VST3_PATH'), ...env('CLAP_PATH'),
+    path.join(home, '.vst'), '/usr/lib/vst', '/usr/local/lib/vst', path.join(home, '.lxvst'), '/usr/lib/lxvst', '/usr/local/lib/lxvst', ...env('VST_PATH'), ...env('LXVST_PATH')];
+}
+
+// Windows: the VST2 folder installers write into the registry (HKLM\SOFTWARE\VST, VSTPluginsPath)
+let regVstPath = null;
+function registryVstFolder() {
+  if (process.platform !== 'win32') return Promise.resolve(null);
+  if (!regVstPath) {
+    regVstPath = new Promise((resolve) => {
+      execFile('reg', ['query', 'HKLM\\SOFTWARE\\VST', '/v', 'VSTPluginsPath'], { windowsHide: true, timeout: 5000 }, (err, stdout) => {
+        const m = !err && /VSTPluginsPath\s+REG_(?:EXPAND_)?SZ\s+(.+)/i.exec(String(stdout));
+        resolve(m ? m[1].trim().replace(/%([^%]+)%/g, (_, k) => process.env[k] || '') : null);
+      });
+    });
+  }
+  return regVstPath;
 }
 
 function installPlugins({ getWin }) {
@@ -47,11 +67,12 @@ function installPlugins({ getWin }) {
     return cache;
   };
   const saveCache = () => { try { fs.writeFileSync(cachePath(), JSON.stringify(cache)); } catch (_) { /* read-only profile */ } };
+  let regFolder = null;
   const folders = () => {
     const c = loadCache();
     if (process.env.FLLUA_PLUGIN_PATH) return process.env.FLLUA_PLUGIN_PATH.split(path.delimiter);        // tests: only these
-    const list = [...defaultFolders().filter((f) => !c.hidden.includes(f)), ...c.folders];
-    return [...new Set(list)];
+    const list = [...defaultFolders(), ...(regFolder ? [regFolder] : [])].filter((f) => !c.hidden.includes(f));
+    return [...new Set([...list, ...c.folders])];
   };
   const toPage = (ch, v) => { const w = getWin(); if (w && !w.isDestroyed()) w.webContents.send(ch, v); };
 
@@ -126,7 +147,8 @@ function installPlugins({ getWin }) {
   }
 
   // ---------------------------------------------------------------- scanning
-  const isPluginName = (n) => /\.(vst3|clap)$/i.test(n);
+  // VST3 and CLAP files or bundles; VST2: a .dll (Windows), .so (Linux) or a .vst bundle / folder
+  const isPluginName = (n) => /\.(vst3|clap|vst)$/i.test(n) || (process.platform === 'win32' ? /\.dll$/i : process.platform === 'linux' ? /\.so$/i : /^$/).test(n);
   function candidates(dir, depth = 0, out = []) {
     if (depth > 6 || out.length > 5000) return out;
     let entries;
@@ -143,7 +165,7 @@ function installPlugins({ getWin }) {
     const dir = nativeDir();
     return new Promise((resolve) => {
       execFile(hostExe(dir), ['--scan', file], { timeout: 30000, windowsHide: true, maxBuffer: 4 << 20 }, (err, stdout) => {
-        try { const r = JSON.parse(String(stdout).trim().split('\n').pop()); resolve(r.ok ? { plugins: r.plugins } : { error: r.error || 'No plugins in this file' }); }
+        try { const r = JSON.parse(String(stdout).trim().split('\n').pop()); resolve(r.ok ? { plugins: r.plugins } : r.notPlugin ? { notPlugin: true } : { error: r.error || 'No plugins in this file' }); }
         catch (_) { resolve({ error: err ? (err.killed ? 'The plugin took too long to load' : 'The plugin crashed while being checked') : 'No answer' }); }
       });
     });
@@ -154,6 +176,7 @@ function installPlugins({ getWin }) {
     scanning = (async () => {
       const c = loadCache();
       if (!nativeDir()) return list();
+      regFolder = await registryVstFolder();
       const files = [];
       for (const f of folders()) candidates(f, 0, files);
       const todo = files.filter((f) => { const s = stamp(f), k = c.files[f]; return force || !k || !s || k.mtime !== s.mtime || k.size !== s.size; });
@@ -165,7 +188,7 @@ function installPlugins({ getWin }) {
           const f = todo.shift();
           toPage('plugins:event', { ev: 'scan', done, total: done + todo.length + 1, file: path.basename(f) });
           const r = await scanOne(f);
-          c.files[f] = { ...(stamp(f) || {}), ...(r.plugins ? { plugins: r.plugins } : { error: r.error }) };
+          c.files[f] = { ...(stamp(f) || {}), ...(r.plugins ? { plugins: r.plugins } : r.notPlugin ? { notPlugin: true } : { error: r.error }) };      // a library next to the plugins is remembered, not listed
           done++;
         }
       });
@@ -193,7 +216,7 @@ function installPlugins({ getWin }) {
   ipcMain.handle('plugins:list', () => list());
   ipcMain.handle('plugins:scan', (_e, o) => scan(o || {}));
   ipcMain.handle('plugins:addFolder', async () => {
-    const r = await dialog.showOpenDialog(getWin(), { title: 'Folder with VST3 or CLAP plugins', properties: ['openDirectory'] });
+    const r = await dialog.showOpenDialog(getWin(), { title: 'Folder with VST3, CLAP or VST2 plugins', properties: ['openDirectory'] });
     if (r.canceled || !r.filePaths[0]) return list();
     const c = loadCache();
     if (!c.folders.includes(r.filePaths[0])) c.folders.push(r.filePaths[0]);

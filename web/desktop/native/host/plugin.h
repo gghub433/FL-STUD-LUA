@@ -1,4 +1,4 @@
-// What the host needs from a loaded plugin, whatever its format (vst3.cpp, clap.cpp).
+// What the host needs from a loaded plugin, whatever its format (vst3.cpp, clap.cpp, vst2.cpp).
 #pragma once
 #include <atomic>
 #include <cstdint>
@@ -12,9 +12,9 @@
 #include "json.h"
 
 struct ClassInfo {             // one plugin found in a file
-  std::string format;          // "vst3" | "clap"
+  std::string format;          // "vst3" | "clap" | "vst2" | "au"
   std::string path;            // the file or bundle
-  std::string uid;             // VST3 class id (32 hex digits) / CLAP plugin id
+  std::string uid;             // VST3 class id (32 hex digits) / CLAP plugin id / VST2 unique id (decimal)
   std::string name, vendor, version, category;
   bool instrument = false;
   json::Value toJson() const {
@@ -89,6 +89,9 @@ std::vector<ClassInfo> scanVst3(const std::string& path, std::string& error);
 std::vector<ClassInfo> scanClap(const std::string& path, std::string& error);
 std::unique_ptr<Plugin> loadVst3(const std::string& path, const std::string& uid, std::string& error);
 std::unique_ptr<Plugin> loadClap(const std::string& path, const std::string& uid, std::string& error);
+// notPlugin: the file is no VST2 plugin at all (a library next to the plugins): not worth listing as a failure
+std::vector<ClassInfo> scanVst2(const std::string& path, std::string& error, bool& notPlugin);
+std::unique_ptr<Plugin> loadVst2(const std::string& path, const std::string& uid, std::string& error);
 
 // the thread processing audio right now (CLAP thread-check, VST3 asserts in some plugins)
 bool isAudioThread();

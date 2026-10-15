@@ -1,4 +1,4 @@
-// VST3 / CLAP plugins on screen:
+// VST / CLAP plugins on screen:
 //   pluginPanel        the inside of a plugin's FL LUA window (wrapper): its state, "Show plugin window", Reload,
 //                      and knobs for its parameters (automatable like any other knob)
 //   pluginEditor       the window of a plugin channel (app.editors.plugin)
@@ -8,6 +8,7 @@ import { h, clear } from './h.js';
 import { t as tr } from './i18n.js';
 import { Knob } from './knob.js';
 import { paramDef } from '../core/addr.js';
+import { formatLabel } from '../core/plugin-schema.js';
 
 const PAGE = 48;
 // "25.000000 Hz" -> "25 Hz", "0.1234" -> "0.12"
@@ -42,10 +43,10 @@ export function pluginPanel(app, owner, { addrOf, name }) {
   const renderStatus = () => {
     const st = P.statusOf(owner), it = P.item(owner), r = ref();
     clear(status);
-    const what = r ? `${r.name || 'Plugin'}${r.vendor ? ` · ${r.vendor}` : ''} · ${r.format === 'clap' ? 'CLAP' : 'VST3'}` : '';
+    const what = r ? `${r.name || 'Plugin'}${r.vendor ? ` · ${r.vendor}` : ''} · ${formatLabel(r.format)}` : '';
     status.append(h('div.plug-name', what));
     let line = '', cls = '';
-    if (!P.available) { line = 'VST3 and CLAP plugins run in the FL LUA desktop app.'; cls = 'err'; }
+    if (!P.available) { line = 'VST and CLAP plugins run in the FL LUA desktop app.'; cls = 'err'; }
     else if (!st || st.state === 'loading') line = 'Loading…';
     else if (st.state === 'ready') line = it && it.latency ? `Running · latency ${it.latency} samples` : 'Running';
     else if (st.state === 'missing') { line = `Not installed on this computer: ${r ? r.path : ''}`; cls = 'err'; }
@@ -133,13 +134,13 @@ pluginEditor.rect = { w: 560, h: 420 };
 // installed plugins as menu items: kind 'instrument' | 'effect'
 export function pluginMenuItems(app, kind, pick) {
   const P = app.plugins;
-  if (!P || !P.available) return [{ label: 'VST3 / CLAP plugins: in the desktop app', disabled: true }];
+  if (!P || !P.available) return [{ label: 'VST / CLAP plugins: in the desktop app', disabled: true }];
   const list = (P.catalog.plugins || []).filter((p) => p.kind === kind);
   const items = [];
   if (!list.length) items.push({ label: P.catalog.scannedAt ? 'No plugins found yet' : 'Not looked for plugins yet', disabled: true });
   const byVendor = new Map();
   for (const p of list) { const v = p.vendor || 'Other'; if (!byVendor.has(v)) byVendor.set(v, []); byVendor.get(v).push(p); }
-  const fmt = (p) => `${p.name}${list.some((q) => q !== p && q.name === p.name) ? ` (${p.format === 'clap' ? 'CLAP' : 'VST3'})` : ''}`;
+  const fmt = (p) => `${p.name}${list.some((q) => q !== p && q.name === p.name) ? ` (${formatLabel(p.format)})` : ''}`;
   if (list.length <= 14) for (const p of list) items.push({ label: fmt(p), fn: () => pick(p) });
   else for (const [v, ps] of [...byVendor].sort((a, b) => a[0].localeCompare(b[0]))) items.push({ label: v, submenu: ps.map((p) => ({ label: fmt(p), fn: () => pick(p) })) });
   items.push({ sep: true }, { label: 'Find plugins', fn: () => P.scan().then((c) => app.toast(`${c.plugins.length} plugins found`)) }, { label: 'Manage plugins…', fn: () => app.openWindow('plugins') });
@@ -157,7 +158,7 @@ export function createPluginManager(win, app) {
   const search = h('input.input.plug-search', { type: 'search', placeholder: 'Find a plugin…' });
   search.addEventListener('input', () => { filter = search.value.trim().toLowerCase(); render(); });
   search.addEventListener('keydown', (e) => e.stopPropagation());
-  const scanBtn = h('div.btn.primary', { onclick: () => P.scan(), hint: 'Look through the folders for VST3 and CLAP plugins (new ones are checked one by one)' }, 'Find plugins');
+  const scanBtn = h('div.btn.primary', { onclick: () => P.scan(), hint: 'Look through the folders for VST and CLAP plugins (new ones are checked one by one)' }, 'Find plugins');
   const rescan = h('div.btn', { onclick: () => P.scan(true), hint: 'Check every plugin again' }, 'Check all again');
   const addFolder = h('div.btn', { onclick: () => P.addFolder(), hint: 'Add a folder where you keep plugins' }, 'Add folder…');
   // how many 128-sample blocks the plugins get to answer: fewer = sooner sound, more = safer on a busy computer
@@ -183,7 +184,7 @@ export function createPluginManager(win, app) {
   const render = () => {
     clear(folders); clear(list);
     if (!P.available) {
-      list.append(h('div.plug-empty', h('b', 'VST3 and CLAP plugins run in the FL LUA desktop app.'), h('p.dim', 'Download it from the releases page; your projects open there as they are. In the browser you can use the built-in instruments and effects, plugin packs and WAM plugins.')));
+      list.append(h('div.plug-empty', h('b', 'VST and CLAP plugins run in the FL LUA desktop app.'), h('p.dim', 'Download it from the releases page; your projects open there as they are. In the browser you can use the built-in instruments and effects, plugin packs and WAM plugins.')));
       scanBtn.classList.add('disabled'); rescan.classList.add('disabled'); addFolder.classList.add('disabled'); latSel.disabled = true;
       return;
     }
@@ -199,7 +200,7 @@ export function createPluginManager(win, app) {
       list.append(h('div.plug-group', `${tr(title)} · ${ps.length}`));
       for (const p of ps) {
         list.append(h('div.plug-row', { ondblclick: () => add(p), hint: `${p.path}\n${p.category || ''}` },
-          h('span.plug-fmt', p.format === 'clap' ? 'CLAP' : 'VST3'),
+          h('span.plug-fmt', formatLabel(p.format)),
           h('b', p.name), h('span.dim', p.vendor || ''), h('div.grow'),
           h('div.btn.sm', { onclick: () => add(p) }, kind === 'instrument' ? 'Add to rack' : 'Add to mixer')));
       }
@@ -208,7 +209,7 @@ export function createPluginManager(win, app) {
       list.append(h('div.plug-group.err', `${tr('Could not be used')} · ${c.failed.length}`));
       for (const f of c.failed) list.append(h('div.plug-row.err', { hint: f.path }, h('span', f.path.split(/[\\/]/).pop()), h('span.dim', f.error)));
     }
-    if (c.scannedAt && !(c.plugins || []).length) list.append(h('div.plug-empty', h('b', 'No plugins found.'), h('p.dim', 'Install VST3 or CLAP plugins (for example Vital, Surge XT, Dexed, Valhalla Supermassive) and press Find plugins. If they are in another folder, add it.')));
+    if (c.scannedAt && !(c.plugins || []).length) list.append(h('div.plug-empty', h('b', 'No plugins found.'), h('p.dim', 'Install VST or CLAP plugins (for example Vital, Surge XT, Dexed, Valhalla Supermassive) and press Find plugins. If they are in another folder, add it.')));
   };
 
   const el = h('div.rack.plug-manager',

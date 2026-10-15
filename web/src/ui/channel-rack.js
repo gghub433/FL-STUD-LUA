@@ -340,7 +340,7 @@ export class ChannelRack {
   markPlugin(nm, ch) {
     const P = this.app.plugins;
     if (ch.type !== 'plugin' || !P) return;
-    const st = P.available ? P.statusOf(`ch:${ch.id}`) : { state: 'error', error: 'VST3 / CLAP plugins run in the desktop app' };
+    const st = P.available ? P.statusOf(`ch:${ch.id}`) : { state: 'error', error: 'VST / CLAP plugins run in the desktop app' };
     const bad = !!st && (st.state === 'error' || st.state === 'missing');
     nm.classList.toggle('plug-bad', bad);
     if (bad) nm.setAttribute('hint', `${ch.name} — ${st.state === 'missing' ? 'the plugin is not installed on this computer' : st.error}. Double-click: open`);

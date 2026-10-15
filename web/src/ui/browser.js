@@ -8,6 +8,7 @@ import { drawWave } from './waveform.js';
 import { FACTORY, IRS, factoryId, collectFactorySamples } from '../core/factory.js';
 import { INSTRUMENTS } from '../core/instruments/index.js';
 import { EFFECTS } from '../core/effects/index.js';
+import { formatLabel } from '../core/plugin-schema.js';
 import { INSTRUMENT_PRESETS, EFFECT_PRESETS } from '../core/presets.js';
 import { TEMPLATES } from '../core/templates.js';
 import { loadedPacks, packSounds } from '../core/packs.js';
@@ -169,15 +170,15 @@ export class Browser {
       for (const b of list) out.push({ id: `bk:${b.key}`, label: b.name, right: ago(b.time), project: b, restore: true, menu: () => [{ label: 'Restore', fn: () => app.openSavedProject(b) }] });
       return out.length ? out : [{ label: 'Backups appear here while you work', hintOnly: true }];
     } };
-    // installed VST3 / CLAP plugins (desktop app): double-click adds one
+    // installed VST / CLAP plugins (desktop app): double-click adds one
     const P = app.plugins;
     const pluginDb = P && P.available ? { id: 'plugdb', label: 'Plugin database', folder: true, children: () => {
       const all = P.catalog.plugins || [];
-      if (!all.length) return [{ label: P.catalog.scannedAt ? 'No VST3 / CLAP plugins found (OPTIONS > Manage plugins…)' : 'OPTIONS > Manage plugins… > Find plugins', hintOnly: true }];
+      if (!all.length) return [{ label: P.catalog.scannedAt ? 'No VST / CLAP plugins found (OPTIONS > Manage plugins…)' : 'OPTIONS > Manage plugins… > Find plugins', hintOnly: true }];
       const node = (kind, label) => ({ id: `plugdb:${kind}`, label, folder: true, children: () => {
         const byVendor = new Map();
         for (const p of all.filter((x) => x.kind === kind)) { const v = p.vendor || 'Other'; if (!byVendor.has(v)) byVendor.set(v, []); byVendor.get(v).push(p); }
-        return [...byVendor].sort((a, b) => a[0].localeCompare(b[0])).map(([v, ps]) => ({ id: `plugdb:${kind}:${v}`, label: v, folder: true, children: () => ps.map((p) => ({ id: `plugdb:${p.format}:${p.uid}:${p.path}`, label: p.name, right: p.format === 'clap' ? 'CLAP' : 'VST3', installed: p })) }));
+        return [...byVendor].sort((a, b) => a[0].localeCompare(b[0])).map(([v, ps]) => ({ id: `plugdb:${kind}:${v}`, label: v, folder: true, children: () => ps.map((p) => ({ id: `plugdb:${p.format}:${p.uid}:${p.path}`, label: p.name, right: formatLabel(p.format), installed: p })) }));
       } });
       return [node('instrument', 'Generators'), node('effect', 'Effects')];
     } } : null;

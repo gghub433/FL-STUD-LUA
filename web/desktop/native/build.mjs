@@ -1,7 +1,7 @@
 // Builds the native parts of the desktop app and puts them in native/out/<platform>-<arch>/:
 //   fllua-plughost(.exe)   the VST3 / CLAP host (CMake)
 //   fllua_bridge.node      the page-process bridge (Node-API)
-//   testplugins/           the test VST3 and CLAP plugins in their usual bundle layout (only for tests)
+//   testplugins/           the test VST3, CLAP and VST2 plugins in their usual layout (only for tests)
 // Usage: node native/build.mjs [--no-test-plugins]
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -46,6 +46,10 @@ if (testPlugins) {
     fs.mkdirSync(dir, { recursive: true });
     fs.copyFileSync(art(win ? 'FLLUA Test VST3.dll' : 'FLLUA Test VST3.so'), path.join(dir, win ? 'FLLUA Test VST3.vst3' : 'FLLUA Test VST3.so'));
     fs.copyFileSync(art('FLLUA Test CLAP.clap'), path.join(tp, 'FLLUA Test CLAP.clap'));
+  }
+  for (const n of ['FLLUA Test VST2 Synth', 'FLLUA Test VST2 Gain']) {
+    const file = mac ? `${n}.vst` : win ? `${n}.dll` : `${n}.so`;
+    fs.cpSync(art(file), path.join(tp, file), { recursive: true });
   }
 }
 console.log(`native parts in ${path.relative(process.cwd(), out) || out}`);

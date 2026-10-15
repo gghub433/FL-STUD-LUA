@@ -1,4 +1,4 @@
-// fllua-plughost: runs VST3 and CLAP plugins for FL LUA in a process of its own, so a plugin that crashes takes
+// fllua-plughost: runs VST3, CLAP and VST2 plugins for FL LUA in a process of its own, so a plugin that crashes takes
 // only this process down.
 //   fllua-plughost --scan <file>          prints the plugins in one file as a JSON line and exits
 //   fllua-plughost --serve <shm name>     creates the shared memory (common/layout.h) and reads commands as JSON lines
@@ -147,7 +147,7 @@ json::Value handle(const json::Value& m) {
     if (slot < 0 || slot >= fl::SLOTS || bySlot[slot].load()) { r.set("ok", false).set("error", "No free plugin slot"); return r; }
     std::string error, format = m["format"].str(), path = m["path"].str(), uid = m["uid"].str();
     if (m.has("sampleRate")) sampleRate = m["sampleRate"].num(sampleRate);
-    std::unique_ptr<Plugin> p = format == "clap" ? loadClap(path, uid, error) : loadVst3(path, uid, error);
+    std::unique_ptr<Plugin> p = format == "clap" ? loadClap(path, uid, error) : format == "vst2" ? loadVst2(path, uid, error) : loadVst3(path, uid, error);
     if (!p) { r.set("ok", false).set("error", error.empty() ? "Could not load the plugin" : error); return r; }
     std::string state = json::unbase64(m["state"].str());
     if (!state.empty() && !p->loadState(state)) r.set("stateError", "The saved settings could not be restored");
@@ -226,12 +226,16 @@ int scanMain(const std::string& path) {
   std::string lower = path;
   for (auto& c : lower) c = (char)std::tolower((unsigned char)c);
   while (!lower.empty() && (lower.back() == '/' || lower.back() == '\\')) lower.pop_back();
-  bool clap = lower.size() > 5 && lower.compare(lower.size() - 5, 5, ".clap") == 0;
-  list = clap ? scanClap(path, error) : scanVst3(path, error);
+  auto ends = [&](const char* ext) { size_t n = std::strlen(ext); return lower.size() > n && lower.compare(lower.size() - n, n, ext) == 0; };
+  bool notPlugin = false;
+  if (ends(".clap")) list = scanClap(path, error);
+  else if (ends(".vst3")) list = scanVst3(path, error);
+  else list = scanVst2(path, error, notPlugin);          // .dll / .so / .vst
   json::Value v = json::Value::object(), arr = json::Value::array();
   for (auto& c : list) arr.push(c.toJson());
   v.set("ok", !list.empty()).set("plugins", arr);
   if (list.empty()) v.set("error", error.empty() ? "No plugins found" : error);
+  if (notPlugin) v.set("notPlugin", true);
   emit(v);
   std::fflush(stdout);
   std::_Exit(0);          // skip static destructors of plugins that misbehave on unload

@@ -1,4 +1,4 @@
-// Native plugins (VST3 / CLAP) in the project:
+// Native plugins (VST3 / CLAP / VST2 / AU) in the project:
 //   channel  { type: 'plugin', plugin: PluginRef, params: { "<param id>": normalized value } }
 //   fx slot  { type: 'plugin', params: {...}, extra: { plugin: PluginRef } }
 //   PluginRef = { id, format, path, uid, name, vendor, kind, state (base64 or null), params: [[id, name, def, steps, unit]] }
@@ -11,6 +11,10 @@ import { effectSchema } from './effects/index.js';
 const cache = new WeakMap();
 const MAX_PARAMS = 4096;
 const MAX_STATE = 32 << 20;          // base64 characters
+
+// plugin formats the desktop app hosts, with their short names on screen
+export const FORMATS = { vst3: 'VST3', clap: 'CLAP', vst2: 'VST2', au: 'AU' };
+export const formatLabel = (f) => FORMATS[f] || 'VST3';
 
 export function pluginSchema(ref) {
   if (!ref || !Array.isArray(ref.params)) return [];
@@ -31,7 +35,7 @@ const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
 export function normalizePluginRef(o, withId = false) {
   const r = o && typeof o === 'object' ? o : {};
   const out = {
-    format: r.format === 'clap' ? 'clap' : 'vst3',
+    format: FORMATS[r.format] ? r.format : 'vst3',
     path: str(r.path, 4096), uid: str(r.uid, 256), name: str(r.name, 120), vendor: str(r.vendor, 120),
     kind: r.kind === 'effect' ? 'effect' : 'instrument',
     state: typeof r.state === 'string' && r.state.length < MAX_STATE && /^[A-Za-z0-9+/=]*$/.test(r.state.slice(0, 64)) ? r.state : null,

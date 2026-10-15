@@ -4,7 +4,7 @@
 import { PluginPort, latencyOf } from '../plugin-link.js';
 
 export const schema = [];
-export const meta = { id: 'plugin', name: 'VST3 / CLAP plugin', category: 'External', description: 'An effect plugin installed on this computer (desktop app)' };
+export const meta = { id: 'plugin', name: 'VST / CLAP plugin', category: 'External', description: 'An effect plugin installed on this computer (desktop app)' };
 
 class PluginEffect {
   constructor(sr, host) { this.sr = sr; this.host = host; this.port = new PluginPort(host); }

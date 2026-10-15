@@ -161,7 +161,7 @@ app.addChannelItems = () => [
   { label: 'Sampler with factory sample', submenu: () => FACTORY.map((f) => ({ label: `${f.cat} · ${f.name}`, fn: () => { const ch = cmd.addChannel(app.store, 'sampler', { name: f.name, sample: { id: `factory:${f.id}`, name: f.name } }); app.preview(ch.id); } })) },
   { label: 'Sampler from file…', fn: () => { const ch = cmd.addChannel(app.store, 'sampler', { name: 'Sampler' }); app.pickSampleFor(ch.id); } },
   { label: 'Flux — preset synth', fn: () => app.addInstrument('flux') },
-  { label: 'VST3 / CLAP plugin', submenu: () => pluginMenuItems(app, 'instrument', (p) => { const ch = app.plugins.addInstrument(p); if (ch) app.openChannelEditor(ch.id); }) },
+  { label: 'VST / CLAP plugin', submenu: () => pluginMenuItems(app, 'instrument', (p) => { const ch = app.plugins.addInstrument(p); if (ch) app.openChannelEditor(ch.id); }) },
   { sep: true },
   { label: 'Audio clip', fn: () => app.addAudioClipChannel && app.addAudioClipChannel(), disabled: !app.addAudioClipChannel },
   { label: 'Automation clip', fn: () => app.addAutomationChannel && app.addAutomationChannel(), disabled: !app.addAutomationChannel },

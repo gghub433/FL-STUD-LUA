@@ -1,5 +1,5 @@
 'use strict';
-// Part of `--smoke`: VST3 / CLAP plugins in the real app window with the test plugins (native/out/<platform>/testplugins).
+// Part of `--smoke`: VST3 / CLAP / VST2 plugins in the real app window with the test plugins (native/out/<platform>/testplugins).
 // Runs in the page; returns what it saw. Checked in main.js.
 async function pageCheck() {
   const P = app.plugins, out = { available: P.available };
@@ -65,6 +65,15 @@ async function pageCheck() {
     out.clapPeak = await peakOf(2, 600);
     app.host.send({ t: 'noteOff', ch: ch2.id, key: 60 });
 
+    // and a VST2 instrument
+    const ch3 = P.addInstrument(cat.plugins.find((p) => p.name === 'FLLUA Test VST2 Synth'));
+    app.cmd.setMixerTarget(app.store, ch3.id, 3);
+    await P.sync();
+    out.vst2Status = (P.statusOf(`ch:${ch3.id}`) || {}).state;
+    app.host.send({ t: 'noteOn', ch: ch3.id, key: 64, vel: 1 });
+    out.vst2Peak = await peakOf(3, 600);
+    app.host.send({ t: 'noteOff', ch: ch3.id, key: 64 });
+
     // export with plugins: the same instances render the pattern
     app.cmd.setStep(app.store, ch.id, 0, true, { key: 69 });
     let wav = null;
@@ -79,6 +88,7 @@ async function pageCheck() {
     // removing the channels unloads the plugins
     app.cmd.removeChannel(app.store, ch.id);
     app.cmd.removeChannel(app.store, ch2.id);
+    app.cmd.removeChannel(app.store, ch3.id);
     app.cmd.setFx(app.store, 1, 0, null);
     await P.sync();
     out.left = P.items.size;
@@ -94,7 +104,7 @@ function ok(r) {
   return !!r && r.available && !r.error && r.status === 'ready' && r.items === 2 && r.peak > 0.05 && r.quiet < r.peak * 0.05
     && (r.editor === undefined || (r.editor === true && r.tone === 0.75)) && r.state > 0 && r.params === 2
     && r.reloaded === 'ready' && (r.toneAfterReopen === undefined || r.editor === undefined || Math.abs(r.toneAfterReopen - 0.75) < 1e-6)
-    && r.clapPeak > 0.05 && r.exportPeak > 0.05 && r.left === 0;
+    && r.clapPeak > 0.05 && r.vst2Status === 'ready' && r.vst2Peak > 0.05 && r.exportPeak > 0.05 && r.left === 0;
 }
 
 module.exports = { run, ok };

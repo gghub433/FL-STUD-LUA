@@ -2,6 +2,7 @@
 import { h, clear } from './h.js';
 import { INSTRUMENTS } from '../core/instruments/index.js';
 import { EFFECTS } from '../core/effects/index.js';
+import { formatLabel } from '../core/plugin-schema.js';
 
 export function createPicker(win, app) {
   win.setTitle('Plugin picker');
@@ -27,10 +28,10 @@ export function createPicker(win, app) {
     const own = ([id]) => id !== 'plugin';
     section('Generators', Object.entries(INSTRUMENTS).filter(own), 'instrument');
     section('Effects', Object.entries(EFFECTS).filter(own), 'effect');
-    // installed VST3 / CLAP plugins (desktop app)
+    // installed VST / CLAP plugins (desktop app)
     const P = app.plugins;
     if (P && P.available) {
-      for (const [title, kind] of [['Installed instruments (VST3 / CLAP)', 'instrument'], ['Installed effects (VST3 / CLAP)', 'effect']]) {
+      for (const [title, kind] of [['Installed instruments (VST / CLAP)', 'instrument'], ['Installed effects (VST / CLAP)', 'effect']]) {
         const ps = (P.catalog.plugins || []).filter((p) => p.kind === kind);
         list.append(h('div.title', { style: { color: 'var(--accent)', padding: '8px 2px 2px', textTransform: 'uppercase', fontSize: '10px', letterSpacing: '.8px' } }, title));
         if (!ps.length) list.append(h('div.dim', { style: { padding: '2px 8px' } }, P.catalog.scannedAt ? 'None found. Manage plugins… adds folders.' : 'Press Find plugins below.'));
@@ -38,10 +39,10 @@ export function createPicker(win, app) {
           const key = `${p.format}:${p.path}:${p.uid}`;
           list.append(h('div.item', {
             style: { padding: '4px 8px', borderRadius: '3px', cursor: 'default', background: selected && selected.id === key ? 'var(--bg3)' : '' },
-            onclick: () => { selected = { id: key, kind, plugin: p }; info.textContent = `${p.name} · ${p.vendor || ''} · ${p.format === 'clap' ? 'CLAP' : 'VST3'}`; render(); },
+            onclick: () => { selected = { id: key, kind, plugin: p }; info.textContent = `${p.name} · ${p.vendor || ''} · ${formatLabel(p.format)}`; render(); },
             ondblclick: () => addInstalled(p),
             hint: p.path,
-          }, p.name, h('span.dim', { style: { float: 'right' } }, `${p.vendor || ''} ${p.format === 'clap' ? 'CLAP' : 'VST3'}`)));
+          }, p.name, h('span.dim', { style: { float: 'right' } }, `${p.vendor || ''} ${formatLabel(p.format)}`)));
         }
       }
     }
@@ -61,7 +62,7 @@ export function createPicker(win, app) {
 
   const more = h('div.btn', { hint: 'Download more plugins: installable plugin packs', onclick: () => app.openStore && app.openStore() }, 'Get more…');
   const addBtn = h('div.btn.primary', { onclick: () => { if (selected && selected.plugin) addInstalled(selected.plugin); else if (selected) add(selected.id, selected.kind); }, hint: 'Add — adds the selected plugin' }, 'Add');
-  const find = app.plugins && app.plugins.available ? h('div.btn', { hint: 'Look for VST3 and CLAP plugins installed on this computer', onclick: () => app.plugins.scan() }, 'Find plugins') : null;
+  const find = app.plugins && app.plugins.available ? h('div.btn', { hint: 'Look for VST and CLAP plugins installed on this computer', onclick: () => app.plugins.scan() }, 'Find plugins') : null;
   const manage = app.plugins && app.plugins.available ? h('div.btn', { hint: 'Plugin folders and the list of installed plugins', onclick: () => app.openWindow('plugins') }, 'Manage…') : null;
   render();
   app.store.bus.on('plugins', render);                    // a pack was installed
