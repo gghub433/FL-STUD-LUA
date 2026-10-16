@@ -2,7 +2,8 @@
 import { h } from './h.js';
 import { modal } from './dialog.js';
 
-// fields: [{ id, label, type: 'range'|'number'|'select'|'check'|'text', min, max, step, value, options: [[value,label]], unit, hint }]
+// fields: [{ id, label, type: 'range'|'number'|'select'|'check'|'text', min, max, step, value, options: [[value,label]], unit, hint,
+//            format(value) -> text shown next to a range }]
 // returns a promise of the values object, or null when cancelled.
 export function formDialog(title, fields, { ok = 'Apply', width = 360, onChange, extra, scroll = false } = {}) {
   return new Promise((resolve) => {
@@ -23,7 +24,7 @@ export function formDialog(title, fields, { ok = 'Apply', width = 360, onChange,
       if (f.type === 'range') {
         const out = h('span.dim', { style: { width: '44px', textAlign: 'right' } }, '');
         el = h('input', { type: 'range', min: f.min, max: f.max, step: f.step ?? 1, value: f.value, style: { flex: 1, accentColor: 'var(--accent)' } });
-        const show = () => { out.textContent = `${(+el.value).toFixed(f.step && f.step < 1 ? 2 : 0)}${f.unit || ''}`; };
+        const show = () => { out.textContent = f.format ? f.format(+el.value) : `${(+el.value).toFixed(f.step && f.step < 1 ? 2 : 0)}${f.unit || ''}`; };
         el.addEventListener('input', () => { show(); if (onChange) onChange(vals()); });
         show();
         inputs[f.id] = el;
