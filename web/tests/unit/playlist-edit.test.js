@@ -11,6 +11,7 @@ import { Engine } from '../../src/core/engine.js';
 import { collectFactorySamples } from '../../src/core/factory.js';
 import { PPQ, STEP } from '../../src/core/constants.js';
 import { SR, peak } from './helpers.js';
+import { diffOps, applyOps } from '../../src/core/json-merge.js';
 
 let id = 5000;
 const newId = () => ++id;
@@ -190,6 +191,22 @@ test('takes, the active take and the auto crossfade setting survive save / load'
   assert.equal(q.settings.xfade, 0);
   assert.equal(normalize(JSON.parse(JSON.stringify(createProject()))).settings.xfade, 1, 'auto crossfade is on by default');
   assert.equal(JSON.stringify(normalize(JSON.parse(JSON.stringify(q)))), JSON.stringify(q), 'normalize is idempotent');
+});
+
+test('takes merge in a shared session: one person switches a take while another edits the same clip list', () => {
+  const p = createProject();
+  const arr = currentArrangement(p);
+  arr.clips.push({ ...createClip(p, 'audio', 1, 0, 384, 1), o: 10, takes: [{ id: 900, t: 0 }, { id: 901, t: 2 }], take: 901 }, createClip(p, 'pattern', 2, 0, 384, 1));
+  const mine = clone(p), theirs = clone(p);
+  switchTake(currentArrangement(mine).clips[0], 900, mine.tempo);
+  const t = currentArrangement(theirs); t.clips[1].s = 768; t.clips.push(createClip(theirs, 'pattern', 3, 0, 96, 1));
+  for (const r of [applyOps(applyOps(clone(p), diffOps(p, mine)), diffOps(p, theirs)), applyOps(applyOps(clone(p), diffOps(p, theirs)), diffOps(p, mine))]) {
+    const cl = currentArrangement(r).clips;
+    assert.equal(cl[0].take, 900); assert.equal(cl[0].o, currentArrangement(mine).clips[0].o);
+    assert.equal(cl[1].s, 768); assert.equal(cl.length, 3);
+  }
+  const del = clone(p); delete currentArrangement(del).clips[0].takes; delete currentArrangement(del).clips[0].take;
+  assert.equal(currentArrangement(applyOps(clone(p), diffOps(p, del))).clips[0].takes, undefined, 'Delete other takes travels as a change of that clip');
 });
 
 // ---- consolidate ------------------------------------------------------------------------------------------------
