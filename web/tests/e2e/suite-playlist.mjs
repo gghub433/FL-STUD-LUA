@@ -334,12 +334,26 @@ export async function run() {
       const sn = app.cmd.addAudioChannel(app.store, { id: 'factory:snare-tight', name: 'Snare' });
       app.cmd.setMixerTarget(app.store, sn.id, 6);
       app.cmd.setFx(app.store, 5, 0, 'delay');                         // a tail that must survive the consolidation
+      app.cmd.setFx(app.store, 5, 1, 'limiter');                       // and delay compensation (look-ahead)
       const made = app.cmd.addClips(app.store, [{ type: 'pattern', track: 1, s: 0, l: BAR * 2, ref: 1 }, { type: 'audio', track: 2, s: BAR / 2, l: BAR / 2, ref: sn.id }]);
       app.playlist.setTool('select');
       app.playlist.setSel(made.map((c) => c.id));
       return made.map((c) => c.id);
     }, BAR);
     await renderSong('before');
+    // the export worker and the AudioWorklet engine (Web Audio render, used for WAM projects) render a range alike
+    const paths = await ev(async (ids) => {
+      const { prepareRender } = await import('/src/core/consolidate.js');
+      const { renderInWorker } = await import('/src/host/export/render-client.js');
+      const { renderWithWebAudio } = await import('/src/host/export/render-webaudio.js');
+      const job = () => ({ project: prepareRender(app.store.project, ids, { s: 0, e: 768, mode: 'clips' }), samples: [...app.bank.map].map(([id, e]) => ({ id, rate: e.rate, channels: e.channels })),
+        opts: { mode: 'song', from: 0, to: 768, tail: 1, sampleRate: 44100, align: true, ring: true } });
+      const a = (await renderInWorker(job()).promise).result, b = (await renderWithWebAudio(job(), {}, { workletUrl: app.host.workletUrl, moduleHooks: app.host.moduleHooks || [] }).promise).result;
+      let d = 0; for (let i = 0; i < Math.min(a.frames, b.frames); i++) d = Math.max(d, Math.abs(a.left[i] - b.left[i]));
+      return { d, fa: a.frames, fb: b.frames, first: a.left.findIndex((v) => Math.abs(v) > 1e-4) };
+    }, ids);
+    ok(paths.d < 1e-4 && Math.abs(paths.fa - paths.fb) <= 128, `worker and worklet renders match: ${JSON.stringify(paths)}`);
+    ok(paths.first >= 0 && paths.first < 20, `aligned: the first kick starts the render, not the limiter's delay: ${paths.first}`);
     const m = await at(BAR * 2, 1, 0, -8);                              // the ▾ menu button in the clip header
     await page.mouse.click(m.x, m.y + 7);
     await page.locator('.popup .item', { hasText: 'Consolidate to audio clip…' }).click();

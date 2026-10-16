@@ -55,7 +55,7 @@ class StepwiseProcessor extends AudioWorkletProcessor {
           else if (m.op === 'pause') e.plugPause(m.on);
           else if (m.op === 'midi') e.plugMidi(m.ch, m.type, m.channel, m.key, m.value);
           break;
-        case 'offline': e.noLoop = true; this.off = { end: m.end, tailMax: Math.round((m.tail === 'auto' ? 20 : m.tail) * sampleRate), auto: m.tail === 'auto', frames: 0, stopped: false, body: 0, tail: 0, quiet: 0, done: false }; break;
+        case 'offline': e.noLoop = true; this.off = { end: m.end, tailMax: Math.round((m.tail === 'auto' ? 20 : m.tail) * sampleRate), auto: m.tail === 'auto', ring: !!m.ring, frames: 0, stopped: false, body: 0, tail: 0, quiet: 0, done: false }; break;
         case 'ping': this.port.postMessage({ t: 'pong', id: m.id }); break;
         default: break;
       }
@@ -105,7 +105,7 @@ class StepwiseProcessor extends AudioWorkletProcessor {
       }
       if (o.tail >= o.tailMax || (o.auto && o.quiet > sampleRate * 0.4)) {
         o.done = true;
-        this.port.postMessage({ t: 'offlineDone', frames: o.frames, bodyFrames: o.body, loudness: e.meter.stats() });
+        this.port.postMessage({ t: 'offlineDone', frames: o.frames, bodyFrames: o.body, loudness: e.meter.stats(), latency: e.mixer.totalLatency });
       }
     }
   }
@@ -123,8 +123,9 @@ class StepwiseProcessor extends AudioWorkletProcessor {
     e.host.extOut = send && send.length ? send : null;
     const o = this.off;
     if (o && !o.stopped && (!e.tr.playing || e.tr.tick >= o.end)) {
-      e.stop(); o.stopped = true; o.body = o.frames;
-      if (o.tailMax <= 0) { o.done = true; this.port.postMessage({ t: 'offlineDone', frames: o.frames, bodyFrames: o.body, loudness: e.meter.stats() }); }
+      if (!o.ring) e.stop();                                   // ring: the song plays on under the tail (consolidated clips)
+      o.stopped = true; o.body = o.frames;
+      if (o.tailMax <= 0) { o.done = true; this.port.postMessage({ t: 'offlineDone', frames: o.frames, bodyFrames: o.body, loudness: e.meter.stats(), latency: e.mixer.totalLatency }); }
     }
     try {
       e.process(L, R, L.length);
