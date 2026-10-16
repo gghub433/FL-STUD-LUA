@@ -107,6 +107,13 @@ const ui = {
   'Fade in…': 'Нарастание…', 'Fade out…': 'Затухание…', 'Fade in': 'Нарастание', 'Fade out': 'Затухание', 'Gain…': 'Усиление…', 'Pitch (resample)…': 'Высота (передискретизация)…', 'Time-stretch…': 'Растяжение во времени…', 'Reset time-stretch': 'Сбросить растяжение',
   'Detect tempo, fit to the project…': 'Определить темп, подогнать к проекту…', 'Follow project tempo': 'Следовать темпу проекта', 'Edit sample in the audio editor': 'Править сэмпл в аудиоредакторе', 'Edit events…': 'Править события…',
   'Tempo of the audio': 'Темп аудио', 'Or type it': 'Или введите', '0 = use the choice above': '0 = взять выбранное выше', 'Keep following tempo changes': 'Следовать изменениям темпа', 'The clip has no sample': 'У клипа нет сэмпла', Multiplier: 'Множитель',
+  // ---- playlist: consolidate / render to audio clip, takes of a loop recording, auto crossfade
+  'Consolidate to audio clip…': 'Свести в аудиоклип…', 'Consolidate to audio clip': 'Свести в аудиоклип', 'Render track to audio clip…': 'Отрендерить дорожку в аудиоклип…', 'Render track to audio clip': 'Отрендерить дорожку в аудиоклип',
+  'Consolidate loop region to audio clip…': 'Свести область цикла в аудиоклип…', 'Selected clips only': 'Только выделенные клипы', 'Everything in the range': 'Всё в этом отрезке', Originals: 'Исходные клипы', s: 'с',
+  'Selected clips only: just their sound. Everything: the whole mix of that time': 'Только выделенные клипы — только их звук. Всё — весь микс этого отрезка',
+  'Seconds after the range so reverbs and delays ring out (silence at the end is cut off)': 'Секунды после отрезка, чтобы реверберация и дилей успели затихнуть (тишина в конце обрезается)',
+  'Nothing sounds in this range': 'В этом отрезке ничего не звучит', 'Rendered to an audio clip': 'Отрендерено в аудиоклип', Takes: 'Дубли', 'Delete other takes': 'Удалить остальные дубли',
+  'Auto crossfade': 'Автокроссфейд', 'Audio clips that overlap on a playlist track crossfade over the overlap (equal power, up to 50 ms). An audio clip dropped over another keeps that much underneath': 'Аудиоклипы, которые перекрываются на дорожке плейлиста, плавно переходят друг в друга на перекрытии (равная мощность, до 50 мс). Аудиоклип, положенный поверх другого, оставляет под собой столько же',
   // ---- mixer
   'Selected track — click to rename': 'Выбранная дорожка — щелчок переименовывает', 'Spectrum of this track output with the track EQ curve': 'Спектр выхода дорожки с кривой эквалайзера', Routing: 'Маршрутизация',
   'Master output goes to the audio device': 'Выход мастера идёт на звуковое устройство', 'Add an output route to another track': 'Добавить маршрут на другую дорожку', 'No free destinations': 'Нет свободных направлений', 'Toggle sidechain delivery': 'Переключить подачу сайдчейна',
@@ -797,6 +804,8 @@ export const patterns = [
   [/^(\d+) audio clips? fitted to ([\d.]+) BPM$/, 'Подогнано аудиоклипов: $1, темп $2 BPM'],
   [/^Tempo: ([\d.]+) BPM(.*)$/, 'Темп: $1 BPM$2'],
   [/^Project tempo: ([\d.]+) BPM$/, 'Темп проекта: $1 BPM'],
+  [/^Take (\d+)$/, 'Дубль $1'], [/^take (\d+)\/(\d+)$/, 'дубль $1/$2'], [/^Recorded (\d+) takes onto insert (\d+)$/, 'Записано дублей: $1, на дорожку $2'],
+  [/^Could not render: (.+)$/, (m, tr) => `Не удалось отрендерить: ${tr(m[1])}`],
   [/^Added (\d+) zones?$/, 'Добавлено зон: $1'],
   [/^(\d+) sounds$/, '$1 звуков'],
   [/^(\d+) installed$/, 'установлено: $1'],

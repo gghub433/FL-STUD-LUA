@@ -7,7 +7,10 @@ import { LoudnessMeter } from './loudness.js';
 
 // samples: Map id -> { rate, channels: [Float32Array, ...] }
 // opts: { sampleRate=44100, mode='song'|'pat', from=0, to=null (ticks), tail=4 (seconds) | 'auto',
-//         soloTrack=null, measure=false (adds .loudness: integrated, range, true peak…), onProgress(frac), shouldCancel() }
+//         soloTrack=null, measure=false (adds .loudness: integrated, range, true peak…), onProgress(frac), shouldCancel(),
+//         align=false (start the audio where the music starts, without the mixer's delay compensation),
+//         ring=false (the tail goes on playing the song instead of stopping it: notes ring out and automation moves as
+//         they do when the song plays on; used for consolidated clips, whose project has nothing after `to` to play) }
 export function renderOffline(project, samples, opts = {}) {
   const sr = opts.sampleRate || 44100;
   const mode = opts.mode === 'pat' ? 'pat' : 'song';
@@ -62,7 +65,7 @@ export function renderOffline(project, samples, opts = {}) {
   }
   const bodyFrames = n;
   // tail: let delays / reverbs / releases ring out
-  eng.stop();
+  if (!opts.ring) eng.stop();
   const tailAuto = opts.tail === 'auto';
   const tailMax = Math.round((tailAuto ? 20 : (opts.tail ?? 4)) * sr);
   let quiet = 0;
@@ -79,7 +82,7 @@ export function renderOffline(project, samples, opts = {}) {
   }
   if (opts.onProgress) opts.onProgress(1);
   // with plugins the whole mix comes out late by the plugins' latency: the file starts where the music starts
-  const trim = opts.plug && opts.plug.sab ? Math.min(n, eng.mixer.totalLatency || 0) : 0;
+  const trim = (opts.plug && opts.plug.sab) || opts.align ? Math.min(n, eng.mixer.totalLatency || 0) : 0;
   return { left: L.slice(trim, n), right: R.slice(trim, n), sampleRate: sr, frames: n - trim, bodyFrames: Math.max(0, bodyFrames - trim), loudness: eng.meter ? eng.meter.stats() : null };
 }
 

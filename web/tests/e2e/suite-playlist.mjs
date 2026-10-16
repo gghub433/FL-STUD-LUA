@@ -311,4 +311,137 @@ export async function run() {
     }, r.id);
     ok(Math.abs(t - 100) < 0.2, `audio editor detects ${t}`);
   });
+
+  // the song rendered offline with the engine, notes ringing past the end (consolidated clips keep their tails)
+  const renderSong = (key) => ev(async (key) => {
+    const { renderOffline } = await import('/src/core/offline.js');
+    const samples = new Map([...app.bank.map].map(([id, e]) => [id, { rate: e.rate, channels: e.channels }]));
+    window.__renders = window.__renders || {};
+    window.__renders[key] = renderOffline(app.store.project, samples, { mode: 'song', sampleRate: 44100, tail: 3, ring: true });
+  }, key);
+  const compareRenders = (a, b) => ev(({ a, b }) => {
+    const x = window.__renders[a], y = window.__renders[b], n = Math.min(x.left.length, y.left.length);
+    let d = 0, pk = 0;
+    // (the new clip, like every clip, fades in over its first 24 frames against clicks: they are left out)
+    for (let i = x.left.findIndex((v) => v !== 0) + 32; i < n; i++) { d = Math.max(d, Math.abs(x.left[i] - y.left[i]), Math.abs(x.right[i] - y.right[i])); pk = Math.max(pk, Math.abs(x.left[i])); }
+    return { d, pk };
+  }, { a, b });
+
+  await test('consolidate: selected clips become one audio clip that sounds like them; one undo restores', async () => {
+    await fresh();
+    const ids = await ev(async (BAR) => {
+      await app.bank.ensure('factory:snare-tight');
+      const sn = app.cmd.addAudioChannel(app.store, { id: 'factory:snare-tight', name: 'Snare' });
+      app.cmd.setMixerTarget(app.store, sn.id, 6);
+      app.cmd.setFx(app.store, 5, 0, 'delay');                         // a tail that must survive the consolidation
+      app.cmd.setFx(app.store, 5, 1, 'limiter');                       // and delay compensation (look-ahead)
+      const made = app.cmd.addClips(app.store, [{ type: 'pattern', track: 1, s: 0, l: BAR * 2, ref: 1 }, { type: 'audio', track: 2, s: BAR / 2, l: BAR / 2, ref: sn.id }]);
+      app.playlist.setTool('select');
+      app.playlist.setSel(made.map((c) => c.id));
+      return made.map((c) => c.id);
+    }, BAR);
+    await renderSong('before');
+    // the export worker and the AudioWorklet engine (Web Audio render, used for WAM projects) render a range alike
+    const paths = await ev(async (ids) => {
+      const { prepareRender } = await import('/src/core/consolidate.js');
+      const { renderInWorker } = await import('/src/host/export/render-client.js');
+      const { renderWithWebAudio } = await import('/src/host/export/render-webaudio.js');
+      const job = () => ({ project: prepareRender(app.store.project, ids, { s: 0, e: 768, mode: 'clips' }), samples: [...app.bank.map].map(([id, e]) => ({ id, rate: e.rate, channels: e.channels })),
+        opts: { mode: 'song', from: 0, to: 768, tail: 1, sampleRate: 44100, align: true, ring: true } });
+      const a = (await renderInWorker(job()).promise).result, b = (await renderWithWebAudio(job(), {}, { workletUrl: app.host.workletUrl, moduleHooks: app.host.moduleHooks || [] }).promise).result;
+      let d = 0; for (let i = 0; i < Math.min(a.frames, b.frames); i++) d = Math.max(d, Math.abs(a.left[i] - b.left[i]));
+      return { d, fa: a.frames, fb: b.frames, first: a.left.findIndex((v) => Math.abs(v) > 1e-4) };
+    }, ids);
+    ok(paths.d < 1e-4 && Math.abs(paths.fa - paths.fb) <= 128, `worker and worklet renders match: ${JSON.stringify(paths)}`);
+    ok(paths.first >= 0 && paths.first < 20, `aligned: the first kick starts the render, not the limiter's delay: ${paths.first}`);
+    const m = await at(BAR * 2, 1, 0, -8);                              // the ▾ menu button in the clip header
+    await page.mouse.click(m.x, m.y + 7);
+    await page.locator('.popup .item', { hasText: 'Consolidate to audio clip…' }).click();
+    ok((await page.locator('.modal select').first().inputValue()) === 'clips', 'selected clips only by default');
+    await page.locator('.modal input.field').first().fill('2');
+    await page.locator('.modal .btn.primary').click();
+    await page.waitForFunction(() => app.store.arrangement.clips.length === 3, null, { timeout: 20000 });
+    const r = await ev((ids) => {
+      const arr = app.store.arrangement, made = arr.clips.find((c) => !ids.includes(c.id)), ch = app.store.channel(made.ref);
+      return { made, mixer: ch.mixer, name: ch.name, sample: !!app.bank.get(ch.sample.id), muted: arr.clips.filter((c) => ids.includes(c.id)).map((c) => c.mute), sel: [...app.playlist.sel] };
+    }, ids);
+    ok(r.made.type === 'audio' && r.made.s === 0 && r.made.track === 3 && r.made.o === 0, `audio clip at the range start on a free track: ${JSON.stringify(r.made)}`);
+    ok(r.made.l > BAR * 2, `the delay tail is in the clip: ${r.made.l}`);
+    ok(r.mixer === 0 && r.sample, 'the clip plays its rendered sample into the master');
+    ok(r.muted.every((v) => v === 1), 'originals muted');
+    ok(r.sel.length === 1 && r.sel[0] === r.made.id, 'the new clip is selected');
+    const kept = await ev(async (name) => (await app.library.list('rendered')).some((x) => x.name === name), r.name);
+    ok(kept, 'the audio is kept in Browser > Rendered');
+    await renderSong('after');
+    const cmp = await compareRenders('before', 'after');
+    ok(cmp.pk > 0.05 && cmp.d < cmp.pk * 3e-3, `sounds like the originals: largest difference ${cmp.d} of ${cmp.pk}`);
+    await playSong();
+    const live = await maxPeak(0, 1500);
+    ok(live > 0.02 && (await maxPeak(5, 300)) < 0.005, `plays live from the new clip, the originals are silent: ${live}`);
+    await stop();
+    await ev(() => app.store.undo()); await sleep(80);
+    const u = await ev((ids) => ({ n: app.store.arrangement.clips.length, mute: app.store.arrangement.clips.map((c) => c.mute), audio: app.store.project.channels.filter((c) => c.type === 'audio').length }), ids);
+    ok(u.n === 2 && u.mute.every((v) => !v) && u.audio === 1, `one undo restores everything: ${JSON.stringify(u)}`);
+  });
+
+  await test('render a playlist track to an audio clip, removing the originals', async () => {
+    await fresh();
+    await ev((BAR) => app.cmd.addClips(app.store, [{ type: 'pattern', track: 3, s: BAR, l: BAR, ref: 1 }]), BAR);
+    const nb = await ev(() => { const p = app.playlist, b = p.names.getBoundingClientRect(); return { x: b.left + 40, y: b.top + p.ty(3) + 10 }; });
+    await page.mouse.click(nb.x, nb.y, { button: 'right' });
+    await page.locator('.popup .item', { hasText: 'Render track to audio clip…' }).click();
+    await page.locator('.modal select').last().selectOption('remove');
+    await page.locator('.modal .btn.primary').click();
+    await page.waitForFunction(() => app.store.arrangement.clips.length === 1 && app.store.arrangement.clips[0].type === 'audio', null, { timeout: 20000 });
+    const c = (await clips())[0];
+    ok(c.track === 3 && c.s === BAR, `the clip takes the track's place: ${JSON.stringify(c)}`);
+    await playSong();
+    ok((await maxPeak(0, 2500)) > 0.02, 'and plays');
+    await stop();
+    await ev(() => app.playlist.setSel([]));
+  });
+
+  await test('auto crossfade: an audio clip dropped over another keeps 50 ms under it; export and the live engine crossfade alike', async () => {
+    await fresh();
+    const ids = await ev(() => {
+      app.store.setParam('transport:tempo', 120, { noUndo: true });          // 192 ticks = 1 s
+      const mk = (name, v) => { const e = app.bank.addPCM(name, 44100, [new Float32Array(88200).fill(v)]); return app.cmd.addAudioChannel(app.store, { id: e.id, name }); };
+      const a = mk('Flat A', 0.4), b = mk('Flat B', 0.3);
+      const [ca, cb] = app.cmd.addClips(app.store, [{ type: 'audio', track: 1, s: 0, l: 192, ref: a.id }, { type: 'audio', track: 2, s: 400, l: 192, ref: b.id }]);
+      const pl = app.playlist; pl.setTool('draw'); pl.view.px = 1; pl.view.x0 = 0; pl.layout();
+      return { a: ca.id, b: cb.id };
+    });
+    // drag B onto the end of A (Alt: no snapping)
+    const g0 = await at(480, 2, 0.7), g1 = await at(480 - 220, 1, 0.7);
+    await page.keyboard.down('Alt');
+    await page.mouse.move(g0.x, g0.y); await page.mouse.down(); await page.mouse.move(g1.x, g1.y, { steps: 8 }); await page.mouse.up();
+    await page.keyboard.up('Alt');
+    const c = await ev((ids) => { const all = app.store.arrangement.clips; return { a: all.find((x) => x.id === ids.a), b: all.find((x) => x.id === ids.b), n: all.length }; }, ids);
+    ok(c.n === 2 && c.b.track === 1 && c.b.s > 150 && c.b.s < 192, `B dropped over the end of A: ${JSON.stringify(c)}`);
+    ok(c.a.l === c.b.s - c.a.s + 10, `A keeps ceil(50 ms) = 10 ticks under B: ${c.a.l}`);
+    const r = await ev(async (bs) => {
+      const job = () => ({ project: JSON.parse(JSON.stringify(app.store.project)), samples: [...app.bank.map].map(([id, e]) => ({ id, rate: e.rate, channels: e.channels })), opts: { mode: 'song', sampleRate: 44100, tail: 0 } });
+      const { renderInWorker } = await import('/src/host/export/render-client.js');
+      const { renderWithWebAudio } = await import('/src/host/export/render-webaudio.js');
+      const exp = (await renderInWorker(job()).promise).result.left;
+      const live = (await renderWithWebAudio(job(), {}, { workletUrl: app.host.workletUrl, moduleHooks: app.host.moduleHooks || [] }).promise).result.left;
+      const lat = exp.findIndex((v) => Math.abs(v) > 1e-6), x0 = lat + Math.ceil((bs / 192) * 44100), xf = Math.round(0.05 * 44100);
+      let diff = 0, jump = 0;
+      for (let i = 0; i < Math.min(exp.length, live.length); i++) diff = Math.max(diff, Math.abs(exp[i] - live[i]));
+      for (let i = x0 - 300; i < x0 + xf + 300; i++) jump = Math.max(jump, Math.abs(exp[i] - exp[i - 1]));
+      return { diff, jump, a: exp[x0 - 200], mid: exp[x0 + (xf >> 1)], b: exp[x0 + xf + 200] };
+    }, c.b.s);
+    ok(r.diff < 1e-4, `export and the AudioWorklet engine give the same samples: ${r.diff}`);
+    ok(Math.abs(r.b / r.a - 0.75) < 0.01, `A then B: ${r.a} → ${r.b}`);
+    ok(Math.abs(r.mid / r.a - (0.7 * Math.SQRT1_2) / 0.4) < 0.02, `equal power in the middle (-3 dB each): ${r.mid / r.a}`);
+    ok(r.jump < r.a * 0.01, `no clicks: ${r.jump}`);
+    // the project setting turns it off
+    await ev(() => app.projectSettings());
+    await page.locator('.modal input[type=checkbox]').uncheck();
+    await page.locator('.modal .btn.primary').click(); await sleep(60);
+    ok((await ev(() => app.store.project.settings.xfade)) === 0, 'Auto crossfade off');
+    await ev(() => app.store.undo()); await sleep(60);
+    ok((await ev(() => app.store.project.settings.xfade)) === 1, 'undo turns it back on');
+    await page.screenshot({ path: 'tests/e2e/out/playlist-crossfade.png' });
+  });
 }

@@ -51,13 +51,13 @@ async function renderOnce(project0, job, soloTrack, progress, env, isCancelled) 
   const from = o.from || 0;
   const end = o.to != null ? o.to : mode === 'song' ? songLength(p, currentArrangement(p)) : patternLength(p, p.patterns[p.currentPattern]);
   if (end <= from) return { left: new Float32Array(0), right: new Float32Array(0), sampleRate: sr, frames: 0 };
-  const tail = o.tail === 'auto' ? 'auto' : (o.tail ?? 4);
+  const tail = o.tail === 'auto' ? 'auto' : (o.tail ?? 4), ring = !!o.ring, align = !!o.align;
   const tailSec = tail === 'auto' ? 20 : tail;
   // a generous length from the project tempo; if the body did not fit (tempo automation), it is rendered again, longer
   let bodySec = ((end - from) / (p.tempo * PPQ / 60)) * 1.15 + 1;
   for (let attempt = 0; attempt < 4; attempt++) {
     const frames = Math.ceil((bodySec + tailSec + 1) * sr);
-    const r = await renderLength(p, job, { sr, mode, from, end, tail, frames }, progress, env);
+    const r = await renderLength(p, job, { sr, mode, from, end, tail, frames, ring, align }, progress, env);
     if (isCancelled()) return null;
     if (r.done) return r;
     bodySec *= 2;
@@ -65,7 +65,7 @@ async function renderOnce(project0, job, soloTrack, progress, env, isCancelled) 
   throw new Error('The song did not end while rendering (is the tempo extremely slow?)');
 }
 
-async function renderLength(p, job, { sr, mode, from, end, tail, frames }, progress, env) {
+async function renderLength(p, job, { sr, mode, from, end, tail, frames, ring, align }, progress, env) {
   const oc = new OfflineAudioContext({ numberOfChannels: 2, length: frames, sampleRate: sr });
   await oc.audioWorklet.addModule(env.workletUrl);
   for (const f of env.moduleHooks || []) { try { await f(oc); } catch (err) { console.warn('[export] module', err); } }
@@ -93,14 +93,14 @@ async function renderLength(p, job, { sr, mode, from, end, tail, frames }, progr
   }
   send({ t: 'init', project: p });
   for (const s of job.samples || []) send({ t: 'sample', id: s.id, rate: s.rate, channels: s.channels });
-  send({ t: 'offline', end, tail });
+  send({ t: 'offline', end, tail, ring });
   send({ t: 'play', mode, from });
   await ping();                                                     // everything above has been applied
   const buf = await oc.startRendering();
   if (!done) await Promise.race([doneP, new Promise((r) => setTimeout(r, 1500))]);
   rig.close();
   if (!done || done.bodyFrames == null) return { done: false };
-  const n = Math.min(buf.length, done.frames);
+  const n = Math.min(buf.length, done.frames), trim = align ? Math.min(n, done.latency || 0) : 0;     // align: as in core/offline.js
   if (progress) progress(1);
-  return { done: true, left: buf.getChannelData(0).slice(0, n), right: buf.getChannelData(1).slice(0, n), sampleRate: sr, frames: n, bodyFrames: done.bodyFrames, loudness: done.loudness };
+  return { done: true, left: buf.getChannelData(0).slice(trim, n), right: buf.getChannelData(1).slice(trim, n), sampleRate: sr, frames: n - trim, bodyFrames: Math.max(0, done.bodyFrames - trim), loudness: done.loudness };
 }

@@ -251,8 +251,8 @@ export class Mixer {
       if (t.directDelay > 0) {
         if (!t.ddL || t.ddL.buf.length < t.directDelay + 8) { t.ddL = new DelayLine(t.directDelay + 8); t.ddR = new DelayLine(t.directDelay + 8); }
         for (let i = 0; i < n; i++) {
-          t.ddL.write(t.dirL[i]); t.ddR.write(t.dirR[i]);
-          L[i] += t.ddL.readInt(t.directDelay); R[i] += t.ddR.readInt(t.directDelay);
+          t.ddL.write(t.dirL[i]); t.ddR.write(t.dirR[i]);                      // readInt(1) is the sample just written
+          L[i] += t.ddL.readInt(t.directDelay + 1); R[i] += t.ddR.readInt(t.directDelay + 1);
         }
       } else {
         const dl = t.dirL, dr = t.dirR;
@@ -331,7 +331,7 @@ export class Mixer {
             if (!r.dl || r.dl.buf.length < r.delay + 8) { r.dl = new DelayLine(r.delay + 8); r.dr = new DelayLine(r.delay + 8); }
             for (let i = 0; i < n; i++) {
               r.dl.write(L[i]); r.dr.write(R[i]);
-              dL[i] += r.dl.readInt(r.delay) * lv; dR[i] += r.dr.readInt(r.delay) * lv;
+              dL[i] += r.dl.readInt(r.delay + 1) * lv; dR[i] += r.dr.readInt(r.delay + 1) * lv;
             }
           } else for (let i = 0; i < n; i++) { dL[i] += L[i] * lv; dR[i] += R[i] * lv; }
           d.fed = true;

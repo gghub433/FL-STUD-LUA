@@ -352,14 +352,17 @@ app.projectSettings = () => {
   const author = h('input.field', { type: 'text', value: p.meta.author, style: { width: '100%' } });
   const num = h('input.field', { type: 'number', min: 1, max: 32, value: p.timeSig.num, style: { width: '56px' } });
   const den = h('select.select', [1, 2, 4, 8, 16, 32].map((d) => h('option', { value: d, selected: d === p.timeSig.den }, String(d))));
+  const xfade = h('input', { type: 'checkbox', checked: p.settings.xfade !== 0 });
   modal({
     title: 'Project settings',
-    body: [h('div.dim', 'Title'), title, h('div.dim', 'Author'), author, h('div.dim', 'Time signature'), h('div.row', num, h('span', '/'), den)],
+    body: [h('div.dim', 'Title'), title, h('div.dim', 'Author'), author, h('div.dim', 'Time signature'), h('div.row', num, h('span', '/'), den),
+      h('label.row', { style: { marginTop: '8px', gap: '6px' }, hint: 'Audio clips that overlap on a playlist track crossfade over the overlap (equal power, up to 50 ms). An audio clip dropped over another keeps that much underneath' }, xfade, h('span', 'Auto crossfade'))],
     buttons: [{ label: 'Cancel' }, { label: 'OK', primary: true, fn: () => {
       app.store.edit('Project settings', (pr) => {
         pr.meta.title = title.value.slice(0, 80) || 'Untitled'; pr.meta.author = author.value.slice(0, 80);
         pr.timeSig = { num: Math.max(1, Math.min(32, +num.value || 4)), den: +den.value };
-      }, [['timeSig']]);
+        pr.settings.xfade = xfade.checked ? 1 : 0;
+      }, [['timeSig'], ['settings']]);
       app.store.bus.emit('project', app.store.project);
     } }],
   });
