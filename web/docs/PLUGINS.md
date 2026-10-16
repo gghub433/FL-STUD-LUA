@@ -35,6 +35,8 @@ class MyFx {
 export function create(sr, host) { return new MyFx(sr, host); }
 ```
 
+Необязательно: `meters` (массив чисел для окна эффекта), `view()` — снимок анализа для окна, пока оно открыто (`ctx.watch === true`; так сделан Scope), `control(n)` + `meta.controller: true` — эффект становится контроллером и двигает ручки из `slot.links` (Peak controller), `meta.mixerOnly: true` — не предлагать в Patcher и аудиоредакторе.
+
 Регистрация: `import * as myfx from './myfx.js'` и добавить `myfx` в `EFFECTS` в `effects/index.js`. Тест `effects.test.js`
 автоматически проверит схему, отсутствие NaN и тишину на тишине.
 

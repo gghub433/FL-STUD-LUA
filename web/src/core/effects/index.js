@@ -1,7 +1,10 @@
 // Effect registry. Each module exports { schema, meta, create(sr, host) }.
 // create() returns an object with: setParam(id, v), process(L, R, n, ctx), reset(), latency (samples),
 // optional setExtra(obj) for non-parameter data (impulse response id, curves) and meters[] for the UI.
-// ctx = { scL, scR } sidechain buffers (null when nothing is routed as sidechain).
+// ctx = { scL, scR } sidechain buffers (null when nothing is routed as sidechain), ctx.watch = the slot's window is open.
+// Optional: view() returns analysis data for that window (sent while it is open, see Scope), control(n) makes the effect
+// a controller that drives the parameters in slot.links (meta.controller, see Peak controller).
+// meta.mixerOnly: only useful in a mixer slot (not offered in the Patcher or the audio editor).
 import * as eq from './eq.js';
 import * as compressor from './compressor.js';
 import * as limiter from './limiter.js';
@@ -22,6 +25,9 @@ import * as transient from './transient.js';
 import * as pitchshift from './pitchshift.js';
 import * as freqshift from './freqshift.js';
 import * as tape from './tape.js';
+import * as polish from './polish.js';
+import * as scope from './scope.js';
+import * as peakctl from './peakctl.js';
 import * as patcher from './patcher.js';
 import * as wam from './wam.js';
 import * as plugin from './plugin.js';
@@ -33,7 +39,9 @@ export const EFFECTS = {
   flanger: { schema: mod.flangerSchema, meta: mod.flangerMeta, create: mod.createFlanger },
   phaser: { schema: mod.phaserSchema, meta: mod.phaserMeta, create: mod.createPhaser },
   distortion, bitcrusher, filter, stereo, vocoder, grossbeat,
-  tremolo, transient, pitchshift, freqshift, tape, patcher, wam, plugin,
+  tremolo, transient, pitchshift, freqshift, tape,
+  polish, scope, peakctl,
+  patcher, wam, plugin,
 };
 
 export function registerEffect(type, m) { EFFECTS[type] = m; }

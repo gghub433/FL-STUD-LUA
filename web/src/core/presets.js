@@ -97,6 +97,23 @@ export const EFFECT_PRESETS = {
     'Classic chorus': { rate: 0.6, depth: 0.5, delay: 13, voices: 1 },
     'Lush ensemble': { rate: 0.35, depth: 0.7, delay: 18, voices: 2, width: 1 },
   },
+  polish: {
+    'Gentle warmth': { amount: 35, mode: 0 },
+    'Vocal sparkle': { amount: 55, mode: 1 },
+    'Wide pad': { amount: 70, mode: 2 },
+    'Drum bus punch': { amount: 65, mode: 3 },
+  },
+  scope: {
+    'Bass oscilloscope': { view: 1, time: 80, trigger: 1 },
+    'Mix spectrum (tilted)': { view: 2, tilt: 4.5, floor: -96, hold: 1 },
+    'Stereo check': { view: 3, zoom: 6 },
+  },
+  peakctl: {
+    'Envelope follower': { base: 0, amount: 1, tension: 0.3, attack: 2, release: 80 },
+    'Ducker (sidechain pump)': { base: 1, amount: -1, tension: 0.5, attack: 1, release: 220 },
+    'Muted key: ducker': { base: 1, amount: -1, tension: 0.5, attack: 0.5, release: 180, mute: 1 },
+    'Slow swell': { base: 0, amount: 1, attack: 150, release: 900, detect: 1 },
+  },
 };
 
 export function instrumentPresets(type) { return INSTRUMENT_PRESETS[type] || {}; }

@@ -26,7 +26,7 @@ for (const b of BANDS) {
 export const meta = { id: 'multiband', name: 'Multiband Compressor', category: 'Dynamics', description: '3-band compressor with output limiter' };
 
 // LR4 = two cascaded 2nd-order Butterworth sections
-class LR4 {
+export class LR4 {
   constructor() { this.a = new Biquad(); this.b = new Biquad(); }
   set(type, sr, f) { this.a.set(type, sr, f, 0.7071); this.b.set(type, sr, f, 0.7071); }
   process(x) { return this.b.process(this.a.process(x)); }

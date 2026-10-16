@@ -22,6 +22,7 @@ class FxSlotRT {
     if (this.inst.syncParams) this.inst.syncParams(data.params);
     else for (const k in data.params) this.inst.setParam(k, data.params[k]);
     this.latency = this.inst.latency || 0;
+    this.links = data.links || null;      // parameters this effect drives (Peak controller)
   }
 
   // effects with look-ahead report their latency (samples) only while enabled
@@ -59,7 +60,8 @@ export class Mixer {
     for (let n = 0; n <= MAX_INSERT; n++) this.tracks.push(new TrackRT(n, sr));
     this.order = [];
     this.tailBlocks = Math.ceil((TAIL_SECONDS * sr) / BLOCK);
-    this.ctx = { scL: null, scR: null };
+    this.ctx = { scL: null, scR: null, watch: false };
+    this.ctl = []; this.ctlDirty = true;  // effect slots that drive linked parameters (see controlSlots)
     this.soloActive = false;
     this.tap = null;                    // { track, slot } slot -1 = track output
     this.analyzer = new Analyzer();
@@ -89,13 +91,29 @@ export class Mixer {
     const cur = t.fx[s];
     if (!data || !hasEffect(data.type)) { t.fx[s] = null; }
     else if (cur && cur.type === data.type) {
-      cur.on = data.on !== 0; cur.mix = data.mix;
+      cur.on = data.on !== 0; cur.mix = data.mix; cur.links = data.links || null;
       if (data.extra && cur.inst.setExtra) cur.inst.setExtra(data.extra);
       if (cur.inst.syncParams) cur.inst.syncParams(data.params);
       else for (const k in data.params) cur.inst.setParam(k, data.params[k]);
     } else t.fx[s] = new FxSlotRT(data, this.sr, this.host);
     t.hasFx = t.fx.some(Boolean);
     this.latencyDirty = true;
+    this.ctlDirty = true;
+  }
+
+  // Effect slots that are controllers (control(n) + links), as [{ slot, key }]; the engine drives their links every block.
+  controlSlots() {
+    if (this.ctlDirty) {
+      this.ctlDirty = false;
+      this.ctl = [];
+      for (const t of this.tracks) {
+        for (let s = 0; s < FX_SLOTS; s++) {
+          const f = t.fx[s];
+          if (f && f.inst.control && f.links && f.links.length) this.ctl.push({ slot: f, key: `fx${t.n}.${s}>` });
+        }
+      }
+    }
+    return this.ctl;
   }
 
   setTrackParam(n, key, v) {
@@ -258,6 +276,7 @@ export class Mixer {
         const wet = slot.mix;
         if (wet < 0.999) { slot.dryL.set(L.subarray(0, n)); slot.dryR.set(R.subarray(0, n)); }
         ctx.scL = t.scFed ? t.scL : null; ctx.scR = t.scFed ? t.scR : null;
+        ctx.watch = this.tap !== null && this.tap.track === idx && this.tap.slot === s;
         slot.inst.process(L, R, n, ctx);
         if (wet < 0.999) {
           const dl = slot.dryL, dr = slot.dryR, d = 1 - wet;

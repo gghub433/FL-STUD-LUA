@@ -86,7 +86,7 @@ export const PLUGIN_NODE_TYPES = ['inst', 'fx'];
 
 // instruments that can live inside a patch (the rest need channel data of their own)
 export const canHostInstrument = (t) => hasInstrument(t) && !['controller', 'patcher', 'fpc', 'slicer', 'audio', 'wam'].includes(t);
-export const canHostEffect = (t) => hasEffect(t) && t !== 'patcher' && t !== 'wam';
+export const canHostEffect = (t) => hasEffect(t) && t !== 'patcher' && t !== 'wam' && !EFFECTS[t].meta.mixerOnly;      // Scope / Peak controller need a mixer slot
 
 // ---- per-node description (depends on the node: plugin nodes take ports and parameters from their plugin)
 export function nodeInfo(node) {

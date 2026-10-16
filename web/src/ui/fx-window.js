@@ -1,5 +1,6 @@
 // Effect editor windows: header (bypass, mix, presets) + custom visual panel per effect type
-// (EQ with draggable bands and spectrum, dynamics meters, convolver IR picker, 36-slot curve editor)
+// (EQ with draggable bands and spectrum, dynamics meters, convolver IR picker, 36-slot curve editor;
+// Scope views, Peak controller links and Polish modes live in fx-tools.js)
 // + a schema-generated parameter area for everything else.
 import { h, drag, clamp, clear, hiDPI } from './h.js';
 import { t as tr } from './i18n.js';
@@ -16,8 +17,10 @@ import { IRS } from '../core/factory.js';
 import { trackName } from '../core/addr.js';
 import { patcherFxPanel } from './patcher.js';
 import { pluginPanel } from './plugin-ui.js';
+import { scopePanel, peakPanel, polishPanel } from './fx-tools.js';
 
 const BAND_COLORS = ['#e35d5d', '#e8894a', '#e0b84a', '#7fdc5c', '#4cc3a6', '#4aaedc', '#a07fe0'];
+const SIZES = { scope: [720, 600], peakctl: [680, 560], polish: [660, 330] };     // window size of effects with their own panels
 
 export function openFxEditor(app, track, slot) {
   const store = app.store;
@@ -27,9 +30,10 @@ export function openFxEditor(app, track, slot) {
   if (app.wm.isOpen(id)) { app.wm.focus(id); return app.wm.get(id); }
   const meta = EFFECTS[s.type].meta;
   const big = ['eq', 'grossbeat', 'convolver', 'multiband', 'compressor', 'limiter', 'gate'].includes(s.type);
+  const size = SIZES[s.type];
   return app.wm.open(id, {
     title: meta.name, dynamic: true,
-    rect: s.type === 'wam' ? { x: 220, y: 80, w: 580, h: 340 } : s.type === 'plugin' ? { x: 220, y: 80, w: 560, h: 380 } : { x: 220, y: 80, w: s.type === 'patcher' ? 980 : s.type === 'grossbeat' ? 820 : big ? 680 : 520, h: s.type === 'patcher' ? 580 : s.type === 'grossbeat' ? 640 : s.type === 'eq' ? 560 : 400 },
+    rect: size ? { x: 220, y: 60, w: size[0], h: size[1] } : s.type === 'wam' ? { x: 220, y: 80, w: 580, h: 340 } : s.type === 'plugin' ? { x: 220, y: 80, w: 560, h: 380 } : { x: 220, y: 80, w: s.type === 'patcher' ? 980 : s.type === 'grossbeat' ? 820 : big ? 680 : 520, h: s.type === 'patcher' ? 580 : s.type === 'grossbeat' ? 640 : s.type === 'eq' ? 560 : 400 },
     minW: 360, minH: 220,
     create: (win) => fxEditor(win, app, track, slot),
   });
@@ -100,7 +104,7 @@ function fxEditor(win, app, track, slotIdx) {
   const head = h('div.rack-head', led, h('b', mod.meta.name), h('span.dim', mod.meta.description), h('div.grow'), h('span.dim', 'Mix'), mix.el, presetBtn);
 
   const custom = h('div', { style: { flex: 'none' } });
-  const state = { meters: [], status: '', spec: null, band: 1, extra: null };
+  const state = { meters: [], status: '', spec: null, view: null, band: 1, extra: null };
   const subs = [];
   const watching = () => app.host.watch(track, slotIdx);
   const painters = [];
@@ -110,6 +114,9 @@ function fxEditor(win, app, track, slotIdx) {
   else if (['compressor', 'limiter', 'gate', 'multiband'].includes(type)) painters.push(meterPanel(type, custom, state));
   else if (type === 'convolver') painters.push(convolverPanel(app, track, slotIdx, custom, state));
   else if (type === 'grossbeat') painters.push(grossPanel(app, track, slotIdx, custom, state));
+  else if (type === 'scope') painters.push(scopePanel(app, track, slotIdx, custom, state));
+  else if (type === 'peakctl') painters.push(peakPanel(app, track, slotIdx, custom, state, subs));
+  else if (type === 'polish') painters.push(polishPanel(app, track, slotIdx, custom, state, subs));
 
   // ---------------------------------------------------------------- generic parameter area
   const groups = [];
@@ -140,6 +147,7 @@ function fxEditor(win, app, track, slotIdx) {
   // ---------------------------------------------------------------- engine feedback
   subs.push(app.host.bus.on('spectrum', (m) => { if (m.track === track && m.slot === slotIdx) state.spec = m.mags; }));
   subs.push(app.host.bus.on('fxmeter', (m) => { if (m.track === track && m.slot === slotIdx) { state.meters = m.values; state.status = m.status; } }));
+  subs.push(app.host.bus.on('fxview', (m) => { if (m.track === track && m.slot === slotIdx) state.view = m.view; }));
   subs.push(store.bus.on('change', ({ paths }) => {
     if (!paths.some((p) => p[0] === 'mixer')) return;
     const s = live();

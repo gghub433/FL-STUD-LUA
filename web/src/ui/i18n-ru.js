@@ -544,11 +544,34 @@ const collab = {
   'The plugin bridge did not answer': 'Мост плагинов не ответил',
   'This build has no plugin host': 'В этой сборке нет хоста плагинов',
 };
+// Scope, Peak controller, Polish (effects, their windows and presets)
+const fxTools = {
+  Scope: 'Скоп', 'Peak controller': 'Пиковый контроллер', Polish: 'Полировка',
+  'Oscilloscope, spectrum, peak / RMS meters and vectorscope; the sound passes unchanged': 'Осциллограф, спектр, пиковые и RMS-индикаторы и векторскоп; звук проходит без изменений',
+  'Follows the level of this track and moves the knobs linked to it': 'Следит за уровнем дорожки и двигает привязанные к нему ручки',
+  'One-knob enhancer: multiband compression, saturation, width and tone': 'Улучшайзер одной ручкой: многополосная компрессия, насыщение, ширина и тембр',
+  Analysis: 'Анализ', Control: 'Управление', Enhance: 'Улучшение',
+  View: 'Вид', Oscilloscope: 'Осциллограф', Spectrum: 'Спектр', Vectorscope: 'Векторскоп', 'Time window': 'Окно времени', Trigger: 'Синхронизация',
+  'Display gain': 'Усиление отображения', 'Spectrum floor': 'Нижний предел спектра', 'Spectrum tilt': 'Наклон спектра', 'Peak hold': 'Удержание пиков',
+  Base: 'База', Tension: 'Изгиб', RMS: 'RMS', 'Mute audio': 'Заглушить звук', Warm: 'Тёплый', Bright: 'Яркий', Wide: 'Широкий',
+  'Live view of the signal in this slot: oscilloscope, spectrum, vectorscope and levels': 'Сигнал этого слота вживую: осциллограф, спектр, векторскоп и уровни',
+  'Play something through this track to see it': 'Включите воспроизведение через эту дорожку, чтобы увидеть сигнал', 'corr —': 'корр. —',
+  'Detected level (filled) and the value sent to the linked knobs (line)': 'Найденный уровень (заливка) и значение для привязанных ручек (линия)',
+  'Nothing linked yet. Right-click any knob → Link to controller → this Peak controller, or use + Link parameter.': 'Пока ничего не привязано. Правый щелчок по любой ручке → Привязать к контроллеру → этот пиковый контроллер, или «＋ Привязать параметр».',
+  "Minimum of the linked knob's range that the controller maps to": 'Нижняя граница диапазона привязанной ручки, куда попадает контроллер',
+  "Maximum of the linked knob's range that the controller maps to": 'Верхняя граница диапазона привязанной ручки, куда попадает контроллер', Inv: 'Инв.',
+  'Warm — thicker and rounder, a little darker': 'Тёплый — плотнее и круглее, чуть темнее', 'Bright — presence and air on top': 'Яркий — разборчивость и воздух сверху',
+  'Wide — opens the stereo image, keeps the bass centred': 'Широкий — раскрывает стереокартину, бас остаётся в центре', 'Punch — denser, lets the hits through': 'Панч — плотнее, удары проходят',
+  'How much each band is turned up or down right now (dB)': 'Насколько сейчас поднята или опущена каждая полоса (дБ)',
+  'Gentle warmth': 'Мягкое тепло', 'Vocal sparkle': 'Блеск вокала', 'Wide pad': 'Широкий пэд', 'Drum bus punch': 'Панч шины ударных',
+  'Bass oscilloscope': 'Осциллограф для баса', 'Mix spectrum (tilted)': 'Спектр микса (с наклоном)', 'Stereo check': 'Проверка стерео',
+  'Ducker (sidechain pump)': 'Приглушение (сайдчейн-накачка)', 'Muted key: ducker': 'Немой ключ: приглушение', 'Slow swell': 'Медленное нарастание',
+};
 const parts = { delay: 'задержка', attack: 'атака', hold: 'удержание', decay: 'спад', sustain: 'удержание', release: 'затухание', 'env amount': 'глубина огибающей', 'LFO amount': 'глубина LFO', 'LFO speed': 'скорость LFO', 'LFO shape': 'форма LFO', 'LFO delay': 'задержка LFO', 'LFO attack': 'атака LFO',
   ratio: 'отношение', fine: 'точно', 'fixed frequency': 'фиксированная частота', frequency: 'частота', level: 'уровень', 'output level': 'выходной уровень', 'velocity sensitivity': 'чувствительность к силе', wave: 'волна', feedback: 'обратная связь', output: 'выход', octave: 'октава', semitones: 'полутоны', 'pulse width': 'ширина импульса', 'start phase': 'начальная фаза',
   shape: 'форма', rate: 'скорость', 'tempo sync': 'по темпу', division: 'доля', '→ pitch': '→ высота', '→ cutoff': '→ срез', '→ amplitude': '→ амплитуда', '→ pulse width': '→ ширина импульса', '→ pan': '→ панорама', 'fade-in': 'нарастание' };
 
-export default { ...more, ...params, ...ui, ...tools, ...rest, ...updates, ...wam, ...collab };
+export default { ...more, ...params, ...ui, ...tools, ...rest, ...updates, ...wam, ...collab, ...fxTools };
 
 
 // messages with numbers or names in them: [pattern, replacement]
@@ -642,6 +665,10 @@ export const patterns = [
   [/^(.+) — channel group\. Right-click for options$/, (m, tr) => `${tr(m[1])} — группа каналов. Правый щелчок — параметры`],
   [/^(.+) — instrument$/, '$1 — инструмент'],
   [/^Song \(([\d.]+) s\): (.+)$/, (m) => `Песня (${m[1]} с): ${m[2].replace('LUFS integrated', 'LUFS интегральная').replace('range', 'диапазон').replace('true peak', 'истинный пик').replace('max short-term', 'макс. кратковр.').replace('On target.', 'В цели.').replace(/Raise by ([\d.]+) dB for (-?\d+) LUFS/, 'Поднимите на $1 дБ для $2 LUFS').replace(/Lower by ([\d.]+) dB for (-?\d+) LUFS/, 'Опустите на $1 дБ для $2 LUFS').replace('(Export can do this: Loudness →', '(Экспорт сделает это сам: Громкость →')}`],
+  // Scope, Peak controller (before the generic "A · B" rule below)
+  [/^corr ([+-][\d.]+)$/, 'корр. $1'],
+  [/^level (\d+)%  ·  output (\d+)%$/, 'уровень $1%  ·  выход $2%'],
+  [/^Peak controller · (.+) \/ slot (\d+)$/, (m, tr) => `Пиковый контроллер · ${tr(m[1])} / слот ${m[2]}`],
   // knob hints "Channel · Parameter" and "Name — description": translate the parts that are known
   [/^(.+?) · (.+)$/, (m, tr) => { const a = tr(m[1]), b = tr(m[2]); return a !== m[1] || b !== m[2] ? `${a} · ${b}` : null; }],
   [/^(.+?) — (.+)$/, (m, tr) => { const a = tr(m[1]), b = tr(m[2]); return a !== m[1] || b !== m[2] ? `${a} — ${b}` : null; }],
