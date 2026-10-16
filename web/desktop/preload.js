@@ -1,7 +1,7 @@
 'use strict';
 // The bridge between the app page and the desktop shell: native file dialogs, reading and writing the files the
 // person picked (and only those), recent files, the "save changes?" question when the window closes, updates and shared sessions.
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const path = require('node:path');
 
 // VST3 / CLAP plugins: the plugin host runs as its own process (plugins.js); the bridge addon copies audio blocks
@@ -69,6 +69,16 @@ contextBridge.exposeInMainWorld('flluaDesktop', {
     off: () => ipcRenderer.invoke('backup:off'),
     show: () => ipcRenderer.invoke('backup:show'),
     write: (title, data) => ipcRenderer.invoke('backup:write', title, data),
+  },
+  sounds: {                                                                  // My sounds in the Browser: folders with samples (sound-folders.js)
+    folders: () => ipcRenderer.invoke('sounds:folders'),                     // -> [{ id, name, path, missing }]
+    add: () => ipcRenderer.invoke('sounds:add'),                             // folder dialog -> the added folders
+    // a folder dropped on the Browser: its path comes from the dropped file itself, the page never names a path
+    addDropped: (file) => { const p = webUtils.getPathForFile(file); return p ? ipcRenderer.invoke('sounds:addPath', p) : Promise.resolve(null); },
+    remove: (id) => ipcRenderer.invoke('sounds:remove', id),
+    list: (id, rel) => ipcRenderer.invoke('sounds:list', id, rel),           // -> [{ name, dir }]: folders and audio files
+    read: (id, rel) => ipcRenderer.invoke('sounds:read', id, rel),           // -> Uint8Array
+    show: (id, rel) => ipcRenderer.invoke('sounds:show', id, rel),           // the file in the system file manager
   },
   collab: {                                                                  // working together on the local network (collab.js)
     host: (o) => ipcRenderer.invoke('collab:host', o),                       // -> { code, port, addresses }
