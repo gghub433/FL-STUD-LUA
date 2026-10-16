@@ -1,6 +1,6 @@
-// Browser panel (F8): a tree of everything you can use — sound packs, plugin presets, saved channel and
-// mixer presets, projects, rendered/recorded audio, scores, templates, the current project and backups.
-// Click previews audio, double-click adds, drag onto the Channel rack / Mixer / Playlist / Piano roll.
+// Browser panel (F8): a tree of everything you can use — the person's own sound folders (My sounds), sound packs,
+// plugin presets, saved channel and mixer presets, projects, rendered/recorded audio, scores, templates, the current
+// project and backups. Click previews audio, double-click adds, drag onto the Channel rack / Mixer / Playlist / Piano roll.
 import { h, clear } from './h.js';
 import { contextMenu } from './menu.js';
 import { confirmBox, promptText } from './dialog.js';
@@ -17,8 +17,13 @@ import { createProject, createChannel, createNote, createClip, currentArrangemen
 import { renderOffline } from '../core/offline.js';
 import { STEP } from '../core/constants.js';
 import { channelSnapshot, mixerSnapshot, scoreSnapshot } from '../app/library.js';
+import { soundName, extOf, dirName, joinPath, pageOf, isAudioDrop } from '../core/sound-files.js';
+import { MAX_TRACK, defaultClipLength } from '../core/playlist-ops.js';
+import { SOUND_TYPE } from './sound-drop.js';
 
 const LS_OPEN = 'stepwise.browser.open';
+const PAGE = 300;                   // rows of one My sounds folder drawn at a time
+const HITS = 200;                   // My sounds search results shown
 const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 90 ? 'just now' : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
 
 class Previewer {
@@ -45,7 +50,8 @@ class Previewer {
 export class Browser {
   constructor(app, root) {
     this.app = app; this.root = root;
-    this.open = new Set(JSON.parse(localStorage.getItem(LS_OPEN) || '["packs"]'));
+    this.open = new Set(JSON.parse(localStorage.getItem(LS_OPEN) || '["mysounds","packs"]'));
+    this.pages = new Map();        // My sounds folder id -> rows shown (big folders grow page by page)
     this.query = '';
     this.cache = new Map();        // folder id -> loaded children
     this.prev = new Previewer(app);
@@ -57,6 +63,9 @@ export class Browser {
     bus.on('library', refresh); bus.on('presets', refresh); bus.on('plugins-catalog', refresh); bus.on('saved', refresh); bus.on('autosaved', () => { this.cache.delete('backup'); });
     bus.on('samples', () => { this.cache.delete('current'); });
     bus.on('project', refresh);
+    // My sounds: folders added, removed or refreshed; search results while the index is being built
+    bus.on('sounds', () => { for (const k of [...this.cache.keys()]) if (k.startsWith('ms:')) this.cache.delete(k); if (this.visible()) this.render(); });
+    bus.on('sounds-index', () => { if (this.query && this.visible()) this.renderSoon(); });
     bus.on('plugins', refresh);                                           // a pack with sounds was installed or removed
     bus.on('change', ({ paths }) => { if (this.visible() && this.open.has('current') && paths.some((p) => ['channels', 'patterns', 'playlist'].includes(p[0]))) { this.cache.delete('current'); this.renderSoon(); } });
   }
@@ -77,6 +86,13 @@ export class Browser {
     this.foot = h('div.br-foot', h('div.row', { style: { gap: '6px' } }, this.info, h('div.grow'), this.stopBtn), this.wave);
     this.root.append(h('div.br-head', this.search, this.autoBtn), this.tree, this.foot);
     this.showInfo(null);
+    // folders dropped from the system become My sounds (loose audio files go to Picked files)
+    const files = (e) => !!(this.app.sounds && e.dataTransfer && [...e.dataTransfer.types].includes('Files'));
+    this.root.addEventListener('dragover', (e) => { if (files(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; this.root.classList.add('br-drop'); } });
+    this.root.addEventListener('dragleave', (e) => { if (!this.root.contains(e.relatedTarget)) this.root.classList.remove('br-drop'); });
+    // only folders and sounds: a project or MIDI file dropped here is opened by the page as usual
+    const takes = (dt) => [...dt.items].some((i) => i.kind === 'file' && i.webkitGetAsEntry && (i.webkitGetAsEntry() || {}).isDirectory) || [...dt.files].some(isAudioDrop);
+    this.root.addEventListener('drop', (e) => { this.root.classList.remove('br-drop'); if (files(e) && takes(e.dataTransfer)) { e.preventDefault(); this.dropFolders(e.dataTransfer); } });
   }
 
   showInfo(text, entry) {
@@ -182,7 +198,11 @@ export class Browser {
       } });
       return [node('instrument', 'Generators'), node('effect', 'Effects')];
     } } : null;
-    return [pluginDb, packs, presets, channelPresets, mixerPresets, projects, this.samplesNode('rendered', 'Rendered', 'Export audio and it shows up here'), this.samplesNode('recorded', 'Recorded', 'Audio you record appears here'), scores, templates, current, backup].filter(Boolean);
+    const S = app.sounds;
+    const mySounds = S ? { id: 'mysounds', label: 'My sounds', folder: true, tooltip: 'Folders with your own samples: click to preview, double-click or drag to use',
+      menu: () => [{ label: S.canPickFolder ? 'Add folder…' : 'Add files…', fn: () => this.addSoundFolder() }, { label: 'Refresh', fn: () => S.refresh() }],
+      children: () => (this.query ? this.soundHits(this.query) : this.soundRoots()) } : null;
+    return [mySounds, pluginDb, packs, presets, channelPresets, mixerPresets, projects, this.samplesNode('rendered', 'Rendered', 'Export audio and it shows up here'), this.samplesNode('recorded', 'Recorded', 'Audio you record appears here'), scores, templates, current, backup].filter(Boolean);
   }
 
   // ------------------------------------------------------------------ rendering
@@ -207,7 +227,7 @@ export class Browser {
     const walk = async (nodes, depth) => {
       for (const n of nodes) {
         if (token !== this.renderToken) return false;
-        if (n.hintOnly) { if (!q) frag.push(h('div.br-hint', { style: { paddingLeft: `${10 + depth * 12}px` } }, n.label)); continue; }
+        if (n.hintOnly) { if (!q || n.always) frag.push(h('div.br-hint', { style: { paddingLeft: `${10 + depth * 12}px` } }, n.label)); continue; }
         if (n.folder) {
           const kids = (q || this.open.has(n.id)) ? await this.kids(n) : null;
           let sub = [];
@@ -218,12 +238,13 @@ export class Browser {
           }
           if (q && !sub.length && !n.label.toLowerCase().includes(q)) continue;
           const open = !!q || this.open.has(n.id);
-          const row = h('div.br-row.folder', { style: { paddingLeft: `${4 + depth * 12}px` }, dataset: { node: n.id } }, h('span.br-caret', open ? '▾' : '▸'), h('span.br-label', n.label));
-          row.addEventListener('click', () => { if (this.open.has(n.id)) this.open.delete(n.id); else this.open.add(n.id); this.persist(); this.render(); });
+          const row = h('div.br-row.folder', { style: { paddingLeft: `${4 + depth * 12}px` }, dataset: { node: n.id }, hint: n.tooltip ? `${n.label} — ${n.tooltip}` : undefined }, h('span.br-caret', open ? '▾' : '▸'), h('span.br-label', n.label), n.right ? h('span.br-right', n.right) : null);
+          row.addEventListener('click', () => { if (this.open.has(n.id)) this.open.delete(n.id); else { this.open.add(n.id); if (n.onOpen) n.onOpen(); } this.persist(); this.render(); });
+          if (n.menu) row.addEventListener('contextmenu', (e) => contextMenu(e, n.menu()));
           if (n.addPlugin) row.addEventListener('dblclick', (e) => { e.stopPropagation(); this.addPlugin(n.addPlugin); });
           frag.push(row, ...sub);
         } else {
-          if (q && !`${n.label} ${n.right || ''}`.toLowerCase().includes(q)) continue;
+          if (q && !n.matched && !`${n.label} ${n.right || ''}`.toLowerCase().includes(q)) continue;
           frag.push(this.leaf(n, depth));
         }
       }
@@ -237,18 +258,24 @@ export class Browser {
   }
 
   leaf(n, depth) {
-    const icon = n.sample ? '♪' : n.preset ? '◆' : n.chanPreset ? '▤' : n.mixPreset ? '≡' : n.project ? '▣' : n.score ? '♬' : n.template ? '❖' : n.channel ? '●' : n.pattern ? '▦' : n.clip ? '▬' : '·';
-    const row = h('div.br-row.leaf', { style: { paddingLeft: `${16 + depth * 12}px` }, dataset: { node: n.id }, draggable: !!(n.sample || n.preset || n.chanPreset || n.mixPreset || n.score), hint: `${n.label} — ${n.tooltip || this.describe(n)}` },
+    if (n.action) {                                       // "Add folder…", "Show more", "Allow access…"
+      const row = h('div.br-row.leaf.br-action', { style: { paddingLeft: `${16 + depth * 12}px` }, dataset: { node: n.id }, hint: n.label }, h('span.br-icon', '＋'), h('span.br-label', n.label));
+      row.addEventListener('click', () => n.action());
+      return row;
+    }
+    const icon = n.sample || n.disk ? '♪' : n.preset ? '◆' : n.chanPreset ? '▤' : n.mixPreset ? '≡' : n.project ? '▣' : n.score ? '♬' : n.template ? '❖' : n.channel ? '●' : n.pattern ? '▦' : n.clip ? '▬' : '·';
+    const row = h('div.br-row.leaf', { style: { paddingLeft: `${16 + depth * 12}px` }, dataset: { node: n.id }, draggable: !!(n.sample || n.disk || n.preset || n.chanPreset || n.mixPreset || n.score), hint: `${n.label} — ${n.tooltip || this.describe(n)}` },
       h('span.br-icon', icon), h('span.br-label', n.label), n.right ? h('span.br-right', n.right) : null);
     row.addEventListener('click', () => this.click(n, row));
     row.addEventListener('dblclick', () => this.activate(n));
-    row.addEventListener('contextmenu', (e) => contextMenu(e, [{ label: 'Use', fn: () => this.activate(n) }, ...(n.sample || n.preset ? [{ label: 'Preview', fn: () => this.preview(n, true) }] : []), ...(n.sample && this.app.openAudioEditor ? [{ label: 'Open in the audio editor', fn: () => this.app.openAudioEditor({ sampleId: n.sample.id, name: n.sample.name }) }] : []), ...(n.menu ? [{ sep: true }, ...n.menu()] : [])]));
+    row.addEventListener('contextmenu', (e) => contextMenu(e, n.disk ? this.diskMenu(n) : [{ label: 'Use', fn: () => this.activate(n) }, ...(n.sample || n.preset ? [{ label: 'Preview', fn: () => this.preview(n, true) }] : []), ...(n.sample && this.app.openAudioEditor ? [{ label: 'Open in the audio editor', fn: () => this.app.openAudioEditor({ sampleId: n.sample.id, name: n.sample.name }) }] : []), ...(n.menu ? [{ sep: true }, ...n.menu()] : [])]));
     row.addEventListener('dragstart', (e) => this.dragStart(e, n));
     return row;
   }
 
   describe(n) {
     if (n.sample) return 'click to preview, double-click to add as a channel, drag to the Channel rack, Playlist, FPC pad or Sampler';
+    if (n.disk) return 'click to preview, double-click to add a Sampler channel, drag to the Channel rack, Playlist, a Sampler or the audio editor';
     if (n.preset) return n.preset.kind === 'inst' ? 'click to preview, double-click to add a channel with this sound, drag onto a channel of the same plugin to load it' : 'click to preview on a drum loop, double-click to add to the selected mixer track, drag onto a mixer slot';
     if (n.template) return 'double-click to start a new project from it';
     if (n.project) return 'double-click to open';
@@ -264,6 +291,7 @@ export class Browser {
     const dt = e.dataTransfer;
     dt.effectAllowed = 'copy';
     if (n.sample) dt.setData('application/x-stepwise-sample', JSON.stringify(n.sample));
+    else if (n.disk) dt.setData(SOUND_TYPE, JSON.stringify(n.disk));
     else if (n.preset) dt.setData(n.preset.kind === 'inst' ? 'application/x-stepwise-inst' : 'application/x-stepwise-fx', JSON.stringify({ type: n.preset.type, params: n.preset.params, extra: n.preset.extra }));
     else if (n.chanPreset) dt.setData('application/x-stepwise-chan', JSON.stringify(n.chanPreset.data));
     else if (n.mixPreset) dt.setData('application/x-stepwise-mixer', JSON.stringify(n.mixPreset.data));
@@ -278,12 +306,22 @@ export class Browser {
     const app = this.app;
     if (n.channel) { app.store.select(n.channel); return; }
     if (n.pattern) { app.cmd.selectPattern(app.store, n.pattern); return; }
-    if (this.auto && (n.sample || n.preset)) this.preview(n);
+    if (this.auto && (n.sample || n.disk || n.preset)) this.preview(n);
   }
 
   async preview(n, force = false) {
     const app = this.app;
     if (this.prev.key === n.id && !force) { this.prev.stop(); this.showInfo(null); return; }
+    this.wanted = n.id;
+    if (n.disk) {                                         // a file from My sounds: decoded, not added to the project
+      this.showInfo(`Loading ${n.label}…`);
+      let d;
+      try { d = await app.sounds.decode(n.disk.root, n.disk.rel); } catch (err) { if (this.wanted === n.id) { this.showInfo(null); app.toast(`Could not play ${n.label}: ${err.message}`); } return; }
+      if (this.wanted !== n.id) return;                   // another sound was clicked meanwhile
+      this.prev.play(n.id, d.channels, d.rate);
+      this.showInfo(`${n.label} · ${(d.length / d.rate).toFixed(2)} s`, d);
+      return;
+    }
     if (n.sample) {
       const e = await app.bank.ensure(n.sample.id);
       if (!e) { app.toast('That sound is not available any more'); return; }
@@ -306,6 +344,7 @@ export class Browser {
     const app = this.app;
     this.prev.stop();
     if (n.sample) { const e = await app.bank.ensure(n.sample.id); if (e) app.addSamplerFor(n.sample); return; }
+    if (n.disk) { const s = await this.useDisk(n); if (s) app.addSamplerFor(s); return; }
     if (n.preset) { n.preset.kind === 'inst' ? app.addInstrumentPreset(n.preset.type, n.preset.params, n.preset.name) : app.addEffectPreset(n.preset.type, n.preset.params, n.preset.extra, n.preset.name); return; }
     if (n.chanPreset) { app.addChannelPreset(n.chanPreset.data); return; }
     if (n.installed) {
@@ -324,6 +363,107 @@ export class Browser {
     if (n.channel) { app.store.select(n.channel); app.openChannelEditor(n.channel); return; }
     if (n.pattern) { app.cmd.selectPattern(app.store, n.pattern); app.openWindow('pianoroll'); return; }
     if (n.clip) { app.openWindow('playlist'); }
+  }
+
+  // ------------------------------------------------------------------ My sounds (app/sound-folders.js)
+  soundRoots() {
+    const S = this.app.sounds, out = [];
+    if (!S.roots.length) out.push({ label: S.canPickFolder ? 'Add the folders with your samples, or drop a folder here' : 'This browser cannot open folders: pick files (for this session), or use Chrome, Edge or the desktop app', hintOnly: true });
+    for (const r of S.roots) out.push(this.soundFolder(r, '', r.name));
+    out.push({ id: 'ms:add', label: S.canPickFolder ? 'Add folder…' : 'Add files…', action: () => this.addSoundFolder() });
+    return out;
+  }
+
+  soundFolder(r, rel, label) {
+    const S = this.app.sounds, top = !rel;
+    return { id: `ms:${r.id}:${rel}`, label, folder: true, load: () => this.soundKids(r, rel),
+      right: top ? (r.session ? 'this session' : r.missing ? 'not found' : '') : '',
+      tooltip: top ? (r.path || (r.session ? 'Only for this session' : '')) : '',
+      onOpen: top && r.kind === 'handle' ? () => S.allow(r.id) : null,       // a click may ask for the permission again
+      menu: () => [{ label: 'Refresh', fn: () => S.refresh(r.id) }, ...(S.desk ? [{ label: 'Show in folder', fn: () => S.show(r.id, rel) }] : []),
+        ...(top ? [{ sep: true }, { label: 'Remove from My sounds', fn: () => S.remove(r.id) }] : [])] };
+  }
+
+  soundFile(rootId, rel, right) { return { id: `msf:${rootId}:${rel}`, label: soundName(rel), right, disk: { root: rootId, rel, name: soundName(rel) } }; }
+
+  async soundKids(r, rel) {
+    const S = this.app.sounds;
+    let list;
+    try { list = await S.list(r.id, rel); } catch (err) {
+      if (err.code === 'permission') return [{ id: `ms:allow:${r.id}`, label: `Allow access to “${r.name}”…`, action: async () => { if (!(await S.allow(r.id))) this.app.toast('Access was not allowed'); } }];
+      return [{ label: err.message, hintOnly: true }];
+    }
+    if (!list.length) return [{ label: 'No audio files here', hintOnly: true }];
+    const key = `ms:${r.id}:${rel}`, { shown, hidden } = pageOf(list, this.pages.get(key) || PAGE);
+    const out = shown.map((e) => (e.dir ? this.soundFolder(r, joinPath(rel, e.name), e.name) : this.soundFile(r.id, joinPath(rel, e.name), extOf(e.name))));
+    if (hidden) out.push({ id: `${key}:more`, label: `Show more (${hidden} not shown)`, action: () => { this.pages.set(key, (this.pages.get(key) || PAGE) + PAGE); this.cache.delete(key); this.render(); } });
+    return out;
+  }
+
+  // search: matches from the name index of all added folders, with the folder on the right
+  soundHits(q) {
+    const S = this.app.sounds;
+    if (!S.roots.length) return [];
+    const ix = S.searchIndex(), r = ix.search(q, HITS);
+    const out = r.hits.map((f) => ({ ...this.soundFile(f.root, f.rel, dirName(f.rel) || (S.root(f.root) || {}).name || ''), matched: true }));
+    if (!ix.done) out.push({ label: `Searching My sounds… ${ix.files.length} files so far`, hintOnly: true, always: true });
+    else if (r.total > r.hits.length) out.push({ label: `${r.total} matches in My sounds, the first ${r.hits.length} are shown`, hintOnly: true, always: true });
+    else if (ix.capped && r.total) out.push({ label: `Only the first ${ix.files.length} files of My sounds were searched`, hintOnly: true, always: true });
+    return out;
+  }
+
+  async addSoundFolder() {
+    let r;
+    try { r = await this.app.sounds.addFolder(); } catch (err) { this.app.toast(`Could not add the folder: ${err.message}`); return; }
+    if (!r) return;
+    this.open.add('mysounds'); this.open.add(`ms:${r.id}:`); this.persist();
+    this.render();
+  }
+
+  async dropFolders(dt) {
+    const r = await this.app.sounds.addDropped(dt);
+    this.open.add('mysounds');
+    for (const f of r.folders) this.open.add(`ms:${f.id}:`);
+    if (r.files) this.open.add('ms:picked:');
+    this.persist();
+    if (r.folders.length === 1) this.app.toast(`Added “${r.folders[0].name}” to My sounds`);
+    else if (r.folders.length) this.app.toast(`Added ${r.folders.length} folders to My sounds`);
+    else if (r.files) this.app.toast(`Added ${r.files} sounds to Picked files`);
+    else this.app.toast('Drop folders with sounds here to add them to My sounds');
+    this.render();
+  }
+
+  // imports the file into the project's sample bank (like any loaded file); null when it cannot be read
+  async useDisk(n) {
+    try { return await this.app.sounds.use(n.disk.root, n.disk.rel); } catch (err) { this.app.toast(`Could not load ${n.label}: ${err.message}`); return null; }
+  }
+
+  diskMenu(n) {
+    const app = this.app, S = app.sounds, d = n.disk;
+    return [
+      { label: 'Preview', fn: () => this.preview(n, true) },
+      { sep: true },
+      { label: 'Open in the audio editor', fn: async () => {
+        try { const b = await S.decode(d.root, d.rel); app.openAudioEditor({ buf: { rate: b.rate, channels: b.channels.map((c) => c.slice()) }, name: n.label }); } catch (err) { app.toast(`Could not load ${n.label}: ${err.message}`); }
+      } },
+      { label: 'New sampler channel', fn: () => this.activate(n) },
+      { label: 'Add to the playlist as an audio clip', fn: () => this.diskToPlaylist(n) },
+      ...(S.desk ? [{ sep: true }, { label: 'Show in folder', fn: () => S.show(d.root, d.rel) }] : []),
+    ];
+  }
+
+  // an audio clip at the playlist cursor, on the first track that is free there
+  async diskToPlaylist(n) {
+    const app = this.app, s = await this.useDisk(n);
+    if (!s) return;
+    app.openWindow('playlist');
+    const pl = app.playlist;
+    if (!pl) return;
+    const p = app.store.project, t = pl.cursorT || 0, len = defaultClipLength(p, 'audio', null, app.bank.get(s.id));
+    const busy = new Set(currentArrangement(p).clips.filter((c) => c.s < t + len && c.s + c.l > t).map((c) => c.track));
+    let track = 1;
+    while (busy.has(track) && track < MAX_TRACK) track++;
+    pl.addAudioAt(s, track, t);
   }
 
   addPlugin(spec) { spec.kind === 'inst' ? this.app.addInstrument(spec.type) : this.app.addEffectToSelected(spec.type); }

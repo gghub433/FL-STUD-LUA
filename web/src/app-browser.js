@@ -6,10 +6,13 @@ import { confirmBox, promptText } from './ui/dialog.js';
 import { instrumentMeta } from './core/instruments/index.js';
 import { normalize } from './core/project.js';
 import { downloadBlob } from './host/export/wav.js';
+import { installSounds } from './app/sound-folders.js';
+import { SOUND_TYPE } from './ui/sound-drop.js';
 
 export function installBrowser(app) {
   const store = app.store, cmd = app.cmd;
   app.library = new Library(store.bus);
+  installSounds(app);                                   // My sounds: the person's folders with samples
   const pane = document.getElementById('browser-pane');
   app.browser = new Browser(app, pane);
 
@@ -96,15 +99,16 @@ export function installBrowser(app) {
 
   // ---- drops from the Browser on empty workspace areas; windows with their own handlers stop propagation first
   const ws = document.getElementById('workspace');
-  const TYPES = ['application/x-stepwise-sample', 'application/x-stepwise-inst', 'application/x-stepwise-chan', 'application/x-stepwise-fx', 'application/x-stepwise-score', 'application/x-stepwise-mixer'];
+  const TYPES = ['application/x-stepwise-sample', 'application/x-stepwise-inst', 'application/x-stepwise-chan', 'application/x-stepwise-fx', 'application/x-stepwise-score', 'application/x-stepwise-mixer', SOUND_TYPE];
   ws.addEventListener('dragover', (e) => { if (e.dataTransfer && TYPES.some((t) => e.dataTransfer.types.includes(t))) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
   ws.addEventListener('drop', async (e) => {
     if (e.defaultPrevented || !e.dataTransfer) return;
     const get = (t) => { const v = e.dataTransfer.getData(t); return v ? JSON.parse(v) : null; };
-    const sample = get(TYPES[0]), inst = get(TYPES[1]), chan = get(TYPES[2]), fx = get(TYPES[3]), score = get(TYPES[4]), mix = get(TYPES[5]);
-    if (!(sample || inst || chan || fx || score || mix)) return;
+    const sample = get(TYPES[0]), inst = get(TYPES[1]), chan = get(TYPES[2]), fx = get(TYPES[3]), score = get(TYPES[4]), mix = get(TYPES[5]), disk = get(TYPES[6]);
+    if (!(sample || inst || chan || fx || score || mix || disk)) return;
     e.preventDefault();
     if (sample) { await app.bank.ensure(sample.id); app.addSamplerFor(sample); }
+    else if (disk) { try { app.addSamplerFor(await app.sounds.use(disk.root, disk.rel)); } catch (err) { app.toast(`Could not load ${disk.name}: ${err.message}`); } }
     else if (inst) app.addInstrumentPreset(inst.type, inst.params, instrumentMeta(inst.type).name);
     else if (chan) app.addChannelPreset(chan);
     else if (fx) app.addEffectPreset(fx.type, fx.params, fx.extra);

@@ -8,6 +8,7 @@ import { patternLength } from '../core/project.js';
 import { instrumentMeta } from '../core/instruments/index.js';
 import { INSTRUMENTS } from '../core/instruments/index.js';
 import { icon } from './icons.js';
+import { wireRackDrop, wireRackRowDrop } from './sound-drop.js';
 
 const STEP_W = 20, STEP_GAP = 2, GROUP_GAP = 5;
 const stepX = (i) => Math.floor(i / 4) * (4 * STEP_W + 3 * STEP_GAP + GROUP_GAP) + (i % 4) * (STEP_W + STEP_GAP);
@@ -60,6 +61,7 @@ export class ChannelRack {
       h('span.dim', 'Click a step to toggle, drag to paint, right-click to erase. Double-click a name to open its editor.'));
     this.root = h('div.rack', this.head, this.groupsEl, this.list, this.graphBar, this.graphWrap, this.foot);
     this.el = this.root;
+    wireRackDrop(app, this.root);                 // audio files and My sounds: a new Sampler each
 
     for (const k of Object.keys(PROPS)) {
       if (k === 'key') continue;
@@ -160,6 +162,7 @@ export class ChannelRack {
     const stepsEl = h('div.steps');
     const el = h('div.ch-row', { dataset: { ch: ch.id } }, meta, stepsEl);
     this.wireRowDrop(el, ch);
+    wireRackRowDrop(app, el, () => store.channel(ch.id));
     el.addEventListener('pointerdown', (e) => { if (!e.target.closest('.step') && !e.target.closest('.mini-roll')) store.select(ch.id); });
     return { el, stepsEl, ch, stepEls: [], mini: null, miniKey: '' };
   }

@@ -544,15 +544,49 @@ const collab = {
   'The plugin bridge did not answer': 'Мост плагинов не ответил',
   'This build has no plugin host': 'В этой сборке нет хоста плагинов',
 };
+// ---- My sounds (Browser): the person's folders with samples; sounds dropped from the system
+const sounds = {
+  'My sounds': 'Мои звуки', 'Folders with your own samples: click to preview, double-click or drag to use': 'Папки с вашими сэмплами: щелчок — прослушать, двойной щелчок или перетаскивание — использовать',
+  'Add files…': 'Добавить файлы…', Refresh: 'Обновить', 'Show in folder': 'Показать в папке', 'Remove from My sounds': 'Убрать из «Моих звуков»',
+  'Add the folders with your samples, or drop a folder here': 'Добавьте папки со своими сэмплами или перетащите папку сюда',
+  'This browser cannot open folders: pick files (for this session), or use Chrome, Edge or the desktop app': 'Этот браузер не открывает папки: выберите файлы (на этот сеанс) или используйте Chrome, Edge или настольную версию',
+  'Picked files': 'Выбранные файлы', 'this session': 'этот сеанс', 'not found': 'не найдена', 'Only for this session': 'Только на этот сеанс',
+  'No audio files here': 'Здесь нет аудиофайлов', 'Access was not allowed': 'Доступ не разрешён',
+  'Drop folders with sounds here to add them to My sounds': 'Перетащите сюда папки со звуками, чтобы добавить их в «Мои звуки»',
+  'click to preview, double-click to add a Sampler channel, drag to the Channel rack, Playlist, a Sampler or the audio editor': 'щелчок — прослушать, двойной щелчок — новый канал сэмплера, перетащите в стойку каналов, плейлист, сэмплер или аудиоредактор',
+  'Add to the playlist as an audio clip': 'Добавить в плейлист как аудиоклип',
+  'This folder is not in My sounds any more': 'Этой папки больше нет в «Моих звуках»', 'This folder is not in My sounds': 'Этой папки нет в «Моих звуках»',
+  'That file is not available any more': 'Этот файл больше недоступен', 'The file has no sound': 'В файле нет звука',
+  'Not a path inside the folder': 'Путь ведёт за пределы папки', 'Not an audio file': 'Это не аудиофайл',
+  'Not an AIFF file': 'Это не файл AIFF', 'The AIFF file has no sound data': 'В файле AIFF нет звука', 'The AIFF file is damaged': 'Файл AIFF повреждён',
+};
 const parts = { delay: 'задержка', attack: 'атака', hold: 'удержание', decay: 'спад', sustain: 'удержание', release: 'затухание', 'env amount': 'глубина огибающей', 'LFO amount': 'глубина LFO', 'LFO speed': 'скорость LFO', 'LFO shape': 'форма LFO', 'LFO delay': 'задержка LFO', 'LFO attack': 'атака LFO',
   ratio: 'отношение', fine: 'точно', 'fixed frequency': 'фиксированная частота', frequency: 'частота', level: 'уровень', 'output level': 'выходной уровень', 'velocity sensitivity': 'чувствительность к силе', wave: 'волна', feedback: 'обратная связь', output: 'выход', octave: 'октава', semitones: 'полутоны', 'pulse width': 'ширина импульса', 'start phase': 'начальная фаза',
   shape: 'форма', rate: 'скорость', 'tempo sync': 'по темпу', division: 'доля', '→ pitch': '→ высота', '→ cutoff': '→ срез', '→ amplitude': '→ амплитуда', '→ pulse width': '→ ширина импульса', '→ pan': '→ панорама', 'fade-in': 'нарастание' };
 
-export default { ...more, ...params, ...ui, ...tools, ...rest, ...updates, ...wam, ...collab };
+export default { ...more, ...params, ...ui, ...tools, ...rest, ...updates, ...wam, ...collab, ...sounds };
 
 
 // messages with numbers or names in them: [pattern, replacement]
 export const patterns = [
+  // My sounds (Browser) and sounds dropped from the system
+  [/^Allow access to “(.+)”…$/, 'Разрешить доступ к «$1»…'],
+  [/^FL LUA may not read “(.+)” yet$/, 'FL LUA пока не может читать «$1»'],
+  [/^Show more \((\d+) not shown\)$/, 'Показать ещё (не показано: $1)'],
+  [/^Searching My sounds… (\d+) files so far$/, 'Поиск в «Моих звуках»… просмотрено файлов: $1'],
+  [/^(\d+) matches in My sounds, the first (\d+) are shown$/, 'Найдено в «Моих звуках»: $1, показаны первые $2'],
+  [/^Only the first (\d+) files of My sounds were searched$/, 'Поиск прошёл только по первым $1 файлам «Моих звуков»'],
+  [/^Added “(.+)” to My sounds$/, 'Папка «$1» добавлена в «Мои звуки»'],
+  [/^Added (\d+) folders to My sounds$/, 'Добавлено папок в «Мои звуки»: $1'],
+  [/^Added (\d+) sounds to Picked files$/, 'Добавлено звуков в «Выбранные файлы»: $1'],
+  [/^Added (\d+) Sampler channels$/, 'Добавлено каналов сэмплера: $1'],
+  [/^Could not add the folder: (.+)$/, (m, tr) => `Не удалось добавить папку: ${tr(m[1])}`],
+  [/^Could not (load|play) (.+?): (.+)$/, (m, tr) => `Не удалось ${m[1] === 'load' ? 'загрузить' : 'воспроизвести'} ${m[2]}: ${tr(m[3])}`],
+  [/^Could not decode (.+)$/, 'Не удалось декодировать $1'],
+  [/^Not an audio file: (.+)$/, 'Это не аудиофайл: $1'],
+  [/^Loading (.+)…$/, 'Загрузка: $1…'],
+  [/^The folder is not available: (.+)$/, 'Папка недоступна: $1'],
+  [/^AIFF-C compression "(.+)" is not supported$/, 'Сжатие AIFF-C «$1» не поддерживается'],
   [/^Checking plugins: (\d+) of (\d+)(.*)$/, 'Проверка плагинов: $1 из $2$3'], [/^(\d+) plugins$/, 'Плагинов: $1'], [/^Running · latency (\d+) samples$/, 'Работает · задержка $1 сэмплов'],
   [/^Not installed on this computer: (.*)$/, 'Не установлен на этом компьютере: $1'], [/^(Instruments|Effects|Could not be used) · (\d+)$/, (m) => `${{ Instruments: 'Инструменты', Effects: 'Эффекты', 'Could not be used': 'Не удалось использовать' }[m[1]]} · ${m[2]}`],
   [/^(.+) added to (Master|insert \d+), slot (\d+)$/, (m) => `${m[1]} добавлен в ${m[2] === 'Master' ? 'Master' : 'инсерт ' + m[2].slice(7)}, слот ${m[3]}`],

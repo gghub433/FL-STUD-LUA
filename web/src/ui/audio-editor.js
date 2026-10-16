@@ -10,6 +10,7 @@ import * as E from '../core/audio-edit.js';
 import { EFFECTS } from '../core/effects/index.js';
 import { clampParam } from '../core/schema.js';
 import { encodeWav, downloadBlob } from '../host/export/wav.js';
+import { wireSoundDrop } from './sound-drop.js';
 
 const RULER = 22;
 const REGION_COLORS = ['#4aaedc', '#7fdc5c', '#e062a8', '#b968d6', '#4cc3a6', '#e8894a'];
@@ -68,6 +69,14 @@ class AudioEditor {
     const e = await this.app.bank.ensure(id);
     if (!e) { this.app.toast('That sample is not available'); return; }
     this.setInitial({ rate: e.rate, channels: e.channels.map((c) => c.slice()) }, name || e.name);
+  }
+
+  loadDropped(b) {
+    const buf = { rate: b.rate, channels: b.channels };
+    if (!this.frames) { this.setInitial(buf, b.name); return; }
+    this.name = b.name;
+    this.commit(buf, `Load ${b.name}`, null, []);
+    this.fitAll();
   }
 
   get frames() { return E.frames(this.buf); }
@@ -164,6 +173,8 @@ class AudioEditor {
     this.canvas.addEventListener('pointermove', (e) => this.hover(e));
     this.thumb.addEventListener('pointerdown', (e) => this.thumbDown(e));
     this.scroll.addEventListener('pointerdown', (e) => { if (e.target === this.scroll) { const r = this.scroll.getBoundingClientRect(); this.view.start = ((e.clientX - r.left) / r.width) * this.frames - (this.W * this.view.spp) / 2; this.clampView(); this.dirty = true; this.specDirty = true; this.updateScroll(); } });
+    // a sound dropped here (Browser, My sounds or a file from the system) opens in the editor; Ctrl+Z brings back the previous one
+    wireSoundDrop(this.el, this.app, ([b]) => this.loadDropped(b), { buffers: true, max: 1 });
   }
 
   layout() {

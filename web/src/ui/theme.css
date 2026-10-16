@@ -547,3 +547,9 @@ html[data-theme="light"] .btn.on, html[data-theme="light"] .btn.primary { box-sh
 .btn.disabled { opacity: .45; pointer-events: none; }
 .plug-val { color: var(--accent); max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch-name.plug-bad { color: var(--red) !important; text-decoration: line-through; }
+
+/* My sounds (Browser): folders dropped from the system, action rows (Add folder…, Show more, Allow access…) */
+.br-drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
+.br-row.br-action { color: var(--dim); font-style: italic; }
+.br-row.br-action:hover { color: var(--text); }
+.br-row.folder .br-right { font-weight: 400; }

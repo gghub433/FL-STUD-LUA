@@ -10,6 +10,7 @@ import { patternLength, barTicks, COLORS } from '../core/project.js';
 import { TimeMap } from '../core/timemap.js';
 import { MAX_TRACK, defaultClipLength, spanOf, trimLeft } from '../core/playlist-ops.js';
 import { renderCurve } from '../core/automation.js';
+import { SOUND_TYPE, droppedSounds } from './sound-drop.js';
 
 const NAMES_W = 132, MARK_H = 16, RULER_H = 22, TOP = MARK_H + RULER_H, EDGE = 6, HEAD_H = 14;
 
@@ -537,7 +538,7 @@ export class Playlist {
     g.addEventListener('contextmenu', (e) => e.preventDefault());
     g.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     g.addEventListener('dblclick', (e) => this.gridDouble(e));
-    g.addEventListener('dragover', (e) => { const t = e.dataTransfer.types; if (t.includes('application/x-stepwise-clip') || t.includes('Files') || t.includes('application/x-stepwise-sample')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+    g.addEventListener('dragover', (e) => { const t = e.dataTransfer.types; if (t.includes('application/x-stepwise-clip') || t.includes('Files') || t.includes('application/x-stepwise-sample') || t.includes(SOUND_TYPE)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
     g.addEventListener('drop', (e) => this.onDrop(e));
     this.names.addEventListener('pointerdown', (e) => this.namesDown(e));
     this.names.addEventListener('contextmenu', (e) => this.namesMenu(e));
@@ -812,16 +813,9 @@ export class Playlist {
       this.setSel(made.map((c) => c.id));
       return;
     }
-    const sample = e.dataTransfer.getData('application/x-stepwise-sample');
-    if (sample) { const s = JSON.parse(sample); await this.app.bank.ensure(s.id); this.addAudioAt(s, track, t); return; }
-    let tt = t, n = 0;
-    for (const f of e.dataTransfer.files) {
-      try {
-        const s = await this.app.bank.decode(f.name, await f.arrayBuffer());
-        tt = this.addAudioAt({ id: s.id, name: s.name }, track + n, t); n += 1;
-      } catch (err) { this.app.toast(`Could not decode ${f.name}`); }
-    }
-    void tt;
+    // a Browser sound, a file from My sounds or audio files from the system: one clip each, on the tracks from here down
+    const sounds = await droppedSounds(this.app, e.dataTransfer);
+    sounds.forEach((s, n) => this.addAudioAt(s, Math.min(MAX_TRACK, track + n), t));
   }
 
   lengthFor(s) {

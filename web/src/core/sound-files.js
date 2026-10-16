@@ -7,8 +7,11 @@ const AUDIO_RE = new RegExp(`\\.(${AUDIO_EXTENSIONS.join('|')})$`, 'i');
 
 // hidden files are skipped: sample packs copied from a Mac are full of "._kick.wav" resource forks
 export const isAudioFile = (name) => typeof name === 'string' && name[0] !== '.' && AUDIO_RE.test(name);
-// a file dropped from the system: by its extension, or by the type the system gives it
-export const isAudioDrop = (f) => !!f && (isAudioFile(f.name) || (/^audio\//.test(f.type || '') && f.name[0] !== '.'));
+// a file dropped from the system: by its extension, or by the type the system gives it (MIDI files, which some
+// systems call audio/midi, and projects are opened by the page instead)
+const NOT_AUDIO = /\.(mid|midi|kar|fllua|stepwise|json|zip)$/i;
+export const isAudioDrop = (f) => !!f && typeof f.name === 'string' && f.name[0] !== '.' && !NOT_AUDIO.test(f.name) && !/midi/i.test(f.type || '')
+  && (isAudioFile(f.name) || /^audio\//.test(f.type || ''));
 export const extOf = (name) => { const m = /\.([^./]+)$/.exec(name); return m ? m[1].toLowerCase() : ''; };
 export const baseName = (rel) => String(rel).split('/').pop();
 export const dirName = (rel) => { const i = String(rel).lastIndexOf('/'); return i < 0 ? '' : rel.slice(0, i); };

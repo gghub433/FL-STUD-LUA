@@ -12,6 +12,8 @@ test('audio file filter: the seven formats in any case, no hidden files, no othe
   assert.ok(isAudioDrop({ name: 'kick.WAV', type: '' }));
   assert.ok(!isAudioDrop({ name: 'song.fllua', type: 'application/json' }));
   assert.ok(!isAudioDrop({ name: '._x.wav', type: 'audio/wav' }));
+  assert.ok(!isAudioDrop({ name: 'groove.mid', type: 'audio/midi' }), 'MIDI files go to the MIDI import');
+  assert.ok(!isAudioDrop({ name: 'groove', type: 'audio/x-midi' }));
 });
 
 test('names and paths', () => {
