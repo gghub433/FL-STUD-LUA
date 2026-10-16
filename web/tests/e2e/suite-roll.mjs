@@ -304,6 +304,26 @@ export async function run() {
     ok((await notes(id)).map((n) => n.s).join() === '0,72,144,192,264,336', `3 in 8: ${(await notes(id)).map((n) => n.s)}`);
   });
 
+  await test('scripts: the Scripts menu and the script dialog in Russian', async () => {
+    const id = await fresh();
+    await ev((id) => app.cmd.addNotes(app.store, id, [{ s: 0, l: 24, k: 60, v: 100 }]), id);
+    await ev(() => app.setPref('lang', 'ru')); await sleep(300);
+    try {
+      await ev(() => app.pianoRoll.toolsBtn.click()); await sleep(150);
+      await page.locator('.popup .item', { hasText: 'Скрипты' }).first().hover(); await sleep(300);
+      const items = await page.locator('.popup').last().locator('.item').allInnerTexts();
+      ok(items.includes('Очеловечить…') && items.includes('Евклидов ритм…') && items.includes('Новый скрипт…'), `submenu: ${items.join(' | ')}`);
+      await page.locator('.popup .item', { hasText: 'Кривая силы…' }).last().click();
+      await page.waitForSelector('.modal .rs-desc'); await sleep(200);
+      ok((await page.locator('.modal .modal-title').innerText()) === 'Кривая силы', 'dialog title');
+      const body = await page.locator('.modal .modal-body').innerText();
+      ok(body.includes('Наименьшая сила') && body.includes('Задаёт силу нажатия по кривой') && body.includes('Нарастание') && body.includes('Новое зерно'), `dialog: ${body.slice(0, 200)}`);
+      await page.screenshot({ path: 'tests/e2e/out/roll-script-ru.png' });
+      await page.locator('.modal .btn', { hasText: 'Отмена' }).click(); await sleep(100);
+      ok((await notes(id))[0].v === 100, 'cancelled');
+    } finally { await ev(() => app.setPref('lang', 'en')); await sleep(200); }
+  });
+
   await test('scripts: write a user script, it survives a reload and runs on the selection', async () => {
     await ev((k) => localStorage.removeItem(k), SCRIPTS_KEY);
     await fresh();
