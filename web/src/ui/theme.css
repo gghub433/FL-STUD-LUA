@@ -582,3 +582,8 @@ body.look-glass .modal-back { backdrop-filter: blur(3px); -webkit-backdrop-filte
 .look-mine { display: flex; flex-direction: column; gap: 3px; }
 .look-my { display: flex; align-items: center; gap: 6px; padding: 3px 6px; background: var(--bg2); border-radius: var(--r3, 3px); cursor: pointer; }
 .look-my:hover { background: var(--bg3); }
+/* My sounds (Browser): folders dropped from the system, action rows (Add folder…, Show more, Allow access…) */
+.br-drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
+.br-row.br-action { color: var(--dim); font-style: italic; }
+.br-row.br-action:hover { color: var(--text); }
+.br-row.folder .br-right { font-weight: 400; }

@@ -16,6 +16,7 @@ import { openExportDialog } from './ui/export-dialog.js';
 import { openStartDialog } from './ui/start-dialog.js';
 import { patcherEditor } from './ui/patcher.js';
 import { openAudioEditor } from './ui/audio-editor.js';
+import { decodeAudioBytes } from './host/sample-bank.js';
 import { createStore } from './ui/plugin-store.js';
 import { openMidiSettings } from './ui/midi-settings.js';
 import { confirmBox } from './ui/dialog.js';
@@ -79,9 +80,8 @@ export function installExtensions(app) {
       const f = inp.files[0];
       if (f) {
         try {
-          const buf = await app.host.ctx.decodeAudioData(await f.arrayBuffer());
-          const channels = []; for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) channels.push(buf.getChannelData(c).slice());
-          app.openAudioEditor({ buf: { rate: buf.sampleRate, channels }, name: f.name.replace(/\.[^.]+$/, '') });
+          const buf = await decodeAudioBytes(app.host.ctx, await f.arrayBuffer());
+          app.openAudioEditor({ buf, name: f.name.replace(/\.[^.]+$/, '') });
         } catch (err) { app.toast(`Could not decode ${f.name}`); }
       }
       inp.remove();

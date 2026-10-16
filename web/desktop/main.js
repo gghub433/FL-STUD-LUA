@@ -9,6 +9,7 @@ const os = require('node:os');
 const { installUpdater } = require('./updater');
 const { installCollab } = require('./collab');
 const { installBackup } = require('./backup');
+const { installSoundFolders } = require('./sound-folders');
 const { installPlugins } = require('./plugins');
 const smokePlugins = require('./smoke-plugins');
 
@@ -274,6 +275,7 @@ ipcMain.on('window:material', (_e, kind) => {
 installUpdater({ getWin: () => win, beforeInstall: () => { closing = true; } });
 const collab = installCollab({ getWin: () => win });
 installBackup({ getWin: () => win });
+installSoundFolders({ getWin: () => win });
 const plugins = installPlugins({ getWin: () => win });
 app.on('before-quit', () => { collab.stop(); });
 app.on('window-all-closed', () => app.quit());

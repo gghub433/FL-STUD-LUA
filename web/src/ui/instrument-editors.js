@@ -7,6 +7,7 @@ import { showPopup, contextMenu } from './menu.js';
 import { promptText } from './dialog.js';
 import { drawWave } from './waveform.js';
 import { drawEnv } from './env-graph.js';
+import { wireSoundDrop } from './sound-drop.js';
 import { keyName } from '../core/constants.js';
 import { instrumentSchema, instrumentMeta } from '../core/instruments/index.js';
 import { TARGETS, TARGET_LABEL } from '../core/instruments/sampler.js';
@@ -95,15 +96,9 @@ function sampleMenu(app, onPick, anchor) {
   showPopup(items, r.left, r.bottom, r);
 }
 
+// a sound from the Browser or My sounds, or an audio file from the system (the first one when there are several)
 function dropFiles(el, app, handler) {
-  el.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files') || [...e.dataTransfer.types].includes('application/x-stepwise-sample')) { e.preventDefault(); e.stopPropagation(); } });
-  el.addEventListener('drop', async (e) => {
-    const sid = e.dataTransfer.getData('application/x-stepwise-sample');
-    if (sid) { e.preventDefault(); e.stopPropagation(); const s = JSON.parse(sid); await app.bank.ensure(s.id); handler(s); return; }
-    if (!e.dataTransfer.files.length) return;
-    e.preventDefault(); e.stopPropagation();
-    try { handler(await loadSampleFile(app, e.dataTransfer.files[0])); } catch (err) { app.toast('Could not decode that file'); }
-  });
+  wireSoundDrop(el, app, ([s]) => handler(s), { max: 1 });
 }
 
 // =================================================================================== SAMPLER
@@ -802,17 +797,12 @@ export function multiEditor(win, app, chId) {
     const i = zones().findIndex((z) => k >= z.lo && k <= z.hi);
     if (i >= 0) { sel = i; render(); }
   });
-  kb.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('application/x-stepwise-sample')) { e.preventDefault(); e.stopPropagation(); } });
-  kb.addEventListener('drop', async (e) => {
-    const raw = e.dataTransfer.getData('application/x-stepwise-sample');
-    if (!raw) return;
-    e.preventDefault(); e.stopPropagation();
-    const s = JSON.parse(raw), r = kb.getBoundingClientRect(), k = LO + Math.floor((e.clientX - r.left) / KW);
-    await app.bank.ensure(s.id);
+  wireSoundDrop(kb, app, async ([s], e) => {
+    const r = kb.getBoundingClientRect(), k = LO + Math.floor((e.clientX - r.left) / KW);
     const { defaultZone } = await import('../core/instruments/multisampler.js');
     setZones([...zones(), defaultZone(s, { lo: k, hi: k, root: k })], 'Add zone');
     sel = zones().length - 1;
-  });
+  }, { max: 1 });
   const list = h('div', { style: { padding: '4px 8px' } });
   const num = (z, i, key, min, max, w = 54, step = 1) => { const inp = h('input.field', { type: 'number', min, max, step, value: z[key], style: { width: `${w}px` } }); inp.addEventListener('keydown', (e) => e.stopPropagation()); inp.addEventListener('change', () => { const all = zones().map((x) => ({ ...x })); all[i][key] = Math.max(min, Math.min(max, +inp.value)); setZones(all); }); return inp; };
   const renderList = () => {

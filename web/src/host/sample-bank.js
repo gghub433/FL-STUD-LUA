@@ -5,6 +5,7 @@ import { projectPatchSampleIds } from '../core/patcher/spec.js';
 import { idbGet, idbPut } from './idb.js';
 import { stretchAudio } from '../core/stretch.js';
 import { isPackSoundId, renderPackSound, packSounds } from '../core/packs.js';
+import { isAiff, decodeAiff } from '../core/aiff.js';
 
 // cyrb53 string/array hash, used to give identical audio the same id
 function hashPCM(ch, rate) {
@@ -21,6 +22,15 @@ function hashPCM(ch, rate) {
   h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+// An audio file -> { rate, channels } (at most two channels). AIFF is read here: Chromium cannot decode it.
+export async function decodeAudioBytes(ctx, arrayBuffer) {
+  if (isAiff(arrayBuffer)) { const r = decodeAiff(arrayBuffer); return { rate: r.rate, channels: r.channels.slice(0, 2) }; }
+  const buf = await ctx.decodeAudioData(arrayBuffer.slice(0));
+  const channels = [];
+  for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) channels.push(buf.getChannelData(c).slice());
+  return { rate: buf.sampleRate, channels };
 }
 
 export class SampleBank {
@@ -63,10 +73,8 @@ export class SampleBank {
   }
 
   async decode(name, arrayBuffer) {
-    const buf = await this.host.ctx.decodeAudioData(arrayBuffer.slice(0));
-    const channels = [];
-    for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) channels.push(buf.getChannelData(c).slice());
-    return this.addPCM(name.replace(/\.[^.]+$/, ''), buf.sampleRate, channels);
+    const { rate, channels } = await decodeAudioBytes(this.host.ctx, arrayBuffer);
+    return this.addPCM(name.replace(/\.[^.]+$/, ''), rate, channels);
   }
 
   // Make sure a sample is decoded/loaded and known to the engine. Resolves to the entry or null.
