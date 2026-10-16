@@ -258,6 +258,19 @@ ipcMain.handle('open:pending', () => { const p = pendingOpen; pendingOpen = null
 ipcMain.on('doc:state', (_e, s) => { if (s && typeof s === 'object') docState = { dirty: !!s.dirty, name: String(s.name || 'Untitled').slice(0, 120), path: s.path || null }; if (process.platform === 'darwin' && win && !win.isDestroyed()) win.setDocumentEdited(!!docState.dirty); });
 ipcMain.on('window:close-now', () => { closing = true; if (win && !win.isDestroyed()) win.close(); });
 ipcMain.on('window:zoom', (_e, f) => { const z = Number(f); if (win && !win.isDestroyed() && z >= 0.5 && z <= 2.5) win.webContents.setZoomFactor(z); });
+// Customize look > See-through window: the desktop shows through the window, blurred by the system
+// (Windows 11: acrylic / mica background material; macOS: vibrancy). The page makes its own background transparent.
+let material = 'none';
+ipcMain.on('window:material', (_e, kind) => {
+  const k = ['acrylic', 'mica', 'vibrancy'].includes(kind) ? kind : 'none';
+  if (!win || win.isDestroyed() || k === material) return;
+  material = k;
+  try {
+    if (process.platform === 'win32' && typeof win.setBackgroundMaterial === 'function') win.setBackgroundMaterial(k === 'none' ? 'none' : k);
+    if (process.platform === 'darwin' && typeof win.setVibrancy === 'function') win.setVibrancy(k === 'none' ? null : 'under-window');
+    win.setBackgroundColor(k === 'none' ? '#272a2d' : '#00000000');
+  } catch (_) { /* older system: stays opaque */ }
+});
 installUpdater({ getWin: () => win, beforeInstall: () => { closing = true; } });
 const collab = installCollab({ getWin: () => win });
 installBackup({ getWin: () => win });

@@ -43,6 +43,9 @@ contextBridge.exposeInMainWorld('flluaDesktop', {
   onOpenPath: (cb) => { ipcRenderer.on('open-path', (_e, path) => cb(path)); },
   onSaveBeforeClose: (cb) => { ipcRenderer.on('save-before-close', () => cb()); },
   setZoom: (factor) => ipcRenderer.send('window:zoom', factor),
+  // see-through window (Customize look): the kinds this system offers
+  materials: process.platform === 'win32' ? ['acrylic', 'mica'] : process.platform === 'darwin' ? ['vibrancy'] : [],
+  setMaterial: (kind) => ipcRenderer.send('window:material', kind),
   info: () => ipcRenderer.invoke('app:info'),                                // -> { version, platform, arch, updates }
   update: {                                                                  // new versions (see updater.js)
     check: () => ipcRenderer.invoke('update:check'),                         // -> { mode, current, latest, available, notes, url, error }

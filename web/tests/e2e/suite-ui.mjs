@@ -60,6 +60,59 @@ export async function run() {
     ok((await page.locator('#menubar .menu-top[data-menu="FILE"]').innerText()) === 'FILE', 'English again');
   });
 
+  await test('OPTIONS > Interface > Customize look: themes, colour, background picture with blur, opacity, glass, font, corners; kept', async () => {
+    await page.locator('#menubar .menu-top[data-menu="OPTIONS"]').click();
+    await page.locator('.popup .item', { hasText: 'Interface' }).hover(); await sleep(200);
+    await page.locator('.popup[data-level="1"] .item', { hasText: 'Customize look' }).click();
+    await page.waitForSelector('.look .look-preset');
+    // a preset turns the colour of the whole interface (canvases too: one filter on the page)
+    await page.locator('.look-preset[data-preset="Ocean"]').click(); await sleep(150);
+    ok((await ev(() => document.documentElement.style.filter)).includes('hue-rotate(170deg)'), 'Ocean: hue turned');
+    ok((await ev(() => app.prefs.look.hue)) === 170, 'kept in the preferences');
+    // sliders
+    await page.locator('.look input[data-key="sat"]').fill('140'); await sleep(100);
+    ok((await ev(() => document.documentElement.style.filter)).includes('saturate(1.4)'), 'saturation');
+    // a gradient background behind a see-through interface
+    await page.locator('.look select[data-key="bg"]').selectOption('gradient'); await sleep(100);
+    await page.locator('.look input[data-key="opacity"]').fill('70'); await sleep(100);
+    let st = await ev(() => { const w = document.getElementById('wallpaper'); return { shown: w && w.style.display !== 'none', bg: w && w.style.background, op: getComputedStyle(document.getElementById('app')).opacity, wall: document.documentElement.classList.contains('look-wall') }; });
+    ok(st.shown && /linear-gradient/.test(st.bg) && st.wall && Math.abs(+st.op - 0.7) < 0.01, `gradient behind, interface 70 %: ${JSON.stringify(st)}`);
+    // a picture: it keeps its own colours (the reverse filter), blurred and dimmed
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DAwMDAxMDAwMDAAAANBAEB3Zy4aQAAAABJRU5ErkJggg==', 'base64');
+    await page.locator('.look input[type=file][accept="image/*"]').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: png }); await sleep(300);
+    await page.locator('.look input[data-key="bgBlur"]').fill('12'); await sleep(100);
+    st = await ev(() => { const w = document.getElementById('wallpaper'); return { bg: w.style.background, f: w.style.filter, look: app.prefs.look.bg }; });
+    ok(st.look === 'image' && /url\("blob:/.test(st.bg), `picture shown: ${st.bg.slice(0, 80)}`);
+    ok(st.f.startsWith('blur(12px)') && st.f.includes('hue-rotate(-170deg)') && st.f.includes('saturate('), `picture blurred, colours kept: ${st.f}`);
+    // glass, font, corners
+    await page.locator('.look input[data-key="glass"]').check(); await sleep(100);
+    ok(await ev(() => document.body.classList.contains('look-glass')), 'frosted glass menus');
+    await page.locator('.look select[data-key="font"]').selectOption('mono'); await sleep(100);
+    ok((await ev(() => getComputedStyle(document.body).fontFamily)).includes('monospace'), 'font');
+    await page.locator('.look input[data-key="radius"]').fill('9'); await sleep(100);
+    ok((await ev(() => getComputedStyle(document.querySelector('.btn')).borderTopLeftRadius)) === '9px', 'rounder corners');
+    await page.screenshot({ path: 'tests/e2e/out/look.png' });
+    // my own theme: saved, kept over a reload with its picture
+    await page.locator('.look input.field').fill('Mine');
+    await page.locator('.look .btn', { hasText: 'Save as theme' }).click(); await sleep(200);
+    ok((await page.locator('.look-my[data-theme="Mine"]').count()) === 1, 'theme saved');
+    await open('/');
+    await sleep(500);
+    st = await ev(() => ({ hue: app.prefs.look.hue, bg: app.prefs.look.bg, wall: (document.getElementById('wallpaper') || {}).style?.background || '', filter: document.documentElement.style.filter }));
+    ok(st.hue === 170 && st.bg === 'image' && /url\("blob:/.test(st.wall) && st.filter.includes('hue-rotate(170deg)'), `kept after a reload: ${JSON.stringify(st).slice(0, 200)}`);
+    // classic again; the saved theme brings everything back
+    await ev(() => app.openWindow('look'));
+    await page.waitForSelector('.look .look-preset');
+    await page.locator('.look .btn', { hasText: 'Reset' }).click(); await sleep(200);
+    st = await ev(() => ({ f: document.documentElement.style.filter, see: document.documentElement.classList.contains('look-see'), glass: document.body.classList.contains('look-glass') }));
+    ok(st.f === '' && !st.see && !st.glass, `reset: ${JSON.stringify(st)}`);
+    await page.locator('.look-my[data-theme="Mine"] span').first().click(); await sleep(300);
+    st = await ev(() => ({ hue: app.prefs.look.hue, bg: app.prefs.look.bg, wall: document.getElementById('wallpaper').style.background }));
+    ok(st.hue === 170 && st.bg === 'image' && /url\("blob:/.test(st.wall), `my theme back: ${JSON.stringify(st).slice(0, 160)}`);
+    await page.locator('.look .btn', { hasText: 'Reset' }).click(); await sleep(100);
+    await ev(() => { localStorage.removeItem('fllua.looks'); app.wm.close && app.wm.close('look'); });
+  });
+
   await test('keyboard shortcuts: F1 lists the commands; a new key works, the old one is free; reset', async () => {
     await page.keyboard.press('F1'); await sleep(300);
     ok((await page.locator('.modal-title').innerText()) === 'Keyboard shortcuts', 'F1 opens the list');

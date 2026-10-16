@@ -319,6 +319,7 @@ function buildMenus() {
       { label: 'Manage plugins…', fn: () => app.openWindow('plugins') },
       { label: 'Cloud backup…', fn: () => app.backup.open() },
       { label: 'Interface', submenu: () => [
+        { label: 'Customize look…', hint: 'Colour, background picture, blur, transparency, font, corners and themes', fn: () => app.openWindow('look') },
         { title: 'Theme' },
         ...[['dark', 'Dark'], ['light', 'Light'], ['system', 'Same as the system']].map(([v, l]) => ({ label: l, checked: app.prefs.theme === v, fn: () => app.setPref('theme', v) })),
         { title: 'Size' },
