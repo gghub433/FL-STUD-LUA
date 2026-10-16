@@ -8,6 +8,7 @@
 import { BLOCK, PPQ, MAX_INSERT } from './constants.js';
 import { faderGain, clamp, TAU, DelayLine } from './dsp.js';
 import { Sequencer, EV_ON, EV_OFF, EV_AUDIO_ON, EV_AUDIO_OFF } from './sequencer.js';
+import { XFADE_SEC } from './playlist-ops.js';
 import { Mixer } from './mixer.js';
 import { TimeMap } from './timemap.js';
 import { evalPoints } from './automation.js';
@@ -107,7 +108,7 @@ export class Engine {
     if (value === undefined) delete o[last]; else o[last] = value;
     switch (path[0]) {
       case 'channels': this._syncChannels(); this.autoDefs.clear(); this.dirty = true; break;
-      case 'patterns': case 'playlist': case 'timeSig': this.dirty = true; break;
+      case 'patterns': case 'playlist': case 'timeSig': case 'settings': this.dirty = true; break;
       case 'currentPattern': this.dirty = true; break;
       case 'mixer':
         if (path[1] === 'tracks' && path.length >= 3) this.mixer.updateTrack(path[2], p.mixer.tracks[path[2]]);
@@ -369,6 +370,7 @@ export class Engine {
     const lenTicks = clip.l - offsetTicks;
     if (lenTicks <= 0) return;
     this._prepare(rt);
+    const fps = sec * this.sr, cap = XFADE_SEC * this.sr;              // frames per tick, longest crossfade
     rt.inst.start({
       clipId: clip.id, sampleId: this.samples.has(sid) ? sid : rt.data.sample.id,
       // reversed clips play their window [o, o + l) backwards, so they start at its end
@@ -377,6 +379,9 @@ export class Engine {
       gain: clip.gain ? Math.pow(10, clip.gain / 20) : 1,
       fadeIn: Math.round((clip.fi || 0) * sec * this.sr), fadeOut: Math.round((clip.fo || 0) * sec * this.sr),
       rev: clip.rev, rate: clip.pitch ? Math.pow(2, clip.pitch / 12) : 1, norm: clip.norm,
+      // auto crossfade with overlapping clips (sequencer): positions count from the clip start, also when playback starts inside it
+      at: offsetTicks * fps, xi: clip.xi ? Math.min(cap, clip.xi * fps) : 0,
+      xoAt: clip.xo ? clip.xoAt * fps : 0, xo: clip.xo ? Math.min(cap, clip.xo * fps) : 0,
     });
   }
 

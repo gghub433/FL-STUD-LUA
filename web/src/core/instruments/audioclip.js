@@ -8,6 +8,10 @@ class ClipVoice {
   constructor() { this.alive = false; }
 }
 
+// equal-power crossfade curves over f = 0..1: in² + out² = 1 everywhere, in(0) = out(1) = 0
+export const xfadeIn = (f) => Math.sin(f * 1.5707963267948966);
+export const xfadeOut = (f) => Math.cos(f * 1.5707963267948966);
+
 export class AudioClipPlayer {
   constructor(sr, host) {
     this.sr = sr;
@@ -24,7 +28,8 @@ export class AudioClipPlayer {
   chokeAll() { for (const v of this.voices) if (v.alive) v.stop = true; }
 
   // spec: { clipId, sampleId, startSrc (source frame), lenFrames (output frames), gain (linear),
-  //         fadeIn, fadeOut (output frames), rev, rate (resample ratio) , norm }
+  //         fadeIn, fadeOut (output frames), rev, rate (resample ratio) , norm,
+  //         at (output frames of the clip already past), xi (crossfade in), xoAt, xo (crossfade out: start, length) }
   start(spec) {
     const smp = this.host.getSample(spec.sampleId);
     if (!smp) return;
@@ -41,6 +46,7 @@ export class AudioClipPlayer {
     v.gain = spec.gain * (spec.norm && smp.peak > 0 ? 1 / smp.peak : 1);
     v.fadeIn = Math.max(spec.fadeIn || 0, 24);
     v.fadeOut = Math.max(spec.fadeOut || 0, 24);
+    v.at = spec.at || 0; v.xi = spec.xi || 0; v.xoAt = spec.xoAt || 0; v.xo = spec.xo || 0;
   }
 
   stopClip(clipId) {
@@ -59,6 +65,11 @@ export class AudioClipPlayer {
         let g = v.gain;
         if (done < v.fadeIn) g *= done / v.fadeIn;
         if (v.left < v.fadeOut) g *= v.left / v.fadeOut;
+        if (v.xi || v.xo) {                                   // crossfade with an overlapping clip
+          const pos = v.at + done;
+          if (pos < v.xi) g *= xfadeIn(pos / v.xi);
+          if (v.xo && pos >= v.xoAt) { const f = (pos - v.xoAt) / v.xo; if (f >= 1) { v.alive = false; break; } g *= xfadeOut(f); }
+        }
         if (v.stop) { v.stopGain -= 1 / (0.003 * this.sr); if (v.stopGain <= 0) { v.alive = false; break; } g *= v.stopGain; }
         const sl = hermite(lData, v.pos, len);
         const sr_ = mono ? sl : hermite(rData, v.pos, len);

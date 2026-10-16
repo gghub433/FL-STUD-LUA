@@ -3,6 +3,7 @@
 // inside each block, so timing is sample-accurate and independent of any JS timer.
 import { STEP } from './constants.js';
 import { patternLength, barTicks } from './project.js';
+import { audioCrossfades } from './playlist-ops.js';
 
 export const EV_OFF = 0, EV_ON = 1, EV_AUDIO_ON = 2, EV_AUDIO_OFF = 3;
 
@@ -60,6 +61,9 @@ export class Sequencer {
     // "Pattern length" markers override the repeat length of pattern clips that start at or after them
     const patLens = arr.markers.filter((m) => m.type === 'patlen').sort((a, b) => a.t - b.t);
     const lenAt = (t, natural) => { let v = natural; for (const m of patLens) { if (m.t <= t) v = m.len; else break; } return v; };
+    // overlapping audio clips that sound crossfade (auto crossfade, project setting): their events carry a copy
+    // of the clip with the fade lengths (the engine caps them in seconds, so live and export match at any tempo)
+    const xf = project.settings && project.settings.xfade === 0 ? null : audioCrossfades(arr.clips, (c) => !c.mute && !muted(c.track) && chById.has(c.ref));
     let end = 0;
     for (const clip of arr.clips) {
       end = Math.max(end, clip.s + clip.l);
@@ -85,9 +89,10 @@ export class Sequencer {
       } else if (clip.type === 'audio') {
         const ch = chById.get(clip.ref);
         if (!ch) continue;
-        this.events.push({ t: clip.s, k: EV_AUDIO_ON, ch: clip.ref, clip, offset: 0 });
-        this.events.push({ t: clipEnd, k: EV_AUDIO_OFF, ch: clip.ref, clip });
-        this.audioClips.push({ s: clip.s, e: clipEnd, clip, ch: clip.ref });
+        const x = xf && xf.get(clip.id), play = x ? { ...clip, ...x } : clip;
+        this.events.push({ t: clip.s, k: EV_AUDIO_ON, ch: clip.ref, clip: play, offset: 0 });
+        this.events.push({ t: clipEnd, k: EV_AUDIO_OFF, ch: clip.ref, clip: play });
+        this.audioClips.push({ s: clip.s, e: clipEnd, clip: play, ch: clip.ref });
       } else if (clip.type === 'automation') {
         const ch = chById.get(clip.ref);
         if (!ch || !ch.target || !ch.points.length) continue;

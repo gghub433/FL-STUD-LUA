@@ -467,7 +467,8 @@ export function setPatternLength(store, patId, ticks) {
 }
 
 // ------------------------------------------------------------------------------ playlist
-import { resolveOverlaps, splitClip, defaultClipLength, MAX_TRACK, sortClips } from '../core/playlist-ops.js';
+import { resolveOverlaps, splitClip, defaultClipLength, MAX_TRACK, sortClips, xfadeKeep, switchTake } from '../core/playlist-ops.js';
+import { applyConsolidate as consolidateEdit } from '../core/consolidate.js';
 import { createClip, createArrangement } from '../core/project.js';
 export { defaultClipLength, MAX_TRACK };
 
@@ -484,7 +485,7 @@ export function addClips(store, partials, label = 'Add clips', coalesce, { overl
       return createClip(p, type, clampTrack(track), Math.max(0, Math.round(s)), Math.max(1, Math.round(l)), ref, extra);
     });
     arr.clips.push(...made);
-    arr.clips = overlap ? resolveOverlaps(arr.clips, made, () => nextId(p)) : sortClips(arr.clips);
+    arr.clips = overlap ? resolveOverlaps(arr.clips, made, () => nextId(p), xfadeKeep(p)) : sortClips(arr.clips);
     return made;
   }, coalesce);
 }
@@ -501,7 +502,7 @@ export function updateClips(store, ids, fn, label = 'Edit clips', coalesce, { ov
     const sel = arr.clips.filter((c) => set.has(c.id));
     sel.forEach((c, i) => fn(c, i));
     for (const c of sel) { c.track = clampTrack(c.track); c.s = Math.max(0, c.s); c.l = Math.max(1, c.l); }
-    arr.clips = overlap ? resolveOverlaps(arr.clips, sel, () => nextId(p)) : sortClips(arr.clips);
+    arr.clips = overlap ? resolveOverlaps(arr.clips, sel, () => nextId(p), xfadeKeep(p)) : sortClips(arr.clips);
   }, coalesce);
 }
 
@@ -515,7 +516,7 @@ export function dragClips(store, base, ids, fn, label, coalesce) {
     const sel = clips.filter((c) => set.has(c.id));
     sel.forEach((c, i) => fn(c, i));
     for (const c of sel) { c.track = clampTrack(c.track); c.s = Math.max(0, c.s); c.l = Math.max(1, c.l); }
-    arr.clips = resolveOverlaps(clips, sel, () => nextId(p));
+    arr.clips = resolveOverlaps(clips, sel, () => nextId(p), xfadeKeep(p));
   }, coalesce);
 }
 
@@ -542,6 +543,25 @@ export function sliceClips(store, cuts /* [[clipId, tick]] */, label = 'Slice cl
 
 export function pasteClips(store, clips, dTick, dTrack = 0, label = 'Paste clips') {
   return addClips(store, clips.map((c) => ({ ...c, id: undefined, s: c.s + dTick, track: c.track + dTrack })), label);
+}
+
+// ---- takes of a loop recording (one clip, one take plays)
+export function setTake(store, clipId, takeId) {
+  plEdit(store, 'Switch take', (p, arr) => { const c = arr.clips.find((x) => x.id === clipId); if (c) switchTake(c, takeId, p.tempo); });
+}
+
+// keep only the take that plays
+export function deleteOtherTakes(store, ids) {
+  const set = new Set(ids);
+  plEdit(store, 'Delete other takes', (p, arr) => { for (const c of arr.clips) if (set.has(c.id)) { delete c.takes; delete c.take; } });
+}
+
+// ---- consolidate / render to audio clip (app/consolidate.js renders, this puts the result in): one undo step
+// plan: { s, e, sources: [clip ids], track, remove, sample: { id, name }, l, name }. Returns { clip, channel }.
+export function applyConsolidate(store, plan) {
+  const r = store.edit(plan.track != null ? 'Render track to audio clip' : 'Consolidate to audio clip', (p) => consolidateEdit(p, currentArrangement(p), plan), [['channels'], ['playlist']]);
+  store.bank.ensure(plan.sample.id);
+  return r;
 }
 
 // give pattern clips their own copy of the pattern so editing it no longer changes the other clips

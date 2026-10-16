@@ -8,8 +8,9 @@ import { icon } from './icons.js';
 import { PPQ, STEP } from '../core/constants.js';
 import { patternLength, barTicks, COLORS } from '../core/project.js';
 import { TimeMap } from '../core/timemap.js';
-import { MAX_TRACK, defaultClipLength, spanOf, trimLeft } from '../core/playlist-ops.js';
+import { MAX_TRACK, defaultClipLength, spanOf, trimLeft, audioCrossfades, XFADE_SEC } from '../core/playlist-ops.js';
 import { renderCurve } from '../core/automation.js';
+import { isSource } from '../core/consolidate.js';
 
 const NAMES_W = 132, MARK_H = 16, RULER_H = 22, TOP = MARK_H + RULER_H, EDGE = 6, HEAD_H = 14;
 
@@ -43,6 +44,7 @@ export class Playlist {
     this.dirty = true;
     this.cursorT = 0;
     this.sideOpen = pr.side !== false;
+    this.renderPrefs = { tail: 2, remove: false, ...(pr.render || {}) };      // last choices of the consolidate dialog
     this.cache = new Map();
     this.build();
     this.bind();
@@ -93,7 +95,7 @@ export class Playlist {
     this.refreshBtns();
   }
 
-  prefs() { prefsSave({ px: this.view.px, rowH: this.view.rowH, quant: this.quant, side: this.sideOpen }); }
+  prefs() { prefsSave({ px: this.view.px, rowH: this.view.rowH, quant: this.quant, side: this.sideOpen, render: this.renderPrefs }); }
 
   refreshBtns() {
     for (const [id, b] of Object.entries(this.toolBtns)) b.classList.toggle('on', id === this.tool);
@@ -292,9 +294,11 @@ export class Playlist {
     if (arr.loop) {
       ctx.fillStyle = 'rgba(255,176,46,.06)'; ctx.fillRect(this.tx(arr.loop.s), 0, (arr.loop.e - arr.loop.s) * v.px, H);
     }
-    // clips
+    // clips (overlapping audio clips show their auto crossfade, as the engine plays it)
     ctx.font = '10px "Segoe UI", system-ui, sans-serif'; ctx.textBaseline = 'middle';
     const tick = this.app.host.st.tick;
+    this.xfades = this.project.settings.xfade === 0 ? null : audioCrossfades(arr.clips, (c) => !c.mute && !(arr.tracks[c.track] && arr.tracks[c.track].mute));
+    this.xfadeCap = (XFADE_SEC * this.project.tempo * PPQ) / 60;
     for (const c of arr.clips) {
       if (c.track < tr0 || c.track > tr1) continue;
       const x = this.tx(c.s), w = c.l * v.px;
@@ -350,7 +354,8 @@ export class Playlist {
       }
     }
     ctx.fillStyle = 'rgba(255,255,255,.92)';
-    const label = (c.name || src.name) + (c.rev ? ' ◂' : '');
+    const take = c.takes ? `  ·  ${loc(`take ${c.takes.findIndex((tk) => tk.id === c.take) + 1}/${c.takes.length}`)}` : '';
+    const label = (c.name || src.name) + (c.rev ? ' ◂' : '') + take;
     if (w > 22) ctx.fillText(label, x + 5, y + 1 + HEAD_H / 2 + 0.5);
     if (w > 46 && !this.perf) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillText('▾', x + w - 14, y + 1 + HEAD_H / 2 + 0.5); }
     if (c.fi || c.fo) { // fade ramps (fi / fo are lengths in ticks)
@@ -359,12 +364,28 @@ export class Playlist {
       if (c.fo) { const fw = Math.min(w, c.fo * this.view.px); ctx.moveTo(x + w - fw, y + 1 + HEAD_H); ctx.lineTo(x + w - 1, y + hgt - 2); }
       ctx.stroke();
     }
+    const xf = this.xfades && this.xfades.get(c.id);
+    if (xf) this.drawCrossfade(ctx, c, xf, x, y, hgt);
     ctx.restore();
     if (c.mute) { ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(x, y + 1, w - 1, hgt - 2); }
     if (sel) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(x + 0.5, y + 1.5, w - 2, hgt - 3); }
     else { ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 1.5, w - 2, hgt - 3); }
     if (playing) { ctx.strokeStyle = '#7fdc5c'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 2, w - 3, hgt - 4); }
     if (queued && Math.floor(performance.now() / 250) % 2) { ctx.strokeStyle = '#ffb02e'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 2, w - 3, hgt - 4); }
+  }
+
+  // equal-power curves of an auto crossfade; the part of a clip after its crossfade out is covered (dimmed)
+  drawCrossfade(ctx, c, xf, x, y, hgt) {
+    const px = this.view.px, top = y + 1 + HEAD_H, bot = y + hgt - 2;
+    const curve = (x0, w, rising) => { for (let i = 0; i <= 8; i++) { const f = i / 8, g = rising ? Math.sin(f * Math.PI / 2) : Math.cos(f * Math.PI / 2); ctx[i ? 'lineTo' : 'moveTo'](x0 + f * w, bot - g * (bot - top)); } };
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1; ctx.beginPath();
+    if (xf.xi) curve(x, Math.max(1, Math.min(xf.xi, this.xfadeCap) * px), true);
+    if (xf.xo) {
+      const x0 = x + xf.xoAt * px, w = Math.max(1, Math.min(xf.xo, this.xfadeCap) * px);
+      curve(x0, w, false);
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(x0 + w, y + 1, Math.max(0, x + c.l * px - x0 - w), hgt - 2);
+    }
+    ctx.stroke();
   }
 
   patternPreview(pat) {
@@ -682,7 +703,7 @@ export class Playlist {
       if (!moved && ev.ctrlKey && zone === 'body' && !fresh) {
         // Ctrl+drag: copies are created exactly on the originals and are what gets moved
         const olds = [...orig.values()];
-        const clones = cmd.addClips(store, this.selClips.map((c) => ({ type: c.type, track: c.track, s: c.s, l: c.l, ref: c.ref, o: c.o, mute: c.mute, name: c.name, color: c.color, fi: c.fi, fo: c.fo, rev: c.rev, gain: c.gain, pitch: c.pitch, stretch: c.stretch, norm: c.norm, use: c.use })), 'Copy clips', token, { overlap: false });
+        const clones = cmd.addClips(store, this.selClips.map((c) => ({ type: c.type, track: c.track, s: c.s, l: c.l, ref: c.ref, o: c.o, mute: c.mute, name: c.name, color: c.color, fi: c.fi, fo: c.fo, rev: c.rev, gain: c.gain, pitch: c.pitch, stretch: c.stretch, norm: c.norm, use: c.use, takes: c.takes, take: c.take })), 'Copy clips', token, { overlap: false });
         orig.clear(); clones.forEach((c, i) => orig.set(c.id, olds[i]));
         ids.length = 0; ids.push(...clones.map((c) => c.id));
         base = this.arr.clips.map((c) => ({ ...c }));
@@ -870,6 +891,15 @@ export class Playlist {
         { label: 'Edit sample in the audio editor', disabled: ids.length !== 1 || !this.app.openAudioEditor, fn: () => { const ch = store.channel(clip.ref); if (ch && ch.sample) this.app.openAudioEditor({ sampleId: clip.use || ch.sample.id, chId: ch.id, name: ch.sample.name }); } },
         { sep: true });
     }
+    if (clip.takes) {                               // a loop recording: one take plays, the others wait here
+      const withTakes = cs.filter((c) => c.takes).map((c) => c.id);
+      items.push({ label: 'Takes', submenu: () => [
+        ...clip.takes.map((tk, i) => ({ label: `Take ${i + 1}`, checked: tk.id === clip.take, fn: () => cmd.setTake(store, clip.id, tk.id) })),
+        { sep: true },
+        { label: 'Delete other takes', fn: () => cmd.deleteOtherTakes(store, withTakes) },
+      ] }, { sep: true });
+    }
+    if (cs.some(isSource)) items.push({ label: 'Consolidate to audio clip…', fn: () => this.consolidateDialog({ ids: cs.filter(isSource).map((c) => c.id) }) }, { sep: true });
     if (cs.every((c) => c.type === 'automation')) {
       items.push({ label: 'Edit events…', disabled: !this.app.openAutomationEditor, fn: () => this.app.openAutomationEditor(clip.ref) }, { sep: true });
     }
@@ -943,6 +973,39 @@ export class Playlist {
     }, 'Reset time-stretch');
   }
 
+  // ---- consolidate / render to audio clip: the range is rendered offline and becomes one audio clip (app/consolidate.js)
+  // { ids } selected clips (their span) · { track } a whole playlist track · { range, ids } the loop region
+  async consolidateDialog({ ids = null, track = null, range = null }) {
+    const arr = this.arr;
+    const srcs = track != null ? arr.clips.filter((c) => c.track === track && isSource(c)) : arr.clips.filter((c) => ids && ids.includes(c.id));
+    const sp = range || (srcs.length ? spanOf(srcs) : null);
+    if (!sp || sp.e <= sp.s) return;
+    const fields = [];
+    if (track == null) {
+      const opts = [...(ids && ids.length ? [['clips', 'Selected clips only']] : []), ['mix', 'Everything in the range']];
+      fields.push({ id: 'mode', label: 'Sound', type: 'select', value: opts[0][0], options: opts, hint: 'Selected clips only: just their sound. Everything: the whole mix of that time' });
+    }
+    fields.push(
+      { id: 'tail', label: 'Tail', type: 'number', min: 0, max: 10, step: 0.5, value: this.renderPrefs.tail, unit: 's', hint: 'Seconds after the range so reverbs and delays ring out (silence at the end is cut off)' },
+      { id: 'originals', label: 'Originals', type: 'select', value: this.renderPrefs.remove ? 'remove' : 'mute', options: [['mute', 'Mute'], ['remove', 'Remove']] },
+    );
+    const v = await formDialog(track != null ? 'Render track to audio clip' : 'Consolidate to audio clip', fields, { ok: 'Render' });
+    if (!v) return;
+    this.renderPrefs = { tail: clamp(+v.tail || 0, 0, 10), remove: v.originals === 'remove' };
+    this.prefs();
+    const opts = { s: sp.s, e: sp.e, ids, track, mode: track != null ? 'clips' : v.mode, tail: this.renderPrefs.tail, remove: this.renderPrefs.remove };
+    this.app.toast('Rendering…');
+    try {
+      const { consolidate } = await import('../app/consolidate.js');
+      const clip = await consolidate(this.app, opts);
+      if (!clip) { this.app.toast('Nothing sounds in this range'); return; }
+      this.setSel([clip.id]);
+      this.app.toast('Rendered to an audio clip');
+    } catch (err) {
+      this.app.toast(`Could not render: ${err.message || err}`);
+    }
+  }
+
   // ------------------------------------------------------------------ track names
   trackOfY(e) { const { y } = this.local(e, this.names); return clamp(this.trackAt(y), 1, MAX_TRACK); }
 
@@ -969,6 +1032,8 @@ export class Playlist {
       { sep: true },
       { label: 'Select all clips on the track', fn: () => this.setSel(this.arr.clips.filter((c) => c.track === t).map((c) => c.id)) },
       { label: 'Clear track', fn: () => { cmd.deleteClips(store, this.arr.clips.filter((c) => c.track === t).map((c) => c.id), 'Clear track'); this.setSel([]); } },
+      { sep: true },
+      { label: 'Render track to audio clip…', disabled: !this.arr.clips.some((c) => c.track === t && isSource(c)), fn: () => this.consolidateDialog({ track: t }) },
     ], e.clientX, e.clientY);
   }
 
@@ -1028,6 +1093,7 @@ export class Playlist {
       { label: 'Loop: set end here', fn: () => cmd.setLoop(store, { s: arr.loop ? Math.min(arr.loop.s, t - 1) : 0, e: t }) },
       { label: 'Loop: around selected clips', disabled: !this.sel.size, fn: () => { const sp = spanOf(this.selClips); cmd.setLoop(store, { s: sp.s, e: sp.e }); } },
       { label: 'Clear loop', disabled: !arr.loop, fn: () => cmd.setLoop(store, null) },
+      { label: 'Consolidate loop region to audio clip…', disabled: !arr.loop, fn: () => this.consolidateDialog({ range: arr.loop, ids: this.selClips.filter(isSource).map((c) => c.id) }) },
       { sep: true },
       { label: 'Punch: set in here', fn: () => cmd.setPunch(store, { in: t, out: Math.max(t + this.beatT, arr.punch ? arr.punch.out : t + this.barT) }) },
       { label: 'Punch: set out here', fn: () => cmd.setPunch(store, { in: arr.punch ? Math.min(arr.punch.in, t - 1) : 0, out: t }) },

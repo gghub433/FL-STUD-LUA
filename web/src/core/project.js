@@ -63,7 +63,7 @@ export function createProject() {
     seq: 1,
     tempo: 130, swing: 0, masterPitch: 0,
     timeSig: { num: 4, den: 4 },
-    settings: { snap: 'cell', metronome: 0, countIn: 0, overdub: 0, blend: 0, loopRec: 0, stepKey: MIDDLE_C, recNotes: 1, recAuto: 1, recAudio: 1 },
+    settings: { snap: 'cell', metronome: 0, countIn: 0, overdub: 0, blend: 0, loopRec: 0, stepKey: MIDDLE_C, recNotes: 1, recAuto: 1, recAudio: 1, xfade: 1 },
     channels: [],
     patterns: {},
     currentPattern: 1,
@@ -214,6 +214,7 @@ export function normalize(raw) {
     snap: str(st.snap, 'cell', 20), metronome: bit(st.metronome), countIn: bit(st.countIn), overdub: bit(st.overdub),
     blend: bit(st.blend), loopRec: bit(st.loopRec), stepKey: int(st.stepKey, 0, KEY_MAX, MIDDLE_C),
     recNotes: st.recNotes === 0 ? 0 : 1, recAuto: st.recAuto === 0 ? 0 : 1, recAudio: st.recAudio === 0 ? 0 : 1,      // recording filter
+    xfade: st.xfade === 0 ? 0 : 1,                                                                                   // auto crossfade of overlapping audio clips
   };
   p.groups = Array.isArray(raw.groups) ? raw.groups.filter((g) => typeof g === 'string').slice(0, 32) : ['All'];
   if (!p.groups.includes('All')) p.groups.unshift('All');
@@ -399,6 +400,7 @@ export function normalize(raw) {
       if (c.bpm) clip.bpm = num(c.bpm, 20, 999, 120);                   // the audio's own tempo: the clip follows the project tempo
       if (c.norm) clip.norm = 1;
       if (typeof c.use === 'string' && c.use) clip.use = c.use.slice(0, 200);
+      if (c.type === 'audio' && Array.isArray(c.takes)) normTakes(clip, c, useId);
       arr.clips.push(clip);
     }
     arr.clips.sort((x, y) => x.s - y.s);
@@ -423,6 +425,22 @@ export function normalize(raw) {
   }
   p.seq = Math.max(int(raw.seq, 1, 1e9, 1), maxId + 1);
   return p;
+}
+
+// Takes of a loop recording (see core/playlist-ops.js): { id, t } = where each pass starts in the recording (seconds),
+// clip.take = the take that plays. A clip with fewer than two takes is a plain clip.
+function normTakes(clip, c, useId) {
+  const takes = [];
+  let active = null;
+  for (const tk of c.takes.slice(0, 64)) {
+    if (!tk || typeof tk !== 'object') continue;
+    const t = { id: useId(tk.id), t: num(tk.t, 0, 1e6, 0) };
+    if (active === null && tk.id === c.take) active = t.id;
+    takes.push(t);
+  }
+  if (takes.length < 2) return;
+  clip.takes = takes;
+  clip.take = active ?? takes[takes.length - 1].id;
 }
 
 // Mixer routing must stay acyclic; drop any route that would close a loop.
