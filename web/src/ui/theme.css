@@ -277,6 +277,15 @@ canvas { display: block; }
 .pr-swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; padding: 6px 8px; }
 .pr-swatches i { height: 16px; border-radius: var(--r3, 3px); border: 1px solid #000; cursor: pointer; }
 .pr-swatches i:hover { outline: 1px solid var(--accent); }
+/* piano roll scripts: parameter dialog and editor */
+.rs-extra { display: flex; flex-direction: column; gap: 6px; }
+.rs-desc { color: var(--dim); line-height: 1.4; user-select: text; }
+.rs-error { color: var(--red); white-space: pre-wrap; line-height: 1.4; user-select: text; }
+.rs-code { width: 100%; min-height: 280px; resize: vertical; font-family: var(--mono); font-size: 11.5px; line-height: 1.45; white-space: pre; tab-size: 2; -webkit-user-select: text; }
+.rs-help summary { cursor: pointer; color: var(--accent); }
+.rs-api { display: grid; grid-template-columns: minmax(180px, 46%) 1fr; gap: 4px 12px; margin-top: 6px; max-height: 32vh; overflow: auto; line-height: 1.4; user-select: text; }
+.rs-api code { font-family: var(--mono); font-size: 10.5px; color: var(--text); word-break: break-word; }
+.rs-api div { color: var(--dim); }
 
 /* ------------------------------------------------------------ playlist */
 .pl { background: #1d2023; }

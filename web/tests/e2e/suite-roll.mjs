@@ -24,6 +24,23 @@ async function fresh() {
 // pixel position (page coords) of tick t / key k in the grid
 const at = (t, k, dy = 0.5) => ev(({ t, k, dy }) => { const r = app.pianoRoll, b = r.grid.getBoundingClientRect(); return { x: b.left + r.tx(t), y: b.top + r.ky(k) + r.view.rowH * dy }; }, { t, k, dy });
 const notes = (id) => ev((id) => app.store.pattern.notes[id] || [], id);
+// Tools > Scripts > item (and an item of its submenu)
+const scriptMenu = async (item, sub) => {
+  await page.locator('.pr-head .btn', { hasText: 'Tools' }).click();
+  await page.locator('.popup .item', { hasText: 'Scripts' }).first().hover(); await sleep(250);
+  if (sub) { await page.locator('.popup .item', { hasText: item }).last().hover(); await sleep(250); }
+  await page.locator('.popup .item', { hasText: sub || item }).last().click(); await sleep(150);
+};
+// sets a field of the open dialog by its label, like a person would (range: input event, others: change)
+const setField = (label, value) => ev(({ label, value }) => {
+  const row = [...document.querySelectorAll('.modal .row')].find((r) => r.firstChild && r.firstChild.textContent === label);
+  const el = row.querySelector('input, select');
+  if (el.type === 'checkbox') el.checked = !!value; else el.value = String(value);
+  el.dispatchEvent(new Event(el.type === 'range' ? 'input' : 'change', { bubbles: true }));
+}, { label, value });
+const history = () => ev(() => app.store.history.length);
+const scriptError = () => ev(() => { const e = document.querySelector('.modal .rs-error'); return e && e.style.display !== 'none' ? e.textContent : ''; });
+const SCRIPTS_KEY = 'stepwise.rollscripts';
 const click = async (t, k, opts = {}) => { const p = await at(t + (opts.dt || 0), k); await page.mouse.move(p.x, p.y); await page.mouse.down(opts); await page.mouse.up(opts); };
 
 export async function run() {
@@ -252,5 +269,187 @@ export async function run() {
     await play();
     ok((await maxPeak(5, 2500)) > 0.02, 'riff is audible');
     await stop();
+  });
+
+  await test('scripts: a factory script previews live, Cancel restores, OK is one undo step', async () => {
+    const id = await fresh();
+    await ev((id) => app.cmd.addNotes(app.store, id, [0, 24, 48, 72, 96].map((s) => ({ s, l: 24, k: 60, v: 100 }))), id);
+    const vels = async () => (await notes(id)).map((n) => n.v).join();
+    const h0 = await history();
+    await scriptMenu('Velocity curve…');
+    await page.waitForSelector('.modal .rs-desc'); await sleep(150);
+    ok(await vels() === '40,60,80,100,120', `preview with the defaults: ${await vels()}`);
+    await setField('Lowest velocity', 20); await sleep(150);
+    ok(await vels() === '20,45,70,95,120', `a slider change applies at once: ${await vels()}`);
+    ok(await history() === h0, 'the preview adds no undo step');
+    await page.screenshot({ path: 'tests/e2e/out/roll-script.png' });
+    await page.locator('.modal .btn', { hasText: 'Cancel' }).click(); await sleep(100);
+    ok(await vels() === '100,100,100,100,100', `Cancel restores: ${await vels()}`);
+    ok(await history() === h0, 'Cancel leaves the history alone');
+    await scriptMenu('Velocity curve…');
+    await page.waitForSelector('.modal .rs-desc');
+    await setField('Shape', 'down'); await sleep(150);
+    await page.locator('.modal .btn.primary').click(); await sleep(150);
+    ok(await vels() === '120,100,80,60,40', `OK keeps the result: ${await vels()}`);
+    ok(await history() === h0 + 1, 'exactly one undo step');
+    ok(await ev(() => app.store.history[app.store.history.length - 1].label) === 'Script: Velocity curve', 'labelled with the script');
+    await ev(() => app.store.undo()); await sleep(100);
+    ok(await vels() === '100,100,100,100,100', 'undo restores the notes');
+    // a generator on an empty roll: Euclidean rhythm fills the pattern
+    await ev((id) => app.cmd.deleteNotes(app.store, id, app.store.pattern.notes[id].map((n) => n.id)), id);
+    await scriptMenu('Euclidean rhythm…');
+    await page.waitForSelector('.modal .rs-desc');
+    await setField('Steps', 8); await setField('Pulses', 3); await sleep(150);
+    await page.locator('.modal .btn.primary').click(); await sleep(150);
+    ok((await notes(id)).map((n) => n.s).join() === '0,72,144,192,264,336', `3 in 8: ${(await notes(id)).map((n) => n.s)}`);
+  });
+
+  await test('scripts: the Scripts menu and the script dialog in Russian', async () => {
+    const id = await fresh();
+    await ev((id) => app.cmd.addNotes(app.store, id, [{ s: 0, l: 24, k: 60, v: 100 }]), id);
+    await ev(() => app.setPref('lang', 'ru')); await sleep(300);
+    try {
+      await ev(() => app.pianoRoll.toolsBtn.click()); await sleep(150);
+      await page.locator('.popup .item', { hasText: 'Скрипты' }).first().hover(); await sleep(300);
+      const items = await page.locator('.popup').last().locator('.item').allInnerTexts();
+      ok(items.includes('Очеловечить…') && items.includes('Евклидов ритм…') && items.includes('Новый скрипт…'), `submenu: ${items.join(' | ')}`);
+      await page.locator('.popup .item', { hasText: 'Кривая силы…' }).last().click();
+      await page.waitForSelector('.modal .rs-desc'); await sleep(200);
+      ok((await page.locator('.modal .modal-title').innerText()) === 'Кривая силы', 'dialog title');
+      const body = await page.locator('.modal .modal-body').innerText();
+      ok(body.includes('Наименьшая сила') && body.includes('Задаёт силу нажатия по кривой') && body.includes('Нарастание') && body.includes('Новое зерно'), `dialog: ${body.slice(0, 200)}`);
+      await page.screenshot({ path: 'tests/e2e/out/roll-script-ru.png' });
+      await page.locator('.modal .btn', { hasText: 'Отмена' }).click(); await sleep(100);
+      ok((await notes(id))[0].v === 100, 'cancelled');
+    } finally { await ev(() => app.setPref('lang', 'en')); await sleep(200); }
+  });
+
+  await test('scripts: write a user script, it survives a reload and runs on the selection', async () => {
+    await ev((k) => localStorage.removeItem(k), SCRIPTS_KEY);
+    await fresh();
+    await scriptMenu('New script…');
+    await page.waitForSelector('.modal textarea.rs-code');
+    ok((await page.locator('.modal textarea').inputValue()).includes('export default'), 'the editor starts with an example');
+    await page.locator('.modal details.rs-help summary').click();
+    ok(await page.locator('.modal .rs-api code').count() >= 10, 'API reference');
+    await page.screenshot({ path: 'tests/e2e/out/roll-script-editor.png' });
+    await page.locator('.modal input.field[type=text]').first().fill('Octave up (test)');
+    await page.locator('.modal textarea').fill("export default {\n  name: 'Octave up',\n  params: [{ id: 'oct', name: 'Octaves', type: 'slider', min: 1, max: 3, value: 1 }],\n  run(ctx) { for (const n of ctx.notes) n.key += 12 * ctx.params.oct; },\n};\n");
+    await page.locator('.modal .btn', { hasText: /^Save$/ }).click();
+    await page.waitForSelector('.modal', { state: 'detached' });
+    ok(await ev((k) => !!JSON.parse(localStorage.getItem(k))['Octave up (test)'], SCRIPTS_KEY), 'kept in the browser');
+    await open('/');
+    const id = await fresh();
+    await ev((id) => app.cmd.addNotes(app.store, id, [{ s: 0, l: 24, k: 60, v: 100 }, { s: 48, l: 24, k: 64, v: 100 }]), id);
+    await ev(() => { const r = app.pianoRoll; r.setSel([r.notes[1].id]); });
+    const keys = async () => (await notes(id)).map((n) => n.k).join();
+    const h0 = await history();
+    await scriptMenu('Octave up (test)');
+    await page.waitForFunction((id) => app.store.pattern.notes[id].some((n) => n.k === 76), id);
+    ok(await keys() === '60,76', `only the selected note moves: ${await keys()}`);
+    await setField('Octaves', 2);
+    await page.waitForFunction((id) => app.store.pattern.notes[id].some((n) => n.k === 88), id);
+    await page.locator('.modal .btn.primary').click(); await sleep(200);
+    ok(await keys() === '60,88', `OK: ${await keys()}`);
+    ok(await history() === h0 + 1, 'one undo step');
+    ok(await ev(() => app.pianoRoll.selNotes.map((n) => n.k).join()) === '88', 'the result stays selected');
+    await ev(() => app.store.undo()); await sleep(100);
+    ok(await keys() === '60,64', 'undo');
+  });
+
+  await test('scripts: a failing script shows its error and changes nothing', async () => {
+    const id = await fresh();
+    await ev((id) => app.cmd.addNotes(app.store, id, [{ s: 0, l: 24, k: 60, v: 100 }, { s: 48, l: 24, k: 64, v: 100 }]), id);
+    const scripts = {
+      'Throws (test)': "export default { params: [{ id: 'a', type: 'slider' }], run(ctx) { ctx.notes[0].key = 1; throw new Error('boom'); } };",
+      'Bad key (test)': "export default { params: [{ id: 'a', name: 'Shift', type: 'slider', min: 0, max: 40, value: 0 }], run(ctx) { ctx.notes[0].key = 100 + ctx.params.a; } };",
+      'Loops (test)': 'export default { run(ctx) { for (;;) {} } };',
+    };
+    await ev(({ k, scripts }) => localStorage.setItem(k, JSON.stringify(Object.fromEntries(Object.entries(scripts).map(([name, source]) => [name, { name, source, time: 1 }])))), { k: SCRIPTS_KEY, scripts });
+    const before = JSON.stringify(await notes(id)), h0 = await history();
+    const same = async () => JSON.stringify(await notes(id)) === before && await history() === h0;
+    // an exception: its message, OK disabled, the notes untouched
+    await scriptMenu('Throws (test)');
+    await page.waitForFunction(() => { const e = document.querySelector('.modal .rs-error'); return e && e.style.display !== 'none'; });
+    ok((await scriptError()) === 'Script error (line 1): boom', `error shown with its line: ${await scriptError()}`);
+    ok(await page.locator('.modal .btn.primary').isDisabled(), 'OK is disabled');
+    ok(await same(), 'nothing changed');
+    await page.locator('.modal .btn', { hasText: 'Cancel' }).click(); await sleep(100);
+    ok(await same(), 'nothing changed after Cancel');
+    // invalid output for some values: the preview goes back to the original notes
+    await scriptMenu('Bad key (test)');
+    await page.waitForFunction((id) => app.store.pattern.notes[id].some((n) => n.k === 100), id);
+    await setField('Shift', 30);
+    await page.waitForFunction(() => document.querySelector('.modal .rs-error').textContent.includes('outside'));
+    ok((await scriptError()) === 'Note 1: key 130 is outside 0–120', `invalid key: ${await scriptError()}`);
+    ok(await same(), 'invalid output changes nothing');
+    await setField('Shift', 4);
+    await page.waitForFunction((id) => app.store.pattern.notes[id].some((n) => n.k === 104), id);
+    ok((await scriptError()) === '' && !(await page.locator('.modal .btn.primary').isDisabled()), 'a good value clears the error');
+    await page.keyboard.press('Escape'); await sleep(100);
+    ok(await same(), 'Escape cancels');
+    // an endless loop is stopped after a few seconds
+    await scriptMenu('Loops (test)');
+    await page.waitForSelector('.modal', { timeout: 8000 });
+    const msg = await page.locator('.modal .modal-body').innerText();
+    ok(msg.includes('did not finish'), `timeout reported: ${msg}`);
+    await page.locator('.modal .btn.primary').click();
+    ok(await same(), 'the endless loop changed nothing');
+    // a script that does not load is not saved by the editor
+    await scriptMenu('New script…');
+    await page.locator('.modal input.field[type=text]').first().fill('Broken (test)');
+    await page.locator('.modal textarea').fill('export default { run( {');
+    await page.locator('.modal .btn', { hasText: /^Save$/ }).click();
+    await page.waitForFunction(() => { const e = document.querySelector('.modal .rs-error'); return e && e.textContent.includes('could not be loaded'); });
+    ok(!(await ev((k) => !!JSON.parse(localStorage.getItem(k))['Broken (test)'], SCRIPTS_KEY)), 'not saved');
+    await page.locator('.modal .btn', { hasText: 'Cancel' }).click();
+  });
+
+  await test('scripts: export a user script as a .js file, import it back, delete it', async () => {
+    const source = "export default { name: 'Shared script', params: [], run(ctx) { return ctx.notes.map((n) => ({ ...n, velocity: 50 })); } };\n";
+    await ev(({ k, source }) => localStorage.setItem(k, JSON.stringify({ 'Export me (test)': { name: 'Export me (test)', source, time: 1 } })), { k: SCRIPTS_KEY, source });
+    const id = await fresh();
+    await ev(() => { window.__exp = null; app.exportSink = (bytes, name, mime) => { window.__exp = { text: new TextDecoder().decode(bytes), name, mime }; }; });
+    await scriptMenu('Export script (.js)', 'Export me (test)');
+    const exp = await ev(() => { const e = window.__exp; app.exportSink = null; return e; });
+    ok(exp && exp.name === 'Export me (test).js' && exp.mime === 'text/javascript', `file: ${JSON.stringify(exp && exp.name)}`);
+    const text = exp.text;
+    ok(text === source, 'the file is the script');
+    const [fc] = await Promise.all([page.waitForEvent('filechooser'), scriptMenu('Import script (.js)…')]);
+    await fc.setFiles({ name: 'shared.js', mimeType: 'text/javascript', buffer: Buffer.from(text) });
+    await page.waitForFunction((k) => !!JSON.parse(localStorage.getItem(k))['Shared script'], SCRIPTS_KEY);
+    // a script without parameters runs at once
+    await ev((id) => app.cmd.addNotes(app.store, id, [{ s: 0, l: 24, k: 60, v: 100 }]), id);
+    await scriptMenu('Shared script');
+    await page.waitForFunction((id) => app.store.pattern.notes[id][0].v === 50, id);
+    await scriptMenu('Delete script', 'Shared script');
+    await page.locator('.modal .btn.primary', { hasText: 'Delete' }).click(); await sleep(100);
+    ok(await ev((k) => Object.keys(JSON.parse(localStorage.getItem(k))).join(), SCRIPTS_KEY) === 'Export me (test)', 'deleted');
+    await ev((k) => localStorage.removeItem(k), SCRIPTS_KEY);
+  });
+
+  await test('channel rack: rotate, invert, fill and clear steps from the channel menu', async () => {
+    const id = await fresh();
+    await ev(async (id) => { app.cmd.setStep(app.store, id, 0, true); app.cmd.setStep(app.store, id, 4, true); app.openWindow('rack'); await new Promise((r) => setTimeout(r, 100)); }, id);
+    const steps = () => ev((id) => (app.store.pattern.notes[id] || []).map((n) => n.s / 24).join(), id);
+    const menu = async (label) => {
+      await ev(() => app.wm.focus('rack'));
+      const b = await page.locator(`.ch-row[data-ch="${id}"] .ch-name`).boundingBox();
+      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2, { button: 'right' });
+      await page.locator('.popup .item', { hasText: label }).first().click(); await sleep(100);
+    };
+    await menu('Rotate right');
+    ok(await steps() === '1,5', `rotate right: ${await steps()}`);
+    await menu('Rotate left'); await menu('Rotate left');
+    ok(await steps() === '3,15', `rotate left wraps: ${await steps()}`);
+    await menu('Invert steps');
+    ok(await steps() === '0,1,2,4,5,6,7,8,9,10,11,12,13,14', `invert: ${await steps()}`);
+    ok(await page.locator(`.ch-row[data-ch="${id}"] .step.on`).count() === 14, 'the step buttons follow');
+    await menu('Fill each 4 steps');
+    ok(await steps() === '0,4,8,12', `fill: ${await steps()}`);
+    await menu('Clear steps in this pattern');
+    ok(await steps() === '', 'clear');
+    await ev(() => app.store.undo()); await ev(() => app.store.undo()); await sleep(100);
+    ok(await steps() === '0,1,2,4,5,6,7,8,9,10,11,12,13,14', `undo twice: ${await steps()}`);
   });
 }

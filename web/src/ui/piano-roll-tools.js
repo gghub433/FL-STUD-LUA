@@ -4,6 +4,7 @@ import { formDialog } from './forms.js';
 import { PPQ, STEP, keyName } from '../core/constants.js';
 import * as T from '../core/note-tools.js';
 import { SCALES } from '../core/scales.js';
+import { scriptsMenu } from './roll-scripts-ui.js';
 
 const GRIDS = [
   [384, '1 bar'], [192, '1/2 bar'], [96, '1 beat'], [48, '1/2 beat'], [32, '1/3 beat'], [24, '1/4 beat (step)'], [16, '1/6 beat'], [12, '1/8 beat'], [8, '1/12 beat'], [4, '1/24 beat'],
@@ -209,6 +210,7 @@ export function toolsMenu(roll) {
     { sep: true },
     { label: 'Claw machine…', fn: t('claw') },
     { label: 'Riff machine…', fn: t('riff') },
+    { label: 'Scripts', submenu: () => scriptsMenu(roll) },
     { sep: true },
     { label: 'Save selection as score…', fn: () => roll.app.saveScore(roll.selNotes.length ? roll.selNotes : roll.notes) },
     { label: 'Select all', key: 'Ctrl+A', fn: () => roll.setSel(roll.notes.map((n) => n.id)) },

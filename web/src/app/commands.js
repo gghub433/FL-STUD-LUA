@@ -157,6 +157,33 @@ export function randomizeSteps(store, chId, density = 0.3) {
   }, [['patterns', pat.id]]);
 }
 
+// Move every note of the channel by one step (dir -1 = left, 1 = right); notes pushed past either end of the pattern
+// come back in at the other end.
+export function rotateSteps(store, chId, dir) {
+  const p = store.project, pat = store.pattern;
+  const len = patternSteps(p, pat) * STEP;
+  if (!(pat.notes[chId] || []).length) return;
+  store.edit(dir < 0 ? 'Rotate steps left' : 'Rotate steps right', () => {
+    const list = pat.notes[chId];
+    for (const n of list) n.s = (((n.s + dir * STEP) % len) + len) % len;
+    list.sort((a, b) => a.s - b.s || a.k - b.k);
+  }, [['patterns', pat.id]]);
+}
+
+// Turn every step on that is off and off that is on. Piano roll notes (longer than a step) stay as they are, and the
+// step they start on counts as on.
+export function invertSteps(store, chId) {
+  const p = store.project, pat = store.pattern;
+  const steps = patternSteps(p, pat);
+  store.edit('Invert steps', () => {
+    const list = pat.notes[chId] || [];
+    const used = new Set(list.map(stepOfNote));
+    const keep = list.filter((n) => !isStepNote(n, stepOfNote(n)));
+    for (let s = 0; s < steps; s++) if (!used.has(s)) keep.push(createNote(p, s * STEP, STEP, p.settings.stepKey, 100));
+    pat.notes[chId] = keep.sort((a, b) => a.s - b.s || a.k - b.k);
+  }, [['patterns', pat.id]]);
+}
+
 export function clearChannelNotes(store, chId) {
   const pat = store.pattern;
   store.edit('Clear channel', () => { delete pat.notes[chId]; }, [['patterns', pat.id]]);
