@@ -609,7 +609,7 @@ const rollScripts = {
   'run() must return a list of notes': 'run() должна вернуть список нот', 'run() must return the notes right away (it cannot be async)': 'run() должна вернуть ноты сразу (она не может быть async)',
   'The script is empty': 'Скрипт пуст', 'The script is too long': 'Скрипт слишком длинный', 'The script is not loaded': 'Скрипт не загружен', 'The script was closed': 'Скрипт закрыт',
   'The script must export its definition: export default { name, params, run(ctx) { … } }': 'Скрипт должен экспортировать своё описание: export default { name, params, run(ctx) { … } }',
-  'params must be a list': 'params должен быть списком', 'A script can have at most 40 parameters': 'У скрипта может быть не больше 40 параметров', 'the script worker stopped': 'процесс скрипта остановился',
+  'params must be a list': 'params должен быть списком', 'A script can have at most 40 parameters': 'У скрипта может быть не больше 40 параметров', 'the script worker stopped': 'процесс скрипта остановился', 'Script error': 'Ошибка в скрипте',
   'Write the degrees as numbers from 1 to 7, for example 1 5 6 4': 'Запишите ступени числами от 1 до 7, например 1 5 6 4',
   'No key of the scale lies between the lowest and the highest key': 'Между самой низкой и самой высокой нотой нет ни одной ноты лада',
   'Rotate left': 'Сдвинуть влево', 'Rotate right': 'Сдвинуть вправо', 'Invert steps': 'Инвертировать шаги', Randomize: 'Случайно',

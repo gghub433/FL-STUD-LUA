@@ -119,7 +119,8 @@ export class ScriptSession {
   async result(values) {
     const key = JSON.stringify(values);
     if (this.cache && this.cache.key === key) return this.cache.result;
-    const raw = await this.runner.run(this.input, values);
+    let raw;
+    try { raw = await this.runner.run(this.input, values); } catch (e) { raw = { ok: false, error: `Script error: ${e && e.message ? e.message : e}` }; }
     const result = raw.ok ? finish(raw.notes, this.ids) : { ok: false, error: raw.error || 'Script error' };
     this.cache = { key, result };
     return result;
