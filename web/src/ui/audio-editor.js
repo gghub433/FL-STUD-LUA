@@ -410,7 +410,7 @@ class AudioEditor {
 
   effectItems() {
     const cats = {};
-    for (const [id, m] of Object.entries(EFFECTS)) (cats[m.meta.category || 'Other'] = cats[m.meta.category || 'Other'] || []).push({ label: m.meta.name, fn: () => this.effectDialog(id) });
+    for (const [id, m] of Object.entries(EFFECTS)) if (!m.meta.mixerOnly) (cats[m.meta.category || 'Other'] = cats[m.meta.category || 'Other'] || []).push({ label: m.meta.name, fn: () => this.effectDialog(id) });
     return [{ title: `Applies to the ${this.sel ? 'selection' : 'whole sample'}` }, ...Object.entries(cats).map(([c, list]) => ({ label: c, submenu: list }))];
   }
 

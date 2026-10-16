@@ -3,7 +3,7 @@
 import { PPQ, STEP, MAX_INSERT, FX_SLOTS, MIDDLE_C, KEY_MAX } from './constants.js';
 import { defaults, clampParam } from './schema.js';
 import { instrumentSchema, hasInstrument, instrumentMeta } from './instruments/index.js';
-import { effectSchema, hasEffect } from './effects/index.js';
+import { effectSchema, effectMeta, hasEffect } from './effects/index.js';
 import { CHANNEL_BUILTIN, TRACK_BUILTIN } from './addr.js';
 import { defaultPads, PADS, MAX_LAYERS } from './instruments/fpc.js';
 import { defaultPatch, normalizePatch, normalizeFxExtra } from './patcher/spec.js';
@@ -41,7 +41,15 @@ export function createFxSlot(type, plugin = null) {
   if (type === 'patcher') slot.extra = { patch: defaultPatch('effect') };
   if (type === 'wam') slot.extra = { wam: normalizeWam(null, true) };
   if (type === 'plugin') slot.extra = { plugin: normalizePluginRef({ ...(plugin || {}), kind: 'effect' }, true) };
+  if (effectMeta(type)?.controller) slot.links = [];          // Peak controller: the knobs it drives, { addr, min, max, inv }
   return slot;
+}
+
+// effect slots that drive linked parameters (Peak controller): [{ track, slot, fx }]
+export function controlSlots(p) {
+  const out = [];
+  p.mixer.tracks.forEach((t, track) => t.fx.forEach((fx, slot) => { if (fx && Array.isArray(fx.links)) out.push({ track, slot, fx }); }));
+  return out;
 }
 
 export function createArrangement(id, name = 'Arrangement') {
@@ -169,6 +177,15 @@ const int = (v, lo, hi, d) => Math.round(num(v, lo, hi, d));
 const str = (v, d = '', max = 80) => (typeof v === 'string' ? v.slice(0, max) : d);
 const bit = (v) => (v ? 1 : 0);
 const colorOk = (c) => (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c) ? c : null);
+// controller links (LFO / Envelope channels, Peak controller slots): { addr, min, max, inv }
+function normLinks(list) {
+  const out = [];
+  for (const l of Array.isArray(list) ? list.slice(0, 64) : []) {
+    if (!l || typeof l.addr !== 'string') continue;
+    out.push({ addr: l.addr.slice(0, 80), min: num(l.min, 0, 1, 0), max: num(l.max, 0, 1, 1), inv: bit(l.inv) });
+  }
+  return out;
+}
 
 function normParams(schema, raw) {
   const out = schema ? defaults(schema) : {};
@@ -277,13 +294,7 @@ export function normalize(raw) {
         }
       }
     }
-    if (type === 'controller') {
-      ch.links = [];
-      for (const l of Array.isArray(c.links) ? c.links.slice(0, 64) : []) {
-        if (!l || typeof l.addr !== 'string') continue;
-        ch.links.push({ addr: l.addr.slice(0, 80), min: num(l.min, 0, 1, 0), max: num(l.max, 0, 1, 1), inv: bit(l.inv) });
-      }
-    }
+    if (type === 'controller') ch.links = normLinks(c.links);
     if (type === 'patcher') ch.patch = normalizePatch(c.patch, 'instrument');
     if (type === 'layer') ch.children = Array.isArray(c.children) ? c.children.filter((x) => Number.isInteger(x)).slice(0, 64) : [];
     if (type === 'automation') {
@@ -352,6 +363,7 @@ export function normalize(raw) {
       else if (f.type === 'wam') tr.fx[s].extra = { wam: normalizeWam(f.extra && f.extra.wam, true) };
       else if (f.type === 'plugin') { const ref = normalizePluginRef(f.extra && f.extra.plugin, true); tr.fx[s].extra = { plugin: ref }; tr.fx[s].params = normalizePluginParams(ref, f.params); }
       else if (f.extra && typeof f.extra === 'object') tr.fx[s].extra = clone(f.extra); // effect-specific data (IR id, curves)
+      if (effectMeta(f.type)?.controller) tr.fx[s].links = normLinks(f.links);
     }
   }
   breakCycles(p);

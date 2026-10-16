@@ -1,7 +1,9 @@
 // Right-click parameter menu (automation clip, controller links, MIDI learn) and the dialogs behind it.
 import { formDialog } from './forms.js';
-import { paramDef, paramLabel, getParam } from '../core/addr.js';
+import { paramDef, paramLabel, getParam, trackName } from '../core/addr.js';
 import { toNorm } from '../core/schema.js';
+import { controlSlots } from '../core/project.js';
+import { effectMeta } from '../core/effects/index.js';
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
@@ -32,6 +34,7 @@ export function paramMenuItems(app, addr) {
   if (!paramDef(p, addr)) return [];
   const auto = cmd.automationFor(p, addr);
   const ctrls = p.channels.filter((c) => c.type === 'controller');
+  const fxCtrls = controlSlots(p);                       // Peak controllers in mixer slots
   const midi = p.controllers.find((l) => l.addr === addr);
   const items = [
     { label: auto ? 'Add a clip of the existing automation' : 'Create automation clip', fn: () => {
@@ -51,7 +54,12 @@ export function paramMenuItems(app, addr) {
         const linked = c.links.some((l) => l.addr === addr);
         return { label: c.name, checked: linked, fn: () => { if (linked) cmd.unlinkController(store, c.id, addr); else cmd.linkController(store, c.id, addr, defaultRange(app, addr)); } };
       }),
-      ...(ctrls.length ? [{ sep: true }] : []),
+      ...fxCtrls.map(({ track, slot, fx }) => {
+        const linked = fx.links.some((l) => l.addr === addr);
+        return { label: `${effectMeta(fx.type)?.name || fx.type} · ${trackName(p, track)} / slot ${slot + 1}`, checked: linked,
+          fn: () => { if (linked) cmd.unlinkFxController(store, track, slot, addr); else cmd.linkFxController(store, track, slot, addr, defaultRange(app, addr)); } };
+      }),
+      ...(ctrls.length || fxCtrls.length ? [{ sep: true }] : []),
       { label: 'New LFO controller…', fn: () => { const c = cmd.addController(store, 0, 'LFO'); cmd.linkController(store, c.id, addr, defaultRange(app, addr)); app.openChannelEditor(c.id); } },
       { label: 'New envelope controller…', fn: () => { const c = cmd.addController(store, 1, 'Envelope'); cmd.linkController(store, c.id, addr, defaultRange(app, addr)); app.openChannelEditor(c.id); } },
     ],

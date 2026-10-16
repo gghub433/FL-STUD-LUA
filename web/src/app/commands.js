@@ -2,7 +2,7 @@
 // sections of the project changed.
 import { STEP, MIDDLE_C } from '../core/constants.js';
 import {
-  createChannel, createNote, createPattern, clone, patternLength, barTicks, stepsPerBar, nextId, COLORS, currentArrangement, createFxSlot,
+  createChannel, createNote, createPattern, clone, patternLength, barTicks, stepsPerBar, nextId, COLORS, currentArrangement, createFxSlot, controlSlots,
 } from '../core/project.js';
 import { instrumentMeta, instrumentSchema } from '../core/instruments/index.js';
 import { defaults, clampParam } from '../core/schema.js';
@@ -28,6 +28,8 @@ export function setChannelSample(store, chId, sample) {
 }
 
 export function removeChannel(store, id) {
+  const gone = (l) => l.addr.startsWith(`ch:${id}:`);
+  const fxTracks = [...new Set(controlSlots(store.project).filter((c) => c.fx.links.some(gone)).map((c) => c.track))];   // Peak controllers linked to it
   store.edit('Delete channel', (p) => {
     const i = p.channels.findIndex((c) => c.id === id);
     if (i < 0) return;
@@ -43,7 +45,8 @@ export function removeChannel(store, id) {
       for (const arr of p.playlist.arrangements) arr.clips = arr.clips.filter((c) => !orphan.has(c.ref));
     }
     for (const c of p.channels) if (c.type === 'controller') c.links = c.links.filter((l) => !l.addr.startsWith(`ch:${id}:`));
-  }, [['channels'], ['patterns'], ['playlist']]);
+    for (const c of controlSlots(p)) c.fx.links = c.fx.links.filter((l) => !gone(l));
+  }, [['channels'], ['patterns'], ['playlist'], ...fxTracks.map((n) => ['mixer', 'tracks', n])]);
   if (store.selected === id) store.select(store.project.channels[0] ? store.project.channels[0].id : null);
 }
 
@@ -806,6 +809,24 @@ export function unlinkController(store, ctrlId, addr) {
 }
 
 export const controllersFor = (project, addr) => project.channels.filter((c) => c.type === 'controller' && c.links.some((l) => l.addr === addr));
+
+// ------------------------------------------------------------------------------ effect controllers (Peak controller): slot.links
+export function linkFxController(store, track, slot, addr, { min = 0, max = 1, inv = 0 } = {}) {
+  store.edit('Link to controller', (p) => {
+    const s = p.mixer.tracks[track].fx[slot];
+    if (!s || !Array.isArray(s.links)) return;
+    const l = s.links.find((x) => x.addr === addr);
+    if (l) Object.assign(l, { min, max, inv }); else s.links.push({ addr, min, max, inv });
+  }, mx(track));
+}
+
+export function updateFxLink(store, track, slot, index, patch, coalesce) {
+  store.edit('Edit link', (p) => { const s = p.mixer.tracks[track].fx[slot]; const l = s && s.links && s.links[index]; if (l) Object.assign(l, patch); }, mx(track), coalesce ? { coalesce } : {});
+}
+
+export function unlinkFxController(store, track, slot, addr) {
+  store.edit('Remove link', (p) => { const s = p.mixer.tracks[track].fx[slot]; if (s && Array.isArray(s.links)) s.links = s.links.filter((l) => l.addr !== addr); }, mx(track));
+}
 
 // ------------------------------------------------------------------------------ MIDI links (project.controllers)
 export function setMidiLink(store, link) {

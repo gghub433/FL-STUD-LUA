@@ -7,6 +7,8 @@ import { paramDef, paramLabel } from '../core/addr.js';
 import { contextMenu } from './menu.js';
 
 const registry = new Set();
+// is the parameter driven by a Peak controller (an effect slot with links)?
+const fxDriven = (p, addr) => p.mixer.tracks.some((t) => t.fx.some((f) => f && f.links && f.links.some((l) => l.addr === addr)));
 let clipboard = null;
 
 function polar(cx, cy, r, deg) {
@@ -92,7 +94,8 @@ export class Knob {
     const auto = p.channels.some((c) => c.type === 'automation' && c.target === this.addr);
     this.el.classList.toggle('auto', auto);
     this.el.classList.toggle('linked', p.controllers.some((l) => l.addr === this.addr));
-    this.el.classList.toggle('ctl', p.channels.some((c) => c.type === 'controller' && c.links.some((l) => l.addr === this.addr)));
+    this.el.classList.toggle('ctl', p.channels.some((c) => c.type === 'controller' && c.links.some((l) => l.addr === this.addr))
+      || fxDriven(p, this.addr));
   }
 
   text() { return this.def ? format(this.def, this.value) : String(this.value); }

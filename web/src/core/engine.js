@@ -483,21 +483,31 @@ export class Engine {
       if (rt.type !== 'controller' || !rt.enabled || !rt.inst) continue;
       const links = rt.data.links;
       const v = rt.inst.control(m);
-      if (!links || !links.length) continue;
-      for (const l of links) {
-        const d = this._autoDef(l.addr);
-        if (!d) continue;
-        const a = l.min + (l.max - l.min) * (l.inv ? 1 - v : v);
-        const val = fromNorm(d.def, a);
-        const key = `${rt.id}>${l.addr}`;
-        const prev = this.lastAuto.get(key);
-        if (prev !== undefined && Math.abs(prev - val) < 1e-7) continue;
-        this.lastAuto.set(key, val);
-        if (d.a.kind === 'transport' && d.a.key === 'tempo') { this.project.tempo = val; continue; }
-        setProjectParam(this.project, d.a, val);
-        this._applyRuntime(d.a, val);
-        this.autoOut.set(l.addr, val);
-      }
+      if (links && links.length) this._drive(`${rt.id}>`, links, v);
+    }
+    // effects that are controllers (Peak controller): their level of the last block; a bypassed one lets go
+    const fx = this.mixer.controlSlots();
+    for (let k = 0; k < fx.length; k++) {
+      const c = fx[k];
+      if (c.slot.on) this._drive(c.key, c.slot.links, c.slot.inst.control(m));
+    }
+  }
+
+  // write controller value v (0..1) into the linked parameters, each mapped into its min..max window
+  _drive(key0, links, v) {
+    for (const l of links) {
+      const d = this._autoDef(l.addr);
+      if (!d) continue;
+      const a = l.min + (l.max - l.min) * (l.inv ? 1 - v : v);
+      const val = fromNorm(d.def, a);
+      const key = key0 + l.addr;
+      const prev = this.lastAuto.get(key);
+      if (prev !== undefined && Math.abs(prev - val) < 1e-7) continue;
+      this.lastAuto.set(key, val);
+      if (d.a.kind === 'transport' && d.a.key === 'tempo') { this.project.tempo = val; continue; }
+      setProjectParam(this.project, d.a, val);
+      this._applyRuntime(d.a, val);
+      this.autoOut.set(l.addr, val);
     }
   }
 
@@ -535,7 +545,7 @@ export class Engine {
     if (tr.playing && this.clockOut && this.host.midiQueue && tr.countIn <= 0) this._midiClock(m);
     if (tr.playing) this._collect(m, evs);
 
-    // ---- controllers (LFO / Envelope) write their value into the linked parameters once per block ----
+    // ---- controllers (LFO / Envelope, Peak controller effects) write their value into the linked parameters once per block ----
     this._applyControllers(m);
 
     // ---- render instruments in slices between events ----
@@ -573,6 +583,9 @@ export class Engine {
       this.out.push({ t: 'spectrum', track: tp.track, slot: tp.slot, mags: mixer.analyzer.compute() });
       const slot = tp.slot >= 0 ? mixer.tracks[tp.track].fx[tp.slot] : null;
       if (slot) this.out.push({ t: 'fxmeter', track: tp.track, slot: tp.slot, values: slot.inst.meters ? Array.from(slot.inst.meters) : [], status: slot.inst.status || '' });
+      // effects with their own analysis (Scope) hand over a decimated snapshot of what they collected meanwhile
+      const view = slot && slot.inst.view ? slot.inst.view() : null;
+      if (view) this.out.push({ t: 'fxview', track: tp.track, slot: tp.slot, view });
     }
     const mL = master.inL, mR = master.inR;
     for (let i = 0; i < m; i++) { outL[off + i] = mL[i]; outR[off + i] = mR[i]; }
